@@ -9,6 +9,7 @@ import lombok.Getter;
 import net.minecraft.tileentity.TileEntity;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
 @SuppressWarnings("DataFlowIssue")
 public final class EUHandler implements IEnergyHandler {
@@ -19,7 +20,9 @@ public final class EUHandler implements IEnergyHandler {
     private TileEntity tileEntity;
     @Nonnull
     private EnergyType energyType;
+    @Nullable
     private IEnergySource send;
+    @Nullable
     private IEnergySink receive;
 
     public EUHandler(TileEntity tileEntity) {
@@ -75,12 +78,14 @@ public final class EUHandler implements IEnergyHandler {
 
     @Override
     public long canExtractValue() {
+        if (send == null) return 0;
         if (send.getOfferedEnergy() > max) return maxFE;
         return ((long) send.getOfferedEnergy()) << 2;
     }
 
     @Override
     public long canReceiveValue() {
+        if (receive == null) return 0;
         if (receive.getDemandedEnergy() > max) return maxFE;
         return ((long) receive.getDemandedEnergy()) << 2;
     }

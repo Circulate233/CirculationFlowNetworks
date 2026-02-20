@@ -11,6 +11,8 @@ import mekanism.common.tile.TileEntityEnergyCube;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 
+import javax.annotation.Nullable;
+
 public final class MEKHandler implements IEnergyHandler {
 
     private static final Class<?> inductionPort;
@@ -32,7 +34,9 @@ public final class MEKHandler implements IEnergyHandler {
     @Getter
     private TileEntity tileEntity;
     private long maxOutput = Long.MAX_VALUE;
+    @Nullable
     private IStrictEnergyStorage send;
+    @Nullable
     private IStrictEnergyStorage receive;
     private EnergyType energyType = EnergyType.INVALID;
     private boolean creative;
@@ -100,6 +104,7 @@ public final class MEKHandler implements IEnergyHandler {
 
     @Override
     public long receiveEnergy(long maxReceive) {
+        if (receive == null) return 0;
         var i = Math.min(canReceiveValue(), maxReceive);
         receive.setEnergy(receive.getEnergy() + i * 2.5);
         return i;
@@ -107,6 +112,7 @@ public final class MEKHandler implements IEnergyHandler {
 
     @Override
     public long extractEnergy(long maxExtract) {
+        if (send == null) return 0;
         var o = Math.min(canExtractValue(), maxExtract);
         if (!creative) send.setEnergy(send.getEnergy() - o * 2.5);
         return o;
@@ -114,6 +120,7 @@ public final class MEKHandler implements IEnergyHandler {
 
     @Override
     public long canExtractValue() {
+        if (send == null) return 0;
         if (creative) return Long.MAX_VALUE;
         double o = send.getEnergy() / 2.5;
         return Math.min((long) o, maxOutput);
@@ -121,6 +128,7 @@ public final class MEKHandler implements IEnergyHandler {
 
     @Override
     public long canReceiveValue() {
+        if (receive == null) return 0;
         double i = (receive.getMaxEnergy() - receive.getEnergy()) / 2.5;
         return Math.min((long) i, maxOutput);
     }

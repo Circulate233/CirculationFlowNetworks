@@ -7,11 +7,15 @@ import net.minecraft.util.EnumFacing;
 import net.minecraftforge.energy.CapabilityEnergy;
 import net.minecraftforge.energy.IEnergyStorage;
 
+import javax.annotation.Nullable;
+
 public final class FEHandler implements IEnergyHandler {
 
     @Getter
     private TileEntity tileEntity;
+    @Nullable
     private IEnergyStorage send;
+    @Nullable
     private IEnergyStorage receive;
     private int extractValue;
     private int receiveValue;
@@ -55,6 +59,7 @@ public final class FEHandler implements IEnergyHandler {
 
     @Override
     public long extractEnergy(long maxExtract) {
+        if (send == null) return 0;
         int e = (int) Math.min(maxExtract, extractValue);
         var o = send.extractEnergy(e, false);
         extractValue -= o;
@@ -63,6 +68,7 @@ public final class FEHandler implements IEnergyHandler {
 
     @Override
     public long receiveEnergy(long maxReceive) {
+        if (receive == null) return 0;
         int e = (int) Math.min(maxReceive, receiveValue);
         var o = receive.receiveEnergy(e, false);
         receiveValue -= o;
