@@ -13,6 +13,7 @@ public interface INode {
     @Nonnull
     BlockPos getPos();
 
+    @Nonnull
     World getWorld();
 
     boolean isActive();

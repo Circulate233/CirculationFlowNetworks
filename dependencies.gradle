@@ -14,7 +14,7 @@ dependencies {
     runtimeOnly(rfg.deobf("curse.maven:had-enough-items-557549:7057606"))
     runtimeOnly(rfg.deobf("curse.maven:ender-utilities-224320:2977010"))
     runtimeOnly(rfg.deobf("curse.maven:flare-692142:6598523"))
-    implementation(rfg.deobf("curse.maven:packagedauto-308380:7329681"))
+    runtimeOnly(rfg.deobf("curse.maven:packagedauto-308380:7329681"))
     implementation(rfg.deobf("curse.maven:mekanism-268560:2835175"))
     implementation(rfg.deobf("curse.maven:industrialcraft-2-242638:3078604"))
 }

@@ -2,7 +2,6 @@ package com.circulation.circulation_networks.blocks.tiles;
 
 import com.circulation.circulation_networks.api.INodeTileEntity;
 import com.circulation.circulation_networks.api.node.INode;
-import com.circulation.circulation_networks.manager.NetworkManager;
 import com.circulation.circulation_networks.proxy.CommonProxy;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
@@ -36,9 +35,7 @@ public abstract class BaseNodeTileEntity extends TileEntity implements INodeTile
     }
 
     protected void onInvalidate() {
-        if (!this.world.isRemote) {
-            NetworkManager.INSTANCE.removeNode(node);
-        }
+
     }
 
     protected void onValidate() {
@@ -46,7 +43,6 @@ public abstract class BaseNodeTileEntity extends TileEntity implements INodeTile
             if (node == null)
                 node = createNode();
             node.setActive(true);
-            NetworkManager.INSTANCE.addNode(node);
         }
     }
 

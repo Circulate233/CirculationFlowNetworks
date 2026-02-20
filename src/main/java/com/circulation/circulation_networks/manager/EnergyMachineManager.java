@@ -123,6 +123,7 @@ public final class EnergyMachineManager {
     }
 
     public void addMachine(TileEntity tileEntity) {
+        if (!RegistryEnergyHandler.isEnergyTileEntity(tileEntity)) return;
         if (RegistryEnergyHandler.isBlack(tileEntity)) return;
         var pos = tileEntity.getPos();
         var chunkPos = new ChunkPos(pos);

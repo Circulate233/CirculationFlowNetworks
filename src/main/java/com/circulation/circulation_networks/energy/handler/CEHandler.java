@@ -1,11 +1,14 @@
 package com.circulation.circulation_networks.energy.handler;
 
 import com.circulation.circulation_networks.api.IEnergyHandler;
-import com.circulation.circulation_networks.api.IMachineNodeTileEntity;
+import com.circulation.circulation_networks.api.node.IMachineNode;
+import com.circulation.circulation_networks.proxy.CommonProxy;
 import com.circulation.circulation_networks.utils.CirculationEnergy;
 import lombok.Getter;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
+
+import java.util.Objects;
 
 public final class CEHandler implements IEnergyHandler {
 
@@ -17,8 +20,9 @@ public final class CEHandler implements IEnergyHandler {
 
     public CEHandler(TileEntity tileEntity) {
         this.tileEntity = tileEntity;
-        this.type = ((IMachineNodeTileEntity) tileEntity).getNode().getType();
-        this.energy = new CirculationEnergy(((IMachineNodeTileEntity) tileEntity).getMaxEnergy());
+        var n = (IMachineNode) Objects.requireNonNull(tileEntity.getCapability(CommonProxy.nodeCapability, null));
+        this.type = n.getType();
+        this.energy = new CirculationEnergy(n.getMaxEnergy());
     }
 
     @Override

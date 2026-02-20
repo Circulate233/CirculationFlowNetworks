@@ -1,9 +1,9 @@
 package com.circulation.circulation_networks.manager;
 
 import com.circulation.circulation_networks.api.IGrid;
-import com.circulation.circulation_networks.api.INodeTileEntity;
 import com.circulation.circulation_networks.api.node.INode;
 import com.circulation.circulation_networks.network.Grid;
+import com.circulation.circulation_networks.proxy.CommonProxy;
 import com.circulation.circulation_networks.utils.UnionFindUtils;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
@@ -39,8 +39,9 @@ public final class NetworkManager {
         return grids.values();
     }
 
-    public void addNode(@Nonnull INode newNode) {
-        if (newNode.getWorld().isRemote || !newNode.isActive() || activeNodes.contains(newNode)) return;
+    public void addNode(INode newNode) {
+        if (newNode == null || newNode.getWorld().isRemote || !newNode.isActive() || activeNodes.contains(newNode))
+            return;
 
         var world = newNode.getWorld();
         activeNodes.add(newNode);
@@ -122,7 +123,7 @@ public final class NetworkManager {
     }
 
     public void removeNode(INode removedNode) {
-        if (removedNode.getWorld().isRemote || !activeNodes.remove(removedNode)) return;
+        if (removedNode == null || removedNode.getWorld().isRemote || !activeNodes.remove(removedNode)) return;
 
         var world = removedNode.getWorld();
         var pos = removedNode.getPos();
@@ -206,8 +207,8 @@ public final class NetworkManager {
      */
     public @Nullable INode getNodeFromPos(World world, BlockPos pos) {
         var te = world.getTileEntity(pos);
-        if (te instanceof INodeTileEntity n) {
-            return n.getNode();
+        if (te != null) {
+            return te.getCapability(CommonProxy.nodeCapability, null);
         }
         return null;
     }

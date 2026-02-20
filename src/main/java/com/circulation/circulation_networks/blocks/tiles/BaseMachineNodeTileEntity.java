@@ -25,7 +25,9 @@ public abstract class BaseMachineNodeTileEntity extends BaseNodeTileEntity imple
     }
 
     @Override
-    public abstract long getMaxEnergy();
+    public long getMaxEnergy() {
+        return getNode().getMaxEnergy();
+    }
 
     @Override
     public @NotNull CEHandler getCEHandler() {

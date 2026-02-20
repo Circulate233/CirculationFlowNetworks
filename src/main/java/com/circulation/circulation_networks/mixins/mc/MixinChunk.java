@@ -1,7 +1,8 @@
 package com.circulation.circulation_networks.mixins.mc;
 
 import com.circulation.circulation_networks.manager.EnergyMachineManager;
-import com.circulation.circulation_networks.registry.RegistryEnergyHandler;
+import com.circulation.circulation_networks.manager.NetworkManager;
+import com.circulation.circulation_networks.proxy.CommonProxy;
 import com.llamalad7.mixinextras.sugar.Local;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
@@ -30,19 +31,24 @@ public class MixinChunk {
     @Inject(method = "addTileEntity(Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/tileentity/TileEntity;)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/tileentity/TileEntity;validate()V", shift = At.Shift.AFTER))
     private void addTileEntity(BlockPos pos, TileEntity tileEntity, CallbackInfo ci) {
         if (world.isRemote) return;
-        if (RegistryEnergyHandler.isEnergyTileEntity(tileEntity))
-            EnergyMachineManager.INSTANCE.addMachine(tileEntity);
+        NetworkManager.INSTANCE.addNode(
+            tileEntity.getCapability(CommonProxy.nodeCapability, null));
+        EnergyMachineManager.INSTANCE.addMachine(tileEntity);
     }
 
     @Inject(method = "addTileEntity(Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/tileentity/TileEntity;)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/tileentity/TileEntity;invalidate()V", shift = At.Shift.AFTER))
     private void addTileEntityRemove(BlockPos pos, TileEntity tileEntity, CallbackInfo ci) {
         if (world.isRemote) return;
+        NetworkManager.INSTANCE.removeNode(
+            tileEntity.getCapability(CommonProxy.nodeCapability, null));
         EnergyMachineManager.INSTANCE.removeMachine(this.tileEntities.get(pos));
     }
 
     @Inject(method = "removeTileEntity", at = @At(value = "INVOKE", target = "Lnet/minecraft/tileentity/TileEntity;invalidate()V", shift = At.Shift.AFTER))
     private void removeTileEntity(BlockPos pos, CallbackInfo ci, @Local(name = "tileentity") TileEntity tileEntity) {
         if (world.isRemote) return;
+        NetworkManager.INSTANCE.removeNode(
+            tileEntity.getCapability(CommonProxy.nodeCapability, null));
         EnergyMachineManager.INSTANCE.removeMachine(tileEntity);
     }
 }

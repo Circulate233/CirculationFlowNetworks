@@ -13,6 +13,7 @@ import lombok.Setter;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nonnull;
 import java.lang.ref.WeakReference;
@@ -39,8 +40,12 @@ public abstract class Node implements INode {
         pos = tileEntity.getNodePos();
     }
 
-    public World getWorld() {
-        return world.get();
+    public @NotNull World getWorld() {
+        var world = this.world.get();
+        if (world != null) {
+            return world;
+        }
+        throw new IllegalStateException("World is null");
     }
 
     @Override
