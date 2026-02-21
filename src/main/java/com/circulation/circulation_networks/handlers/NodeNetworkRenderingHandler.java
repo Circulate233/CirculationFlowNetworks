@@ -52,7 +52,7 @@ public final class NodeNetworkRenderingHandler {
 
             GlStateManager.pushMatrix();
             GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
-            GlStateManager.glLineWidth(3);
+            GlStateManager.glLineWidth(8);
             GlStateManager.translate(-doubleX, -doubleY, -doubleZ);
 
             GlStateManager.enableBlend();
