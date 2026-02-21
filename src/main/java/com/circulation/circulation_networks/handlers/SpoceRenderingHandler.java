@@ -2,6 +2,7 @@ package com.circulation.circulation_networks.handlers;
 
 import com.circulation.circulation_networks.items.ItemInspectionTool;
 import com.circulation.circulation_networks.registry.RegistryItems;
+import com.circulation.circulation_networks.utils.BuckyBallGeometry;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.renderer.BufferBuilder;
@@ -9,10 +10,13 @@ import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.math.Vec3d;
 import net.minecraftforge.client.event.RenderWorldLastEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 import org.lwjgl.opengl.GL11;
+
+import java.util.Arrays;
 
 public final class SpoceRenderingHandler {
 
@@ -25,14 +29,25 @@ public final class SpoceRenderingHandler {
 
     private float lastAnimProgress;
     private float animProgress;
+    private float[] rs;
 
-    public void setStaus(TileEntity te, double linkScope, double energyScope, double maxChargingScope) {
+    public void setStaus(TileEntity te, double linkScope, double energyScope, double chargingScope) {
         this.te = te;
         this.linkScope = (float) linkScope;
         this.energyScope = (float) energyScope;
-        this.chargingScope = (float) maxChargingScope;
+        this.chargingScope = (float) chargingScope;
         this.animProgress = 0;
         this.lastAnimProgress = 0;
+
+        Integer[] indices = {0, 1, 2};
+        float[] scopes = {this.linkScope, this.energyScope, this.chargingScope};
+
+        Arrays.sort(indices, (a, b) -> Float.compare(scopes[b], scopes[a]));
+
+        this.rs = new float[3];
+        this.rs[indices[0]] = 1.0f;
+        this.rs[indices[1]] = -1.0f;
+        this.rs[indices[2]] = 1.0f;
     }
 
     private void clear() {
@@ -42,6 +57,7 @@ public final class SpoceRenderingHandler {
         this.chargingScope = 0;
         this.animProgress = 0;
         this.lastAnimProgress = 0;
+        this.rs = null;
     }
 
     @SubscribeEvent
@@ -95,15 +111,22 @@ public final class SpoceRenderingHandler {
             GlStateManager.disableCull();
             GlStateManager.depthMask(false);
 
+            float time = mc.world.getTotalWorldTime() + event.getPartialTicks();
+            float rotation = time * 0.8F;
+
             float currentFactor = easeOutCubic(lastAnimProgress + (animProgress - lastAnimProgress) * event.getPartialTicks());
+
             if (linkScope > 0) {
-                drawSphere(0, 0, 0.6f, linkScope * currentFactor);
+                final var radius = linkScope * currentFactor;
+                draw(rotation * rs[0], 0, 0.4f, 0.8f, radius, 0.4f, 0.8f, 1);
             }
             if (energyScope > 0) {
-                drawSphere(123.0f / 255, 104.0f / 255, 238.0f / 255, energyScope * currentFactor);
+                final var radius = energyScope * currentFactor;
+                draw(rotation * rs[1], 0.4f, 0.2f, 0.8f, radius, 0.8f, 0.6f, 1);
             }
             if (chargingScope > 0) {
-                drawSphere(0, 0.6f, 0, chargingScope * currentFactor);
+                final var radius = chargingScope * currentFactor;
+                draw(rotation * rs[2], 0, 0.5f, 0.1f, radius, 0.4f, 1, 0.4f);
             }
 
             GlStateManager.depthMask(true);
@@ -116,8 +139,17 @@ public final class SpoceRenderingHandler {
         }
     }
 
-    private void drawSphere(float r, float g, float b, float radius) {
-        GlStateManager.color(r, g, b, 0.3f);
+    private void draw(float rotation, float r, float g, float b, float radius, float r1, float g1, float b1) {
+        GlStateManager.pushMatrix();
+        GlStateManager.rotate(rotation, 0.0F, 1.0F, 0.0F);
+        GlStateManager.rotate(rotation * 0.5F, 1.0F, 0.0F, 0.0F);
+        drawSphere(r, g, b, radius, 0.2f);
+        drawBuckyBallWireframe(r1, g1, b1, radius + 0.01f, 0.8f);
+        GlStateManager.popMatrix();
+    }
+
+    private void drawSphere(float r, float g, float b, float radius, float alpha) {
+        GlStateManager.color(r, g, b, alpha);
         Tessellator tessellator = Tessellator.getInstance();
         BufferBuilder buffer = tessellator.getBuffer();
 
@@ -144,4 +176,28 @@ public final class SpoceRenderingHandler {
             tessellator.draw();
         }
     }
+
+    private void drawBuckyBallWireframe(float r, float g, float b, float radius, float alpha) {
+        GlStateManager.color(r, g, b, alpha);
+        GlStateManager.glLineWidth(2.0f);
+
+        Tessellator tessellator = Tessellator.getInstance();
+        BufferBuilder buffer = tessellator.getBuffer();
+
+        buffer.begin(GL11.GL_LINES, DefaultVertexFormats.POSITION_NORMAL);
+
+        for (int[] edge : BuckyBallGeometry.edges) {
+            Vec3d v1 = BuckyBallGeometry.vertices.get(edge[0]);
+            Vec3d v2 = BuckyBallGeometry.vertices.get(edge[1]);
+
+            buffer.pos(v1.x * radius, v1.y * radius, v1.z * radius)
+                  .normal((float) v1.x, (float) v1.y, (float) v1.z).endVertex();
+
+            buffer.pos(v2.x * radius, v2.y * radius, v2.z * radius)
+                  .normal((float) v2.x, (float) v2.y, (float) v2.z).endVertex();
+        }
+
+        tessellator.draw();
+    }
+
 }
