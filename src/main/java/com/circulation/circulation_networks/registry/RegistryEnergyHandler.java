@@ -12,7 +12,7 @@ import java.util.ArrayDeque;
 import java.util.Comparator;
 import java.util.List;
 
-public class RegistryEnergyHandler {
+public final class RegistryEnergyHandler {
 
     public static List<String> blackList = new ObjectArrayList<>();
     public static List<Class<?>> blackListClass = new ObjectArrayList<>();

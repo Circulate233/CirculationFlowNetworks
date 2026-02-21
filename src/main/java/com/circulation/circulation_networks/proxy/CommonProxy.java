@@ -7,6 +7,9 @@ import com.circulation.circulation_networks.energy.manager.EUHandlerManager;
 import com.circulation.circulation_networks.energy.manager.FEHandlerManager;
 import com.circulation.circulation_networks.energy.manager.MEKHandlerManager;
 import com.circulation.circulation_networks.manager.EnergyMachineManager;
+import com.circulation.circulation_networks.packets.NodeNetworkRendering;
+import com.circulation.circulation_networks.packets.SpoceRendering;
+import com.circulation.circulation_networks.packets.UpdateItemModeMessage;
 import com.circulation.circulation_networks.registry.RegistryBlocks;
 import com.circulation.circulation_networks.registry.RegistryEnergyHandler;
 import com.circulation.circulation_networks.registry.RegistryItems;
@@ -40,6 +43,11 @@ public class CommonProxy {
         MinecraftForge.EVENT_BUS.register(this);
         CapabilityManager.INSTANCE.register(CEHandler.class, new EmptyStorage<>(), () -> null);
         CapabilityManager.INSTANCE.register(INode.class, new EmptyStorage<>(), () -> null);
+
+        registerMessage(UpdateItemModeMessage.class, Side.SERVER);
+
+        registerMessage(SpoceRendering.class, Side.CLIENT);
+        registerMessage(NodeNetworkRendering.class, Side.CLIENT);
     }
 
     public void init() {

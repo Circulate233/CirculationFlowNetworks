@@ -1,6 +1,6 @@
 package com.circulation.circulation_networks.registry;
 
-import com.circulation.circulation_networks.items.DebugItem;
+import com.circulation.circulation_networks.items.ItemInspectionTool;
 import net.minecraft.client.renderer.block.model.ModelResourceLocation;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -19,10 +19,10 @@ public final class RegistryItems {
     private static final List<Item> ITEMS_TO_REGISTER = new LinkedList<>();
     private static final List<Item> ITEM_MODELS_TO_REGISTER = new LinkedList<>();
 
-    public static DebugItem debugItem;
+    public static ItemInspectionTool inspectionTool;
 
     public static void registerItems(RegistryEvent.Register<Item> event) {
-        debugItem = registryItem(new DebugItem());
+        inspectionTool = registryItem(new ItemInspectionTool());
 
         ITEMS_TO_REGISTER.forEach(event.getRegistry()::register);
         ITEMS_TO_REGISTER.clear();
