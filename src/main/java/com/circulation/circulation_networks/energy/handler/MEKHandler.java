@@ -1,13 +1,14 @@
 package com.circulation.circulation_networks.energy.handler;
 
 import com.circulation.circulation_networks.api.IEnergyHandler;
-import lombok.Getter;
+import mekanism.api.energy.IEnergizedItem;
 import mekanism.api.energy.IStrictEnergyAcceptor;
 import mekanism.api.energy.IStrictEnergyOutputter;
 import mekanism.api.energy.IStrictEnergyStorage;
 import mekanism.common.base.IEnergyWrapper;
 import mekanism.common.tier.EnergyCubeTier;
 import mekanism.common.tile.TileEntityEnergyCube;
+import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 
@@ -31,29 +32,30 @@ public final class MEKHandler implements IEnergyHandler {
         inductionPort = temp;
     }
 
-    @Getter
-    private TileEntity tileEntity;
     private long maxOutput = Long.MAX_VALUE;
     @Nullable
     private IStrictEnergyStorage send;
     @Nullable
     private IStrictEnergyStorage receive;
+
+    private boolean isItem;
+    private IEnergizedItem receiveItem;
+    private ItemStack stack = ItemStack.EMPTY;
+    private long needEnergy;
+
     private EnergyType energyType = EnergyType.INVALID;
     private boolean creative;
 
     public MEKHandler(TileEntity tileEntity) {
-        this.tileEntity = tileEntity;
-        init();
+        init(tileEntity);
+    }
+
+    public MEKHandler(ItemStack itemStack) {
+        init(itemStack);
     }
 
     @Override
     public IEnergyHandler init(TileEntity tileEntity) {
-        this.tileEntity = tileEntity;
-        init();
-        return this;
-    }
-
-    private void init() {
         if (tileEntity instanceof TileEntityEnergyCube te) {
             creative = te.tier == EnergyCubeTier.CREATIVE;
             send = (IStrictEnergyStorage) tileEntity;
@@ -90,24 +92,47 @@ public final class MEKHandler implements IEnergyHandler {
                 maxOutput = (long) te.getMaxOutput();
             }
         }
+        return this;
+    }
+
+    @Override
+    public IEnergyHandler init(ItemStack itemStack) {
+        isItem = true;
+        receiveItem = (IEnergizedItem) itemStack.getItem();
+        double i = receiveItem.getMaxTransfer(itemStack);
+        double r = (receiveItem.getMaxEnergy(itemStack) - receiveItem.getEnergy(itemStack)) / 10;
+        needEnergy = (long) (i == 0 ? r : Math.min(r, i));
+        stack = itemStack;
+        energyType = EnergyType.RECEIVE;
+        return this;
     }
 
     @Override
     public void clear() {
-        tileEntity = null;
         maxOutput = Long.MAX_VALUE;
         send = null;
         receive = null;
+        receiveItem = null;
         energyType = EnergyType.INVALID;
         creative = false;
+        isItem = false;
+        needEnergy = 0;
+        stack = ItemStack.EMPTY;
     }
 
     @Override
     public long receiveEnergy(long maxReceive) {
-        if (receive == null) return 0;
-        var i = Math.min(canReceiveValue(), maxReceive);
-        receive.setEnergy(receive.getEnergy() + i * 2.5);
-        return i;
+        if (isItem) {
+            var i = Math.min(needEnergy, maxReceive);
+            receiveItem.setEnergy(stack, receiveItem.getEnergy(stack) + i);
+            needEnergy -= i;
+            return i;
+        } else {
+            if (receive == null) return 0;
+            var i = Math.min(canReceiveValue(), maxReceive);
+            receive.setEnergy(receive.getEnergy() + i * 2.5);
+            return i;
+        }
     }
 
     @Override
@@ -128,9 +153,13 @@ public final class MEKHandler implements IEnergyHandler {
 
     @Override
     public long canReceiveValue() {
-        if (receive == null) return 0;
-        double i = (receive.getMaxEnergy() - receive.getEnergy()) / 2.5;
-        return Math.min((long) i, maxOutput);
+        if (isItem) {
+            return needEnergy;
+        } else {
+            if (receive == null) return 0;
+            double i = (receive.getMaxEnergy() - receive.getEnergy()) / 2.5;
+            return Math.min((long) i, maxOutput);
+        }
     }
 
     @Override
@@ -141,7 +170,8 @@ public final class MEKHandler implements IEnergyHandler {
 
     @Override
     public boolean canReceive() {
-        return receive != null && (receive.getMaxEnergy() - receive.getEnergy()) / 2.5 >= 0;
+        if (isItem) return needEnergy > 0;
+        else return receive != null && (receive.getMaxEnergy() - receive.getEnergy()) / 2.5 >= 0;
     }
 
     @Override

@@ -16,10 +16,4 @@ public interface INodeTileEntity {
 
     World getNodeWorld();
 
-    default double getEnergyScope() {
-        return 0;
-    }
-
-    double getLinkScope();
-
 }

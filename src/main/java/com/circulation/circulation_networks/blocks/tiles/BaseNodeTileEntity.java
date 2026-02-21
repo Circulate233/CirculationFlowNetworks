@@ -62,11 +62,6 @@ public abstract class BaseNodeTileEntity extends TileEntity implements INodeTile
     }
 
     @Override
-    public final double getLinkScope() {
-        return node.getLinkScope();
-    }
-
-    @Override
     public boolean hasCapability(@NotNull Capability<?> capability, @Nullable EnumFacing facing) {
         return (capability == CommonProxy.nodeCapability && node != null) || super.hasCapability(capability, facing);
     }

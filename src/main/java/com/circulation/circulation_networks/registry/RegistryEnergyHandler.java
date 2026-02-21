@@ -5,6 +5,7 @@ import com.circulation.circulation_networks.api.IEnergyHandlerManager;
 import com.circulation.circulation_networks.api.IMachineNodeTileEntity;
 import com.google.common.collect.ImmutableList;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 
 import java.util.ArrayDeque;
@@ -37,6 +38,14 @@ public class RegistryEnergyHandler {
         return false;
     }
 
+    public static boolean isEnergyItemStack(ItemStack stack) {
+        if (stack.isEmpty()) return false;
+        for (IEnergyHandlerManager manager : list) {
+            if (manager.isAvailable(stack)) return true;
+        }
+        return false;
+    }
+
     public static boolean isEnergyTileEntity(TileEntity tile) {
         for (IEnergyHandlerManager manager : list) {
             if (manager.isAvailable(tile)) return true;
@@ -47,6 +56,13 @@ public class RegistryEnergyHandler {
     public static IEnergyHandlerManager getEnergyManager(TileEntity tile) {
         for (IEnergyHandlerManager manager : list) {
             if (manager.isAvailable(tile)) return manager;
+        }
+        return null;
+    }
+
+    public static IEnergyHandlerManager getEnergyManager(ItemStack stack) {
+        for (IEnergyHandlerManager manager : list) {
+            if (manager.isAvailable(stack)) return manager;
         }
         return null;
     }

@@ -9,6 +9,8 @@ import com.circulation.circulation_networks.registry.RegistryEnergyHandler;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMaps;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import it.unimi.dsi.fastutil.objects.ObjectLists;
 import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ObjectSet;
 import it.unimi.dsi.fastutil.objects.ObjectSets;
@@ -28,17 +30,18 @@ import javax.annotation.Nonnull;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Set;
 import java.util.WeakHashMap;
-import java.util.function.Consumer;
+
+import static com.circulation.circulation_networks.CirculationFlowNetworks.server;
 
 public final class EnergyMachineManager {
 
     public static final EnergyMachineManager INSTANCE = new EnergyMachineManager();
-    private static final Consumer<IEnergyHandler> consumer = IEnergyHandler::recycle;
-    private final Object2ObjectMap<World, Object2ObjectMap<ChunkPos, ReferenceSet<IEnergySupplyNode>>> scopeNode = new Object2ObjectOpenHashMap<>();
-    private final Object2ObjectMap<World, Object2ObjectMap<IEnergySupplyNode, ReferenceSet<ChunkPos>>> nodeScope = new Object2ObjectOpenHashMap<>();
-    private final Object2ObjectMap<INode, Set<TileEntity>> gridMachineMap = new Object2ObjectOpenHashMap<>();
+    private final Reference2ObjectMap<World, Object2ObjectMap<ChunkPos, ReferenceSet<IEnergySupplyNode>>> scopeNode = new Reference2ObjectOpenHashMap<>();
+    private final Reference2ObjectMap<World, Object2ObjectMap<IEnergySupplyNode, ObjectSet<ChunkPos>>> nodeScope = new Reference2ObjectOpenHashMap<>();
+    private final Reference2ObjectMap<INode, Set<TileEntity>> gridMachineMap = new Reference2ObjectOpenHashMap<>();
     @Getter
     private final WeakHashMap<TileEntity, ReferenceSet<INode>> machineGridMap = new WeakHashMap<>();
     @Getter
@@ -48,47 +51,7 @@ public final class EnergyMachineManager {
         gridMachineMap.defaultReturnValue(ReferenceSets.emptySet());
     }
 
-    public void onServerTick() {
-        interaction.values().forEach(Interaction::reset);
-        var gridMap = new Reference2ObjectOpenHashMap<IGrid, EnumMap<IEnergyHandler.EnergyType, ObjectSet<IEnergyHandler>>>();
-        for (var grid : NetworkManager.INSTANCE.getAllGrids()) {
-            gridMap.put(grid, new EnumMap<>(IEnergyHandler.EnergyType.class));
-        }
-        for (var entry : machineGridMap.entrySet()) {
-            var te = entry.getKey();
-            var handler = IEnergyHandler.release(te);
-
-            if (handler == null) {
-                continue;
-            } else if (handler.getType() == IEnergyHandler.EnergyType.INVALID) {
-                handler.recycle();
-                continue;
-            }
-
-            for (var node : entry.getValue()) {
-                gridMap.get(node.getGrid())
-                       .computeIfAbsent(handler.getType(), s -> new ObjectOpenHashSet<>()).add(handler);
-            }
-        }
-
-        for (var e : gridMap.entrySet()) {
-            var grid = e.getKey();
-            var hanlers = e.getValue();
-            var send = hanlers.getOrDefault(IEnergyHandler.EnergyType.SEND, ObjectSets.emptySet());
-            var storage = hanlers.getOrDefault(IEnergyHandler.EnergyType.STORAGE, ObjectSets.emptySet());
-            var receive = hanlers.getOrDefault(IEnergyHandler.EnergyType.RECEIVE, ObjectSets.emptySet());
-
-            transferEnergy(send, receive, Status.INTERACTION, grid);
-            transferEnergy(storage, receive, Status.EXTRACT, grid);
-            transferEnergy(send, storage, Status.RECEIVE, grid);
-
-            if (!send.isEmpty()) send.forEach(consumer);
-            if (!storage.isEmpty()) storage.forEach(consumer);
-            if (!receive.isEmpty()) receive.forEach(consumer);
-        }
-    }
-
-    private void transferEnergy(Collection<IEnergyHandler> send, Collection<IEnergyHandler> receive, Status status, IGrid grid) {
+    static void transferEnergy(Collection<IEnergyHandler> send, Collection<IEnergyHandler> receive, Status status, IGrid grid) {
         if (send.isEmpty() || receive.isEmpty()) return;
         var si = send.iterator();
         while (si.hasNext()) {
@@ -102,14 +65,18 @@ public final class EnergyMachineManager {
                     var r = receiver.canReceiveValue();
                     if (e > r) {
                         if (r != 0) status.interaction(receiver.receiveEnergy(sender.extractEnergy(r)), grid);
-                        receiver.recycle();
-                        ri.remove();
+                        if (receiver.getType() != IEnergyHandler.EnergyType.STORAGE) {
+                            receiver.recycle();
+                            ri.remove();
+                        }
                     } else if (e == r) {
                         if (e != 0) status.interaction(receiver.receiveEnergy(sender.extractEnergy(r)), grid);
                         sender.recycle();
-                        receiver.recycle();
                         si.remove();
-                        ri.remove();
+                        if (receiver.getType() != IEnergyHandler.EnergyType.STORAGE) {
+                            receiver.recycle();
+                            ri.remove();
+                        }
                         break;
                     } else {
                         if (e != 0) status.interaction(receiver.receiveEnergy(sender.extractEnergy(e)), grid);
@@ -117,6 +84,51 @@ public final class EnergyMachineManager {
                         si.remove();
                         break;
                     }
+                }
+            }
+        }
+    }
+
+    public void onServerTick() {
+        if (server == null) return;
+        interaction.values().forEach(Interaction::reset);
+        var gridMap = new Reference2ObjectOpenHashMap<IGrid, EnumMap<IEnergyHandler.EnergyType, List<IEnergyHandler>>>();
+        for (var entry : machineGridMap.entrySet()) {
+            var te = entry.getKey();
+            var handler = IEnergyHandler.release(te);
+
+            if (handler == null) {
+                continue;
+            } else if (handler.getType() == IEnergyHandler.EnergyType.INVALID) {
+                handler.recycle();
+                continue;
+            }
+
+            for (var node : entry.getValue()) {
+                gridMap.computeIfAbsent(node.getGrid(), g -> new EnumMap<>(IEnergyHandler.EnergyType.class))
+                       .computeIfAbsent(handler.getType(), s -> new ObjectArrayList<>())
+                       .add(handler);
+            }
+        }
+
+        for (var e : gridMap.entrySet()) {
+            var grid = e.getKey();
+            var hanlers = e.getValue();
+            var send = hanlers.getOrDefault(IEnergyHandler.EnergyType.SEND, ObjectLists.emptyList());
+            var storage = hanlers.getOrDefault(IEnergyHandler.EnergyType.STORAGE, ObjectLists.emptyList());
+            var receive = hanlers.getOrDefault(IEnergyHandler.EnergyType.RECEIVE, ObjectLists.emptyList());
+
+            transferEnergy(send, receive, Status.INTERACTION, grid);
+            transferEnergy(storage, receive, Status.EXTRACT, grid);
+            transferEnergy(send, storage, Status.RECEIVE, grid);
+        }
+
+        ChargingManager.INSTANCE.onServerTick(gridMap);
+
+        for (var value : gridMap.values()) {
+            for (var handlers : value.values()) {
+                for (var handler : handlers) {
+                    handler.recycle();
                 }
             }
         }
@@ -188,7 +200,7 @@ public final class EnergyMachineManager {
             int maxChunkX = (nodeX + range) >> 4;
             int minChunkZ = (nodeZ - range) >> 4;
             int maxChunkZ = (nodeZ + range) >> 4;
-            ReferenceSet<ChunkPos> chunksCovered = new ReferenceOpenHashSet<>();
+            ObjectSet<ChunkPos> chunksCovered = new ObjectOpenHashSet<>();
             for (int cx = minChunkX; cx <= maxChunkX; ++cx) {
                 for (int cz = minChunkZ; cz <= maxChunkZ; ++cz) {
                     var chunkPos = new ChunkPos(cx, cz);
@@ -233,11 +245,11 @@ public final class EnergyMachineManager {
 
             nodeScope.computeIfAbsent(
                 node.getWorld(), k -> {
-                    var m = new Object2ObjectOpenHashMap<IEnergySupplyNode, ReferenceSet<ChunkPos>>();
-                    m.defaultReturnValue(ReferenceSets.emptySet());
+                    var m = new Object2ObjectOpenHashMap<IEnergySupplyNode, ObjectSet<ChunkPos>>();
+                    m.defaultReturnValue(ObjectSets.emptySet());
                     return m;
                 }
-            ).put(energySupplyNode, ReferenceSets.unmodifiable(chunksCovered));
+            ).put(energySupplyNode, ObjectSets.unmodifiable(chunksCovered));
 
             if (energySupplyNode instanceof IMachineNode node1) addMachineNode(node1);
         }
@@ -246,7 +258,7 @@ public final class EnergyMachineManager {
     public void removeNode(INode node) {
         if (node instanceof IEnergySupplyNode removedNode) {
             var world = removedNode.getWorld();
-            ReferenceSet<ChunkPos> coveredChunks = nodeScope.get(world).remove(removedNode);
+            ObjectSet<ChunkPos> coveredChunks = nodeScope.get(world).remove(removedNode);
             if (coveredChunks == null || coveredChunks.isEmpty()) return;
             for (var coveredChunk : coveredChunks) {
                 var set = scopeNode.get(world).get(coveredChunk);
@@ -270,6 +282,14 @@ public final class EnergyMachineManager {
         }
     }
 
+    public void onServerStop() {
+        scopeNode.clear();
+        nodeScope.clear();
+        gridMachineMap.clear();
+        machineGridMap.clear();
+        interaction.clear();
+    }
+
     /**
      * 获取范围包含此位置所在区块的所有节点
      *
@@ -290,7 +310,7 @@ public final class EnergyMachineManager {
         return scopeNode.getOrDefault(world, Object2ObjectMaps.emptyMap()).getOrDefault(pos, ReferenceSets.emptySet());
     }
 
-    private enum Status {
+    enum Status {
         EXTRACT,
         INTERACTION,
         RECEIVE;

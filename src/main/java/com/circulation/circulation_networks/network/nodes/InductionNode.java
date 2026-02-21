@@ -1,22 +1,27 @@
 package com.circulation.circulation_networks.network.nodes;
 
+import com.circulation.circulation_networks.api.INodeTileEntity;
 import com.circulation.circulation_networks.api.node.IEnergySupplyNode;
-import com.circulation.circulation_networks.blocks.tiles.TileEntityEnergyInductionTower;
 
 public final class InductionNode extends Node implements IEnergySupplyNode {
 
-    public InductionNode(TileEntityEnergyInductionTower tileEntity) {
+    private final double energyScope;
+    private final double linkScope;
+
+    public InductionNode(INodeTileEntity tileEntity, double energyScope, double linkScope) {
         super(tileEntity);
+        this.energyScope = energyScope;
+        this.linkScope = linkScope;
     }
 
     @Override
     public double getEnergyScope() {
-        return 16;
+        return energyScope;
     }
 
     @Override
     public double getLinkScope() {
-        return 16;
+        return linkScope;
     }
 
 }

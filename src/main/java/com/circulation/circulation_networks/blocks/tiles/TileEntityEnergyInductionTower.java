@@ -7,7 +7,7 @@ public class TileEntityEnergyInductionTower extends BaseNodeTileEntity {
 
     @Override
     protected INode createNode() {
-        return new InductionNode(this);
+        return new InductionNode(this, 8, 12);
     }
 
 }

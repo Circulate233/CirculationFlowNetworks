@@ -7,6 +7,7 @@ dependencies {
     runtimeOnly 'com.cleanroommc:osxnarratorblocker:1.0'
 
     implementation 'com.cleanroommc:configanytime:1.0'
+    implementation(rfg.deobf("curse.maven:baubles-227083:2518667"))
     runtimeOnly(rfg.deobf("curse.maven:supermartijn642s-core-lib-454372:7521738"))
     runtimeOnly(rfg.deobf("curse.maven:supermartijn642s-config-lib-438332:4715393"))
     runtimeOnly(rfg.deobf("curse.maven:trash-cans-394535:4606884"))

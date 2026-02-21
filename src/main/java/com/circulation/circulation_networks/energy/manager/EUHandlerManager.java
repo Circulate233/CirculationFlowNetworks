@@ -10,6 +10,8 @@ import ic2.api.energy.tile.IEnergySink;
 import ic2.api.energy.tile.IEnergySource;
 import ic2.api.energy.tile.IEnergyTile;
 import ic2.api.info.ILocatable;
+import ic2.api.item.ElectricItem;
+import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraftforge.fml.common.eventhandler.EventPriority;
@@ -29,6 +31,11 @@ public final class EUHandlerManager implements IEnergyHandlerManager {
     }
 
     @Override
+    public boolean isAvailable(ItemStack itemStack) {
+        return ElectricItem.manager.getMaxCharge(itemStack) > 0;
+    }
+
+    @Override
     public Class<EUHandler> getEnergyHandlerClass() {
         return EUHandler.class;
     }
@@ -41,6 +48,11 @@ public final class EUHandlerManager implements IEnergyHandlerManager {
     @Override
     public IEnergyHandler newInstance(TileEntity tileEntity) {
         return new EUHandler(tileEntity);
+    }
+
+    @Override
+    public IEnergyHandler newInstance(ItemStack itemStack) {
+        return new EUHandler(itemStack);
     }
 
     @Override

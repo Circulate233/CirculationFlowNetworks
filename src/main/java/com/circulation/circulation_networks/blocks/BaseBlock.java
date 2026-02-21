@@ -11,7 +11,7 @@ import net.minecraft.world.World;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import static com.circulation.circulation_networks.CirculationFlowNetworks.creativeTab;
+import static com.circulation.circulation_networks.CirculationFlowNetworks.CREATIVE_TAB;
 
 public abstract class BaseBlock extends Block implements ITileEntityProvider {
 
@@ -19,7 +19,7 @@ public abstract class BaseBlock extends Block implements ITileEntityProvider {
         super(Material.IRON);
         this.setRegistryName(new ResourceLocation(CirculationFlowNetworks.MOD_ID, name));
         this.setTranslationKey(CirculationFlowNetworks.MOD_ID + "." + name);
-        this.setCreativeTab(creativeTab);
+        this.setCreativeTab(CREATIVE_TAB);
     }
 
     public boolean hasTileEntity(@NotNull IBlockState state) {

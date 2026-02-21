@@ -1,5 +1,6 @@
 package com.circulation.circulation_networks.registry;
 
+import com.circulation.circulation_networks.blocks.BlockChargingTE;
 import com.circulation.circulation_networks.blocks.BlockEnergyInductionTower;
 import net.minecraft.block.Block;
 import net.minecraft.client.renderer.block.model.ModelBakery;
@@ -17,13 +18,15 @@ import java.util.Objects;
 
 public final class RegistryBlocks {
 
-    public static final List<Block> BLOCKS_TO_REGISTER = new LinkedList<>();
-    public static final List<Block> BLOCK_MODELS_TO_REGISTER = new LinkedList<>();
+    private static final List<Block> BLOCKS_TO_REGISTER = new LinkedList<>();
+    private static final List<Block> BLOCK_MODELS_TO_REGISTER = new LinkedList<>();
 
     public static BlockEnergyInductionTower energyInductionTower;
+    public static BlockChargingTE blockChargingTE;
 
     public static void registerBlocks(RegistryEvent.Register<Block> event) {
         prepareItemBlockRegister(energyInductionTower = registerBlock(new BlockEnergyInductionTower()));
+        prepareItemBlockRegister(blockChargingTE = registerBlock(new BlockChargingTE()));
 
         BLOCKS_TO_REGISTER.forEach(event.getRegistry()::register);
         BLOCKS_TO_REGISTER.clear();
@@ -62,7 +65,7 @@ public final class RegistryBlocks {
             String translationKey = block.getTranslationKey();
             item.setRegistryName(registryName).setTranslationKey(translationKey);
         }
-        RegistryItems.ITEMS_TO_REGISTER.add(item);
+        RegistryItems.registryItem(item);
         return item;
     }
 

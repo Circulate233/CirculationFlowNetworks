@@ -14,7 +14,6 @@ import com.circulation.circulation_networks.utils.Packet;
 import net.minecraft.block.Block;
 import net.minecraft.item.Item;
 import net.minecraft.nbt.NBTBase;
-import net.minecraft.nbt.NBTTagLong;
 import net.minecraft.util.EnumFacing;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.capabilities.Capability;
@@ -33,13 +32,14 @@ public class CommonProxy {
 
     @CapabilityInject(CEHandler.class)
     public static Capability<CEHandler> ceHandlerCapability;
+    @CapabilityInject(INode.class)
     public static Capability<INode> nodeCapability;
     private int id = 0;
 
     public void preInit() {
         MinecraftForge.EVENT_BUS.register(this);
-        CapabilityManager.INSTANCE.register(CEHandler.class, new CEHandlerIStorage(), () -> null);
-        CapabilityManager.INSTANCE.register(INode.class, new INodeIStorage(), () -> null);
+        CapabilityManager.INSTANCE.register(CEHandler.class, new EmptyStorage<>(), () -> null);
+        CapabilityManager.INSTANCE.register(INode.class, new EmptyStorage<>(), () -> null);
     }
 
     public void init() {
@@ -82,26 +82,15 @@ public class CommonProxy {
         EnergyMachineManager.INSTANCE.onServerTick();
     }
 
-    private static class CEHandlerIStorage implements Capability.IStorage<CEHandler> {
-        @Override
-        public @Nullable NBTBase writeNBT(Capability<CEHandler> capability, CEHandler instance, EnumFacing side) {
-            return new NBTTagLong(instance.getEnergy().getEnergy());
-        }
+    private final static class EmptyStorage<T> implements Capability.IStorage<T> {
 
         @Override
-        public void readNBT(Capability<CEHandler> capability, CEHandler instance, EnumFacing side, NBTBase nbt) {
-            instance.getEnergy().setEnergy(((NBTTagLong) nbt).getLong());
-        }
-    }
-
-    private static class INodeIStorage implements Capability.IStorage<INode> {
-        @Override
-        public @Nullable NBTBase writeNBT(Capability<INode> capability, INode instance, EnumFacing side) {
+        public @Nullable NBTBase writeNBT(Capability<T> capability, T instance, EnumFacing side) {
             return null;
         }
 
         @Override
-        public void readNBT(Capability<INode> capability, INode instance, EnumFacing side, NBTBase nbt) {
+        public void readNBT(Capability<T> capability, T instance, EnumFacing side, NBTBase nbt) {
 
         }
     }

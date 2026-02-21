@@ -3,6 +3,7 @@ package com.circulation.circulation_networks.energy.manager;
 import com.circulation.circulation_networks.api.IEnergyHandler;
 import com.circulation.circulation_networks.api.IEnergyHandlerManager;
 import com.circulation.circulation_networks.energy.handler.FEHandler;
+import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraftforge.energy.CapabilityEnergy;
@@ -19,6 +20,11 @@ public final class FEHandlerManager implements IEnergyHandlerManager {
     }
 
     @Override
+    public boolean isAvailable(ItemStack itemStack) {
+        return itemStack.hasCapability(CapabilityEnergy.ENERGY, null);
+    }
+
+    @Override
     public Class<FEHandler> getEnergyHandlerClass() {
         return FEHandler.class;
     }
@@ -31,6 +37,11 @@ public final class FEHandlerManager implements IEnergyHandlerManager {
     @Override
     public IEnergyHandler newInstance(TileEntity tileEntity) {
         return new FEHandler(tileEntity);
+    }
+
+    @Override
+    public IEnergyHandler newInstance(ItemStack itemStack) {
+        return new FEHandler(itemStack);
     }
 
     @Override

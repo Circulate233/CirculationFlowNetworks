@@ -10,6 +10,12 @@ import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
+import it.unimi.dsi.fastutil.objects.ObjectSet;
+import it.unimi.dsi.fastutil.objects.ObjectSets;
+import it.unimi.dsi.fastutil.objects.Reference2ObjectLinkedOpenHashMap;
+import it.unimi.dsi.fastutil.objects.Reference2ObjectMap;
+import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSets;
@@ -31,9 +37,9 @@ public final class NetworkManager {
     private final ReferenceSet<INode> activeNodes = new ReferenceOpenHashSet<>();
     private final Int2ObjectMap<IGrid> grids = new Int2ObjectOpenHashMap<>();
 
-    private final Object2ObjectMap<World, Object2ObjectMap<ChunkPos, ReferenceSet<INode>>> scopeNode = new Object2ObjectOpenHashMap<>();
-    private final Object2ObjectMap<World, Object2ObjectMap<INode, ReferenceSet<ChunkPos>>> nodeScope = new Object2ObjectOpenHashMap<>();
-    private final Object2ObjectMap<World, Object2ObjectMap<ChunkPos, ReferenceSet<INode>>> nodeLocation = new Object2ObjectOpenHashMap<>();
+    private final Reference2ObjectMap<World, Object2ObjectMap<ChunkPos, ReferenceSet<INode>>> scopeNode = new Reference2ObjectOpenHashMap<>();
+    private final Reference2ObjectMap<World, Object2ObjectMap<INode, ObjectSet<ChunkPos>>> nodeScope = new Reference2ObjectOpenHashMap<>();
+    private final Reference2ObjectMap<World, Object2ObjectMap<ChunkPos, ReferenceSet<INode>>> nodeLocation = new Reference2ObjectLinkedOpenHashMap<>();
 
     public Collection<IGrid> getAllGrids() {
         return grids.values();
@@ -66,7 +72,7 @@ public final class NetworkManager {
         int maxChunkX = (nodeX + range) >> 4;
         int minChunkZ = (nodeZ - range) >> 4;
         int maxChunkZ = (nodeZ + range) >> 4;
-        ReferenceSet<ChunkPos> chunksCovered = new ReferenceOpenHashSet<>();
+        ObjectSet<ChunkPos> chunksCovered = new ObjectOpenHashSet<>();
         for (int cx = minChunkX; cx <= maxChunkX; ++cx) {
             for (int cz = minChunkZ; cz <= maxChunkZ; ++cz) {
                 chunksCovered.add(new ChunkPos(cx, cz));
@@ -88,10 +94,10 @@ public final class NetworkManager {
             set1.add(newNode);
         }
         nodeScope.computeIfAbsent(world, l -> {
-            var ma = new Object2ObjectOpenHashMap<INode, ReferenceSet<ChunkPos>>();
-            ma.defaultReturnValue(ReferenceSets.emptySet());
+            var ma = new Object2ObjectOpenHashMap<INode, ObjectSet<ChunkPos>>();
+            ma.defaultReturnValue(ObjectSets.emptySet());
             return ma;
-        }).put(newNode, ReferenceSets.unmodifiable(chunksCovered));
+        }).put(newNode, ObjectSets.unmodifiable(chunksCovered));
 
         List<INode> newNeighbors = new ObjectArrayList<>();
         for (INode existing : nodes) {
@@ -120,6 +126,7 @@ public final class NetworkManager {
         updateNetworks();
 
         EnergyMachineManager.INSTANCE.addNode(newNode);
+        ChargingManager.INSTANCE.addNode(newNode);
     }
 
     public void removeNode(INode removedNode) {
@@ -130,7 +137,7 @@ public final class NetworkManager {
         ChunkPos ownChunk = new ChunkPos(pos);
         nodeLocation.get(world).get(ownChunk).remove(removedNode);
 
-        ReferenceSet<ChunkPos> coveredChunks = nodeScope.get(world).remove(removedNode);
+        ObjectSet<ChunkPos> coveredChunks = nodeScope.get(world).remove(removedNode);
         if (coveredChunks == null || coveredChunks.isEmpty()) return;
         for (var coveredChunk : coveredChunks) {
             var set = scopeNode.get(world).get(coveredChunk);
@@ -175,6 +182,15 @@ public final class NetworkManager {
         updateNetworks();
 
         EnergyMachineManager.INSTANCE.removeNode(removedNode);
+        ChargingManager.INSTANCE.removeNode(removedNode);
+    }
+
+    public void onServerStop() {
+        scopeNode.clear();
+        nodeScope.clear();
+        nodeLocation.clear();
+        activeNodes.clear();
+        grids.clear();
     }
 
     /**
@@ -233,7 +249,7 @@ public final class NetworkManager {
      * @param node 目标节点
      * @return 该节点覆盖的区块集合
      */
-    public @Nonnull ReferenceSet<ChunkPos> getCoveredChunks(INode node) {
+    public @Nonnull ObjectSet<ChunkPos> getCoveredChunks(INode node) {
         return nodeScope.get(node.getWorld()).get(node);
     }
 

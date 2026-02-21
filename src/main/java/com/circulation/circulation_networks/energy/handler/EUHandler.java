@@ -5,7 +5,8 @@ import ic2.api.energy.EnergyNet;
 import ic2.api.energy.tile.IEnergySink;
 import ic2.api.energy.tile.IEnergySource;
 import ic2.api.energy.tile.IEnergyTile;
-import lombok.Getter;
+import ic2.api.item.ElectricItem;
+import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 
 import javax.annotation.Nonnull;
@@ -16,28 +17,28 @@ public final class EUHandler implements IEnergyHandler {
 
     private static final long max = Long.MAX_VALUE >> 2;
     private static final long maxFE = max << 2;
-    @Getter
-    private TileEntity tileEntity;
     @Nonnull
     private EnergyType energyType;
     @Nullable
     private IEnergySource send;
+
+    private boolean isItem;
+    private ItemStack itemStack = ItemStack.EMPTY;
+
     @Nullable
     private IEnergySink receive;
 
     public EUHandler(TileEntity tileEntity) {
-        this.tileEntity = tileEntity;
-        init();
+        init(tileEntity);
+    }
+
+    public EUHandler(ItemStack stack) {
+        init(stack);
     }
 
     @Override
     public IEnergyHandler init(TileEntity tileEntity) {
-        this.tileEntity = tileEntity;
-        init();
-        return this;
-    }
-
-    private void init() {
+        isItem = false;
         IEnergyTile tile = EnergyNet.instance.getSubTile(tileEntity.getWorld(), tileEntity.getPos());
         boolean o = tile instanceof IEnergySource;
         boolean i = tile instanceof IEnergySink;
@@ -52,21 +53,35 @@ public final class EUHandler implements IEnergyHandler {
             receive = (IEnergySink) tile;
         }
         if (!canExtract() && !canReceive()) energyType = EnergyType.INVALID;
+        return this;
+    }
+
+    @Override
+    public IEnergyHandler init(ItemStack itemStack) {
+        isItem = true;
+        this.itemStack = itemStack;
+        energyType = EnergyType.RECEIVE;
+        return this;
     }
 
     @Override
     public void clear() {
-        this.tileEntity = null;
         this.energyType = EnergyType.INVALID;
         this.send = null;
         this.receive = null;
+        this.itemStack = ItemStack.EMPTY;
+        this.isItem = false;
     }
 
     @Override
     public long receiveEnergy(long maxReceive) {
-        long i = (Math.min(canReceiveValue(), maxReceive)) >> 2;
-        receive.injectEnergy(null, i, 0);
-        return i << 2;
+        if (isItem) {
+            return (long) ElectricItem.manager.charge(itemStack, maxReceive, Integer.MAX_VALUE, false, false);
+        } else {
+            long i = (Math.min(canReceiveValue(), maxReceive)) >> 2;
+            receive.injectEnergy(null, i, 0);
+            return i << 2;
+        }
     }
 
     @Override
@@ -85,9 +100,13 @@ public final class EUHandler implements IEnergyHandler {
 
     @Override
     public long canReceiveValue() {
-        if (receive == null) return 0;
-        if (receive.getDemandedEnergy() > max) return maxFE;
-        return ((long) receive.getDemandedEnergy()) << 2;
+        if (isItem) {
+            return (long) ElectricItem.manager.charge(itemStack, Double.MAX_VALUE, Integer.MAX_VALUE, false, true);
+        } else {
+            if (receive == null) return 0;
+            if (receive.getDemandedEnergy() > max) return maxFE;
+            return ((long) receive.getDemandedEnergy()) << 2;
+        }
     }
 
     @Override
@@ -97,7 +116,11 @@ public final class EUHandler implements IEnergyHandler {
 
     @Override
     public boolean canReceive() {
-        return receive != null && receive.getDemandedEnergy() > 0;
+        if (isItem) {
+            return ElectricItem.manager.getMaxCharge(itemStack) > 0;
+        } else {
+            return receive != null && receive.getDemandedEnergy() > 0;
+        }
     }
 
     @Override

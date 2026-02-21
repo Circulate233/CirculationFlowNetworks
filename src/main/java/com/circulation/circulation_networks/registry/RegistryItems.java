@@ -16,13 +16,13 @@ import java.util.Objects;
 
 public final class RegistryItems {
 
-    public static final List<Item> ITEMS_TO_REGISTER = new LinkedList<>();
-    public static final List<Item> ITEM_MODELS_TO_REGISTER = new LinkedList<>();
+    private static final List<Item> ITEMS_TO_REGISTER = new LinkedList<>();
+    private static final List<Item> ITEM_MODELS_TO_REGISTER = new LinkedList<>();
 
     public static DebugItem debugItem;
 
     public static void registerItems(RegistryEvent.Register<Item> event) {
-        registryItem(debugItem = new DebugItem());
+        debugItem = registryItem(new DebugItem());
 
         ITEMS_TO_REGISTER.forEach(event.getRegistry()::register);
         ITEMS_TO_REGISTER.clear();

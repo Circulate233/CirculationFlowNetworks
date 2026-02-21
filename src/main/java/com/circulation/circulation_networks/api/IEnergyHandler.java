@@ -4,9 +4,9 @@ import com.circulation.circulation_networks.manager.EnergyMachineManager;
 import com.circulation.circulation_networks.proxy.CommonProxy;
 import com.circulation.circulation_networks.registry.RegistryEnergyHandler;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
+import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 
-import javax.annotation.Nonnull;
 import java.util.Map;
 import java.util.Queue;
 
@@ -25,7 +25,19 @@ public interface IEnergyHandler {
         return t.init(tileEntity);
     }
 
+    static IEnergyHandler release(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return null;
+        var m = RegistryEnergyHandler.getEnergyManager(stack);
+        if (m == null) return null;
+        var q = POOL.get(m.getEnergyHandlerClass());
+        if (q.isEmpty()) return m.newInstance(stack);
+        var t = q.poll();
+        return t.init(stack);
+    }
+
     IEnergyHandler init(TileEntity tileEntity);
+
+    IEnergyHandler init(ItemStack itemStack);
 
     void clear();
 
@@ -40,9 +52,6 @@ public interface IEnergyHandler {
     boolean canExtract();
 
     boolean canReceive();
-
-    @Nonnull
-    TileEntity getTileEntity();
 
     default void recycle() {
         this.clear();
