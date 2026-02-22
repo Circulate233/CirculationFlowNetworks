@@ -1,8 +1,10 @@
 package com.circulation.circulation_networks.manager;
 
+import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.api.IGrid;
 import com.circulation.circulation_networks.api.node.INode;
 import com.circulation.circulation_networks.network.Grid;
+import com.circulation.circulation_networks.packets.NodeNetworkRendering;
 import com.circulation.circulation_networks.proxy.CommonProxy;
 import com.circulation.circulation_networks.utils.UnionFindUtils;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
@@ -125,12 +127,25 @@ public final class NetworkManager {
 
         updateNetworks();
 
+        var players = NodeNetworkRendering.getPlayers(newNode.getGrid());
+        if (players != null && !players.isEmpty()) {
+            for (var player : players) {
+                CirculationFlowNetworks.NET_CHANNEL.sendTo(new NodeNetworkRendering(player, newNode, NodeNetworkRendering.NODE_ADD), player);
+            }
+        }
         EnergyMachineManager.INSTANCE.addNode(newNode);
         ChargingManager.INSTANCE.addNode(newNode);
     }
 
     public void removeNode(INode removedNode) {
         if (removedNode == null || removedNode.getWorld().isRemote || !activeNodes.remove(removedNode)) return;
+
+        var players = NodeNetworkRendering.getPlayers(removedNode.getGrid());
+        if (players != null && !players.isEmpty()) {
+            for (var player : players) {
+                CirculationFlowNetworks.NET_CHANNEL.sendTo(new NodeNetworkRendering(player, removedNode, NodeNetworkRendering.NODE_REMOVE), player);
+            }
+        }
 
         var world = removedNode.getWorld();
         var pos = removedNode.getPos();

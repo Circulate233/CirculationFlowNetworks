@@ -1,10 +1,12 @@
 package com.circulation.circulation_networks.manager;
 
+import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.api.IEnergyHandler;
 import com.circulation.circulation_networks.api.IGrid;
 import com.circulation.circulation_networks.api.node.IEnergySupplyNode;
 import com.circulation.circulation_networks.api.node.IMachineNode;
 import com.circulation.circulation_networks.api.node.INode;
+import com.circulation.circulation_networks.packets.NodeNetworkRendering;
 import com.circulation.circulation_networks.registry.RegistryEnergyHandler;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMaps;
@@ -158,6 +160,13 @@ public final class EnergyMachineManager {
                 }
                 s.add(node);
                 set1.add(tileEntity);
+
+                var players = NodeNetworkRendering.getPlayers(node.getGrid());
+                if (players != null && !players.isEmpty()) {
+                    for (var player : players) {
+                        CirculationFlowNetworks.NET_CHANNEL.sendTo(new NodeNetworkRendering(player, tileEntity, node, NodeNetworkRendering.MACHINE_ADD), player);
+                    }
+                }
             }
             if (s.isEmpty()) return;
             machineGridMap.putIfAbsent(tileEntity, s);
@@ -169,6 +178,13 @@ public final class EnergyMachineManager {
         if (set == null || set.isEmpty()) return;
         for (var node : set) {
             gridMachineMap.get(node).remove(tileEntity);
+
+            var players = NodeNetworkRendering.getPlayers(node.getGrid());
+            if (players != null && !players.isEmpty()) {
+                for (var player : players) {
+                    CirculationFlowNetworks.NET_CHANNEL.sendTo(new NodeNetworkRendering(player, tileEntity, node, NodeNetworkRendering.MACHINE_REMOVE), player);
+                }
+            }
         }
     }
 

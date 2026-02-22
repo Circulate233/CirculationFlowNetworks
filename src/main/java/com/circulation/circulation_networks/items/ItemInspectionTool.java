@@ -64,6 +64,7 @@ public class ItemInspectionTool extends BaseItem {
         })),
         Link(((player, node) -> {
             CirculationFlowNetworks.NET_CHANNEL.sendTo(new NodeNetworkRendering(player, node.getGrid()), player);
+            NodeNetworkRendering.addPlayer(node.getGrid(), player);
             return EnumActionResult.SUCCESS;
         }));
 
