@@ -4,6 +4,7 @@ import com.circulation.circulation_networks.api.IGrid;
 import com.circulation.circulation_networks.api.node.INode;
 import com.circulation.circulation_networks.handlers.NodeNetworkRenderingHandler;
 import com.circulation.circulation_networks.manager.EnergyMachineManager;
+import com.circulation.circulation_networks.proxy.CommonProxy;
 import com.circulation.circulation_networks.utils.Packet;
 import com.github.bsideup.jabel.Desugar;
 import io.netty.buffer.ByteBuf;
@@ -27,6 +28,7 @@ import net.minecraftforge.fml.common.network.simpleimpl.MessageContext;
 
 import java.util.List;
 import java.util.function.BiConsumer;
+import java.util.function.IntSupplier;
 
 public class NodeNetworkRendering implements Packet<NodeNetworkRendering> {
 
@@ -53,6 +55,7 @@ public class NodeNetworkRendering implements Packet<NodeNetworkRendering> {
         this.mode = SET;
         this.entryList = new ObjectArrayList<>();
         for (var e : EnergyMachineManager.INSTANCE.getMachineGridMap().entrySet()) {
+            if (e.getKey().hasCapability(CommonProxy.ceHandlerCapability, null)) continue;
             for (var node : e.getValue()) {
                 entryList.add(new Pair(e.getKey(), node));
             }
@@ -126,6 +129,13 @@ public class NodeNetworkRendering implements Packet<NodeNetworkRendering> {
             }
         }
 
+        if (mode == NODE_REMOVE) {
+            int count = buf.readInt();
+            for (int i = 0; i < count; i++) {
+                NodeNetworkRenderingHandler.INSTANCE.removeMachineLink(buf.readLong(), buf.readLong());
+            }
+        }
+
         if (mode == SET || mode == MACHINE_ADD || mode == MACHINE_REMOVE) {
             int count = buf.readInt();
             LongBiConsumer handler = (mode == MACHINE_REMOVE)
@@ -163,6 +173,23 @@ public class NodeNetworkRendering implements Packet<NodeNetworkRendering> {
             });
         }
 
+        if (mode == NODE_REMOVE) {
+            writeLinks(buf, () -> {
+                int count = 0;
+                for (var node : nodes) {
+                    if (node != targetNode) continue;
+                    if (dim != node.getWorld().provider.getDimension()) continue;
+                    var set = EnergyMachineManager.INSTANCE.getTileEntities(node);
+                    for (var te : set) {
+                        buf.writeLong(te.getPos().toLong());
+                        buf.writeLong(node.getPos().toLong());
+                        count++;
+                    }
+                }
+                return count;
+            });
+        }
+
         if (mode == SET || mode == MACHINE_ADD || mode == MACHINE_REMOVE) {
             writeLinks(buf, () -> {
                 int count = 0;
@@ -179,10 +206,10 @@ public class NodeNetworkRendering implements Packet<NodeNetworkRendering> {
         }
     }
 
-    private void writeLinks(ByteBuf buf, java.util.function.Supplier<Integer> writer) {
+    private void writeLinks(ByteBuf buf, IntSupplier writer) {
         int pos = buf.writerIndex();
         buf.writeInt(0);
-        int count = writer.get();
+        int count = writer.getAsInt();
         buf.setInt(pos, count);
     }
 

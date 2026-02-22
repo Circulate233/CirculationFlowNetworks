@@ -326,6 +326,17 @@ public final class EnergyMachineManager {
         return scopeNode.getOrDefault(world, Object2ObjectMaps.emptyMap()).getOrDefault(pos, ReferenceSets.emptySet());
     }
 
+    /**
+     * @param node 节点，必须是能量节点以防获取到了节点机器
+     * @return 节点所链接的所有设备
+     */
+    public @Nonnull Set<TileEntity> getTileEntities(INode node) {
+        if (node instanceof IEnergySupplyNode n) {
+            return gridMachineMap.getOrDefault(n, Collections.emptySet());
+        }
+        return Collections.emptySet();
+    }
+
     enum Status {
         EXTRACT,
         INTERACTION,

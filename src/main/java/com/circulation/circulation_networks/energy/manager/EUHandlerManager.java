@@ -77,6 +77,7 @@ public final class EUHandlerManager implements IEnergyHandlerManager {
         } else return;
         var tileEntity = event.getWorld().getTileEntity(pos);
         if (tileEntity != null) {
+            if (EnergyMachineManager.INSTANCE.getMachineGridMap().containsKey(tileEntity)) return;
             if (this.isAvailable(tileEntity))
                 EnergyMachineManager.INSTANCE.addMachine(tileEntity);
         }

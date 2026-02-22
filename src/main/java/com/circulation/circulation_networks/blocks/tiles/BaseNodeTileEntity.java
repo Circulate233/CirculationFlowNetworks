@@ -63,6 +63,7 @@ public abstract class BaseNodeTileEntity extends TileEntity implements INodeTile
 
     @Override
     public boolean hasCapability(@NotNull Capability<?> capability, @Nullable EnumFacing facing) {
+        if (world.isRemote) return capability == CommonProxy.nodeCapability || super.hasCapability(capability, facing);
         return (capability == CommonProxy.nodeCapability && node != null) || super.hasCapability(capability, facing);
     }
 

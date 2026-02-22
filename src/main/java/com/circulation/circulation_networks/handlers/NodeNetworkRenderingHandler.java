@@ -3,6 +3,8 @@ package com.circulation.circulation_networks.handlers;
 import com.circulation.circulation_networks.items.ItemInspectionTool;
 import com.circulation.circulation_networks.registry.RegistryItems;
 import com.github.bsideup.jabel.Desugar;
+import com.google.common.collect.ConcurrentHashMultiset;
+import com.google.common.collect.Multiset;
 import it.unimi.dsi.fastutil.objects.ObjectLinkedOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ObjectSet;
 import net.minecraft.client.Minecraft;
@@ -12,94 +14,186 @@ import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.Vec3i;
+import net.minecraft.util.math.Vec3d;
 import net.minecraftforge.client.event.RenderWorldLastEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+import net.minecraftforge.fml.relauncher.Side;
+import net.minecraftforge.fml.relauncher.SideOnly;
 import org.lwjgl.opengl.GL11;
 
+@SideOnly(Side.CLIENT)
 public final class NodeNetworkRenderingHandler {
 
     public static final NodeNetworkRenderingHandler INSTANCE = new NodeNetworkRenderingHandler();
 
+    private static final int CYLINDER_SIDES = 8;
+    private static final float CORE_RADIUS = 0.04f;
+    private static final float GLOW_RADIUS = 0.10f;
+
     private final ObjectSet<Line> nodeLinks = new ObjectLinkedOpenHashSet<>();
     private final ObjectSet<Line> machineLinks = new ObjectLinkedOpenHashSet<>();
+    private final Multiset<Pos> nodePoss = ConcurrentHashMultiset.create();
+    private final Multiset<Pos> machinePoss = ConcurrentHashMultiset.create();
+    private boolean lock;
 
     public void addNodeLink(long a, long b) {
-        nodeLinks.add(Line.create(a, b));
+        lock = true;
+        var l = Line.create(a, b);
+        nodeLinks.add(l);
+        nodePoss.add(l.from);
+        nodePoss.add(l.to);
+        lock = false;
     }
 
     public void addMachineLink(long a, long b) {
-        machineLinks.add(Line.create(a, b));
+        lock = true;
+        var l = Line.create(a, b);
+        machineLinks.add(l);
+        machinePoss.add(l.from);
+        machinePoss.add(l.to);
+        lock = false;
     }
 
     public void removeNodeLink(long a, long b) {
-        nodeLinks.remove(Line.create(a, b));
+        lock = true;
+        var l = Line.create(a, b);
+        nodeLinks.remove(l);
+        nodePoss.remove(l.from);
+        nodePoss.remove(l.to);
+        lock = false;
     }
 
     public void removeMachineLink(long a, long b) {
-        machineLinks.remove(Line.create(a, b));
+        lock = true;
+        var l = Line.create(a, b);
+        machineLinks.remove(l);
+        machinePoss.remove(l.from);
+        machinePoss.remove(l.to);
+        lock = false;
     }
 
     public void clearLinks() {
+        lock = true;
         nodeLinks.clear();
         machineLinks.clear();
+        nodePoss.clear();
+        machinePoss.clear();
+        lock = false;
     }
 
     @SubscribeEvent
     public void renderWorldLastEvent(RenderWorldLastEvent event) {
+        if (lock) return;
         Minecraft mc = Minecraft.getMinecraft();
         EntityPlayerSP p = mc.player;
 
         var stack = p.getHeldItemMainhand();
-        if (stack.getItem() == RegistryItems.inspectionTool
-            && RegistryItems.inspectionTool.getMode(stack).isMode(ItemInspectionTool.Mode.Link)) {
-            double doubleX = p.lastTickPosX + (p.posX - p.lastTickPosX) * event.getPartialTicks();
-            double doubleY = p.lastTickPosY + (p.posY - p.lastTickPosY) * event.getPartialTicks();
-            double doubleZ = p.lastTickPosZ + (p.posZ - p.lastTickPosZ) * event.getPartialTicks();
+        if (!(stack.getItem() == RegistryItems.inspectionTool
+            && RegistryItems.inspectionTool.getMode(stack).isMode(ItemInspectionTool.Mode.Link))) return;
 
+        double doubleX = p.lastTickPosX + (p.posX - p.lastTickPosX) * event.getPartialTicks();
+        double doubleY = p.lastTickPosY + (p.posY - p.lastTickPosY) * event.getPartialTicks();
+        double doubleZ = p.lastTickPosZ + (p.posZ - p.lastTickPosZ) * event.getPartialTicks();
+
+        GlStateManager.pushMatrix();
+        GlStateManager.translate(-doubleX, -doubleY, -doubleZ);
+        GlStateManager.enableBlend();
+        GlStateManager.disableDepth();
+        GlStateManager.disableTexture2D();
+        GlStateManager.disableLighting();
+        GlStateManager.disableCull();
+        GlStateManager.depthMask(false);
+
+        GlStateManager.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE);
+
+        for (var link : nodeLinks) {
+            drawLaserCylinder(link.from, link.to, GLOW_RADIUS, 0.3f, 0.3f, 1.0f, 0.25f);
+            drawLaserCylinder(link.from, link.to, CORE_RADIUS, 0.3f, 0.3f, 1.0f, 1.0f);
+        }
+
+        for (var link : machineLinks) {
+            drawLaserCylinder(link.from, link.to, GLOW_RADIUS, 1.0f, 0.3f, 0.3f, 0.25f);
+            drawLaserCylinder(link.from, link.to, CORE_RADIUS, 1.0f, 0.3f, 0.3f, 1.0f);
+        }
+
+        for (var pos : nodePoss.elementSet()) {
+            boolean alsoMachine = machinePoss.contains(pos);
             GlStateManager.pushMatrix();
-            GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
-            GlStateManager.glLineWidth(8);
-            GlStateManager.translate(-doubleX, -doubleY, -doubleZ);
-
-            GlStateManager.enableBlend();
-            GlStateManager.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
-            GlStateManager.disableDepth();
-            GlStateManager.disableTexture2D();
-            GlStateManager.disableLighting();
-
-            Tessellator tessellator = Tessellator.getInstance();
-            BufferBuilder buffer = tessellator.getBuffer();
-
-            buffer.begin(GL11.GL_LINES, DefaultVertexFormats.POSITION_COLOR);
-
-            for (var nodeLink : nodeLinks) {
-                renderEntityConnectionLine(buffer, nodeLink.from, nodeLink.to, 0, 0, 1);
+            GlStateManager.translate(pos.x, pos.y, pos.z);
+            if (alsoMachine) {
+                drawSphere(1.0f, 0.0f, 1.0f, 0.25f, 0.6f);
+            } else {
+                drawSphere(0.0f, 0.0f, 1.0f, 0.25f, 0.6f);
             }
-
-            for (var machineLink : machineLinks) {
-                renderEntityConnectionLine(buffer, machineLink.from, machineLink.to, 1, 0, 0);
-            }
-
-            tessellator.draw();
-
-            GlStateManager.enableLighting();
-            GlStateManager.enableTexture2D();
-            GlStateManager.enableDepth();
-            GlStateManager.disableBlend();
             GlStateManager.popMatrix();
         }
+
+        for (var pos : machinePoss.elementSet()) {
+            if (nodePoss.contains(pos)) continue;
+            GlStateManager.pushMatrix();
+            GlStateManager.translate(pos.x, pos.y, pos.z);
+            drawSphere(1.0f, 0.0f, 0.0f, 0.25f, 0.6f);
+            GlStateManager.popMatrix();
+        }
+
+        GlStateManager.depthMask(true);
+        GlStateManager.enableCull();
+        GlStateManager.enableLighting();
+        GlStateManager.enableTexture2D();
+        GlStateManager.enableDepth();
+        GlStateManager.disableBlend();
+        GlStateManager.popMatrix();
     }
 
-    @SuppressWarnings("SameParameterValue")
-    private void renderEntityConnectionLine(BufferBuilder buffer, Pos pos, Pos pos1, float r, float g, float b) {
-        buffer.pos(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5)
-              .color(r, g, b, 0.5f)
-              .endVertex();
+    private void drawLaserCylinder(Pos from, Pos to, float radius, float r, float g, float b, float alpha) {
+        double dx = to.x - from.x;
+        double dy = to.y - from.y;
+        double dz = to.z - from.z;
+        double len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (len < 1e-6) return;
 
-        buffer.pos(pos1.getX() + 0.5, pos1.getY() + 0.5, pos1.getZ() + 0.5)
-              .color(r, g, b, 0.5f)
-              .endVertex();
+        double ax = dx / len, ay = dy / len, az = dz / len;
+
+        double bx, by, bz;
+        if (Math.abs(ax) <= Math.abs(ay) && Math.abs(ax) <= Math.abs(az)) {
+            bx = 0;
+            by = -az;
+            bz = ay;
+        } else if (Math.abs(ay) <= Math.abs(az)) {
+            bx = -az;
+            by = 0;
+            bz = ax;
+        } else {
+            bx = -ay;
+            by = ax;
+            bz = 0;
+        }
+        double bLen = Math.sqrt(bx * bx + by * by + bz * bz);
+        bx /= bLen;
+        by /= bLen;
+        bz /= bLen;
+
+        double cx = ay * bz - az * by;
+        double cy = az * bx - ax * bz;
+        double cz = ax * by - ay * bx;
+
+        Tessellator tess = Tessellator.getInstance();
+        BufferBuilder buf = tess.getBuffer();
+
+        GlStateManager.color(r, g, b, alpha);
+        buf.begin(GL11.GL_QUAD_STRIP, DefaultVertexFormats.POSITION);
+
+        for (int i = 0; i <= CYLINDER_SIDES; i++) {
+            double angle = 2.0 * Math.PI * i / CYLINDER_SIDES;
+            double cos = Math.cos(angle), sin = Math.sin(angle);
+            double nx = radius * (cos * bx + sin * cx);
+            double ny = radius * (cos * by + sin * cy);
+            double nz = radius * (cos * bz + sin * cz);
+
+            buf.pos(from.x + nx, from.y + ny, from.z + nz).endVertex();
+            buf.pos(to.x + nx, to.y + ny, to.z + nz).endVertex();
+        }
+        tess.draw();
     }
 
     @Desugar
@@ -110,7 +204,6 @@ public final class NodeNetworkRenderingHandler {
             var toP = Pos.fromLong(to);
             int h1 = fromP.hashCode();
             int h2 = toP.hashCode();
-
             int mixedHash = (h1 < h2) ? (31 * h1 + h2) : (31 * h2 + h1);
             return new Line(fromP, toP, mixedHash);
         }
@@ -119,9 +212,7 @@ public final class NodeNetworkRenderingHandler {
         public boolean equals(Object o) {
             if (o == null || getClass() != o.getClass()) return false;
             Line line = (Line) o;
-
             if (this.hash != line.hash) return false;
-
             return (from.equals(line.from) && to.equals(line.to)) || (from.equals(line.to) && to.equals(line.from));
         }
 
@@ -131,7 +222,31 @@ public final class NodeNetworkRenderingHandler {
         }
     }
 
-    private static class Pos extends Vec3i {
+    private void drawSphere(float r, float g, float b, float radius, float alpha) {
+        GlStateManager.color(r, g, b, alpha);
+        Tessellator tess = Tessellator.getInstance();
+        BufferBuilder buf = tess.getBuffer();
+        final int slices = 24, stacks = 24;
+        for (int i = 0; i < slices; i++) {
+            double phi1 = Math.PI * i / slices;
+            double phi2 = Math.PI * (i + 1) / slices;
+            buf.begin(GL11.GL_QUAD_STRIP, DefaultVertexFormats.POSITION_NORMAL);
+            for (int j = 0; j <= stacks; j++) {
+                double theta = 2.0 * Math.PI * j / stacks;
+                float x1 = (float) (radius * Math.sin(phi1) * Math.cos(theta));
+                float y1 = (float) (radius * Math.cos(phi1));
+                float z1 = (float) (radius * Math.sin(phi1) * Math.sin(theta));
+                buf.pos(x1, y1, z1).normal(x1 / radius, y1 / radius, z1 / radius).endVertex();
+                float x2 = (float) (radius * Math.sin(phi2) * Math.cos(theta));
+                float y2 = (float) (radius * Math.cos(phi2));
+                float z2 = (float) (radius * Math.sin(phi2) * Math.sin(theta));
+                buf.pos(x2, y2, z2).normal(x2 / radius, y2 / radius, z2 / radius).endVertex();
+            }
+            tess.draw();
+        }
+    }
+
+    private static class Pos extends Vec3d {
 
         private static final int NUM_X_BITS = 1 + MathHelper.log2(MathHelper.smallestEncompassingPowerOfTwo(30000000));
         private static final int NUM_Z_BITS = NUM_X_BITS;
@@ -141,6 +256,10 @@ public final class NodeNetworkRenderingHandler {
         private final int hash;
 
         public Pos(int xIn, int yIn, int zIn) {
+            this(xIn + 0.5, yIn + 0.5, zIn + 0.5);
+        }
+
+        public Pos(double xIn, double yIn, double zIn) {
             super(xIn, yIn, zIn);
             hash = super.hashCode();
         }
@@ -161,7 +280,7 @@ public final class NodeNetworkRenderingHandler {
         public boolean equals(Object o) {
             if (o == null || getClass() != o.getClass()) return false;
             var pos = (Pos) o;
-            return this.getX() == pos.getX() && this.getY() == pos.getY() && this.getZ() == pos.getZ();
+            return this.x == pos.x && this.y == pos.y && this.z == pos.z;
         }
     }
 }

@@ -18,10 +18,13 @@ import net.minecraft.world.World;
 import net.minecraftforge.client.event.RenderWorldLastEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
+import net.minecraftforge.fml.relauncher.Side;
+import net.minecraftforge.fml.relauncher.SideOnly;
 import org.lwjgl.opengl.GL11;
 
 import java.util.Arrays;
 
+@SideOnly(Side.CLIENT)
 public final class SpoceRenderingHandler {
 
     public static final SpoceRenderingHandler INSTANCE = new SpoceRenderingHandler();
@@ -386,9 +389,9 @@ public final class SpoceRenderingHandler {
 
     private void draw(float rotation, float r, float g, float b, float radius, float r1, float g1, float b1) {
         GlStateManager.pushMatrix();
+        drawSphere(r, g, b, radius, 0.2f);
         GlStateManager.rotate(rotation, 0.0F, 1.0F, 0.0F);
         GlStateManager.rotate(rotation * 0.5F, 1.0F, 0.0F, 0.0F);
-        drawSphere(r, g, b, radius, 0.2f);
         drawBuckyBallWireframe(r1, g1, b1, radius + 0.01f, 0.8f);
         GlStateManager.popMatrix();
     }
