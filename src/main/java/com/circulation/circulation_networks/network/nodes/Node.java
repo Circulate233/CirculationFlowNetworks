@@ -9,35 +9,31 @@ import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSets;
 import lombok.Getter;
-import lombok.Setter;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.NotNull;
 
-import javax.annotation.Nonnull;
 import java.lang.ref.WeakReference;
 
 public abstract class Node implements INode {
 
     @Getter
     private final BlockPos pos;
+    @Getter
+    private final Vec3d vec3d;
     private final WeakReference<World> world;
     private final ReferenceSet<INode> neighbors = new ReferenceOpenHashSet<>();
     private final Reference2DoubleMap<INode> distanceMap = new Reference2DoubleOpenHashMap<>();
     @Getter
     private boolean active;
     private IGrid grid;
-    @Getter
-    @Nonnull
-    private INode parent = this;
-    @Getter
-    @Setter
-    private int rank;
 
     public Node(INodeTileEntity tileEntity) {
         world = new WeakReference<>(tileEntity.getNodeWorld());
         pos = tileEntity.getNodePos();
+        vec3d = new Vec3d(pos.getX() + 0.5d, pos.getY() + 0.5d, pos.getZ() + 0.5d);
     }
 
     public @NotNull World getWorld() {
@@ -48,18 +44,9 @@ public abstract class Node implements INode {
         throw new IllegalStateException("World is null");
     }
 
-    @Override
-    public void setParent(@Nonnull INode parent) {
-        if (parent == null) {
-            throw new NullPointerException("parent cannot be null");
-        }
-        this.parent = parent;
-    }
-
     public void setActive(boolean active) {
         this.active = active;
         if (!active) {
-            parent = this;
             grid = null;
             clearNeighbors();
         }
@@ -74,7 +61,7 @@ public abstract class Node implements INode {
     public void addNeighbor(INode neighbor) {
         if (neighbor == null || !neighbor.isActive()) return;
         neighbors.add(neighbor);
-        distanceMap.put(neighbor, distance(neighbor));
+        distanceMap.put(neighbor, distanceSq(neighbor));
     }
 
     @Override
@@ -113,23 +100,28 @@ public abstract class Node implements INode {
     }
 
     @Override
-    public double distance(INode node) {
+    public double distanceSq(INode node) {
         if (distanceMap.containsKey(node)) {
             return distanceMap.get(node);
         }
-        return this.distance(node.getPos());
+        return this.distanceSq(node.getVec3d());
     }
 
     @Override
-    public double distance(BlockPos node) {
-        return this.getPos().getDistance(node.getX(), node.getY(), node.getZ());
+    public double distanceSq(BlockPos node) {
+        return this.vec3d.squareDistanceTo(node.getX() + 0.5d, node.getY() + 0.5d, node.getZ() + 0.5d);
+    }
+
+    @Override
+    public double distanceSq(Vec3d pos) {
+        return this.vec3d.squareDistanceTo(pos);
     }
 
     @Override
     public final LinkType linkScopeCheck(INode node) {
-        var dist = this.distance(node);
-        boolean canConnectAtoB = dist <= this.getLinkScope();
-        boolean canConnectBtoA = dist <= node.getLinkScope();
+        var dist = this.distanceSq(node);
+        boolean canConnectAtoB = dist <= this.getLinkScope() * this.getLinkScope();
+        boolean canConnectBtoA = dist <= node.getLinkScope() * node.getLinkScope();
 
         if (canConnectAtoB && canConnectBtoA) {
             return LinkType.DOUBLY;

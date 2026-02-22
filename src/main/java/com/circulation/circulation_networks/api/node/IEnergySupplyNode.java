@@ -10,6 +10,6 @@ public interface IEnergySupplyNode extends INode {
     double getEnergyScope();
 
     default boolean supplyScopeCheck(BlockPos pos) {
-        return this.distance(pos) <= getEnergyScope();
+        return this.distanceSq(pos) <= getEnergyScope() * getEnergyScope();
     }
 }

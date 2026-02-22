@@ -37,7 +37,7 @@ public final class SpoceRenderingHandler {
 
     private static final float[] EMPTY_VERTS = new float[0];
     private static final int BUILD_BUF_SIZE = 1 << 17;
-    private static final int RESCAN_INTERVAL = 40;
+    private static final int RESCAN_INTERVAL = 3;
     private final float[] buildBuf = new float[BUILD_BUF_SIZE];
     private final double[] angleScratch = new double[9];
     private int buildCount;

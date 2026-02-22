@@ -4,6 +4,7 @@ import com.circulation.circulation_networks.api.IGrid;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 
 import javax.annotation.Nonnull;
@@ -12,6 +13,9 @@ public interface INode {
 
     @Nonnull
     BlockPos getPos();
+
+    @Nonnull
+    Vec3d getVec3d();
 
     @Nonnull
     World getWorld();
@@ -30,23 +34,17 @@ public interface INode {
 
     void clearNeighbors();
 
-    INode getParent();
-
-    void setParent(INode parent);
-
-    int getRank();
-
-    void setRank(int rank);
-
     IGrid getGrid();
 
     void setGrid(IGrid grid);
 
     TileEntity getTileEntity();
 
-    double distance(INode node);
+    double distanceSq(INode node);
 
-    double distance(BlockPos node);
+    double distanceSq(BlockPos node);
+
+    double distanceSq(Vec3d node);
 
     LinkType linkScopeCheck(INode node);
 

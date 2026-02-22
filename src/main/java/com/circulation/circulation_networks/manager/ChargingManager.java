@@ -92,12 +92,16 @@ public final class ChargingManager {
 
         for (var entry : gridMap.entrySet()) {
             var grid = entry.getKey();
-            var send = machineMap.get(grid).getOrDefault(IEnergyHandler.EnergyType.SEND, ObjectLists.emptyList());
-            var storage = machineMap.get(grid).getOrDefault(IEnergyHandler.EnergyType.STORAGE, ObjectLists.emptyList());
             var receive = entry.getValue();
 
-            transferEnergy(send, receive, EnergyMachineManager.Status.INTERACTION, grid);
-            transferEnergy(storage, receive, EnergyMachineManager.Status.EXTRACT, grid);
+            var m = machineMap.get(grid);
+            if (m != null) {
+                var send = m.getOrDefault(IEnergyHandler.EnergyType.SEND, ObjectLists.emptyList());
+                transferEnergy(send, receive, EnergyMachineManager.Status.EXTRACT, grid);
+
+                var storage = machineMap.get(grid).getOrDefault(IEnergyHandler.EnergyType.STORAGE, ObjectLists.emptyList());
+                transferEnergy(storage, receive, EnergyMachineManager.Status.EXTRACT, grid);
+            }
         }
 
         for (var value : gridMap.values()) {

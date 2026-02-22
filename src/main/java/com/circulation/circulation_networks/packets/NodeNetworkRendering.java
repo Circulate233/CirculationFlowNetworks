@@ -16,6 +16,7 @@ import it.unimi.dsi.fastutil.objects.ObjectLists;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceMap;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceLinkedOpenHashSet;
+import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSets;
 import net.minecraft.entity.player.EntityPlayer;
@@ -31,14 +32,17 @@ public class NodeNetworkRendering implements Packet<NodeNetworkRendering> {
 
     public static final int SET = 0;
     public static final int NODE_ADD = 1;
-    private int dim;
-    private IGrid grid;
     public static final int NODE_REMOVE = 2;
     public static final int MACHINE_ADD = 3;
     public static final int MACHINE_REMOVE = 4;
+
     private static final Object2ReferenceMap<IGrid, ReferenceLinkedOpenHashSet<EntityPlayerMP>> gridPlayers = new Object2ReferenceOpenHashMap<>();
     private static final Reference2ReferenceMap<EntityPlayerMP, IGrid> playerGrid = new Reference2ReferenceOpenHashMap<>();
+
+    private int dim;
+    private IGrid grid;
     private ReferenceSet<INode> nodes;
+    private INode targetNode;
     private List<Pair> entryList;
     private int mode;
 
@@ -58,8 +62,18 @@ public class NodeNetworkRendering implements Packet<NodeNetworkRendering> {
     public NodeNetworkRendering(EntityPlayer player, INode node, int mode) {
         this.dim = player.getEntityWorld().provider.getDimension();
         this.grid = node.getGrid();
-        this.nodes = ReferenceSets.singleton(node);
         this.mode = mode;
+        this.targetNode = node;
+        ReferenceSet<INode> relevant = new ReferenceOpenHashSet<>();
+        relevant.add(node);
+        if (grid != null) {
+            for (INode other : grid.getNodes()) {
+                if (other.getNeighbors().contains(node)) {
+                    relevant.add(other);
+                }
+            }
+        }
+        this.nodes = ReferenceSets.unmodifiable(relevant);
     }
 
     public NodeNetworkRendering(EntityPlayer player, TileEntity te, INode node, int mode) {
@@ -70,7 +84,6 @@ public class NodeNetworkRendering implements Packet<NodeNetworkRendering> {
     }
 
     public NodeNetworkRendering() {
-
     }
 
     public static void addPlayer(IGrid grid, EntityPlayerMP player) {
@@ -90,6 +103,7 @@ public class NodeNetworkRendering implements Packet<NodeNetworkRendering> {
             }
         }
     }
+
     public static ReferenceSet<EntityPlayerMP> getPlayers(IGrid grid) {
         return gridPlayers.get(grid);
     }
@@ -117,7 +131,6 @@ public class NodeNetworkRendering implements Packet<NodeNetworkRendering> {
             LongBiConsumer handler = (mode == MACHINE_REMOVE)
                 ? NodeNetworkRenderingHandler.INSTANCE::removeMachineLink
                 : NodeNetworkRenderingHandler.INSTANCE::addMachineLink;
-
             for (int i = 0; i < count; i++) {
                 handler.accept(buf.readLong(), buf.readLong());
             }
@@ -136,6 +149,7 @@ public class NodeNetworkRendering implements Packet<NodeNetworkRendering> {
                     if (dim != node.getWorld().provider.getDimension()) continue;
                     long posA = node.getPos().toLong();
                     for (var neighbor : node.getNeighbors()) {
+                        if (mode == NODE_REMOVE && node != targetNode && neighbor != targetNode) continue;
                         long posB = neighbor.getPos().toLong();
                         long min = Math.min(posA, posB), max = Math.max(posA, posB);
                         if (processedLinks.add(min ^ Long.rotateLeft(max, 32))) {
@@ -173,11 +187,9 @@ public class NodeNetworkRendering implements Packet<NodeNetworkRendering> {
     }
 
     private interface LongBiConsumer extends BiConsumer<Long, Long> {
-
         default void accept(Long t, Long u) {
             accept(t.longValue(), u.longValue());
         }
-
         void accept(long t, long u);
     }
 

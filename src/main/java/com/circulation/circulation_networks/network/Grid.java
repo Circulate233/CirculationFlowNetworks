@@ -4,19 +4,16 @@ import com.circulation.circulation_networks.api.IGrid;
 import com.circulation.circulation_networks.api.node.INode;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
+import lombok.Getter;
 
 public class Grid implements IGrid {
 
+    @Getter
     private final int id;
     private final ReferenceSet<INode> nodes = new ReferenceOpenHashSet<>();
 
     public Grid(int id) {
         this.id = id;
-    }
-
-    @Override
-    public int getID() {
-        return id;
     }
 
     @Override

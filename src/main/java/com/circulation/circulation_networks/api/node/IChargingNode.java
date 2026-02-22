@@ -10,7 +10,7 @@ public interface IChargingNode extends INode {
     double getChargingScope();
 
     default boolean chargingScopeCheck(BlockPos pos) {
-        return this.distance(pos) <= getChargingScope();
+        return this.distanceSq(pos) <= getChargingScope() * getChargingScope();
     }
 
 }

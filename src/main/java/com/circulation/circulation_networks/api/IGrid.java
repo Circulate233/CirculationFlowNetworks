@@ -5,7 +5,7 @@ import it.unimi.dsi.fastutil.objects.ReferenceSet;
 
 public interface IGrid {
 
-    int getID();
+    int getId();
 
     ReferenceSet<INode> getNodes();
 
