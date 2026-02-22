@@ -9,23 +9,22 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
 
+import javax.annotation.Nonnull;
 import java.util.Objects;
 
 public final class CEHandler implements IEnergyHandler {
 
     private final EnergyType type;
     @Getter
+    @Nonnull
     private final CirculationEnergy energy;
 
     public CEHandler(TileEntity tileEntity) {
         var n = (IMachineNode) Objects.requireNonNull(tileEntity.getCapability(CommonProxy.nodeCapability, null));
         this.type = n.getType();
-        this.energy = new CirculationEnergy(n.getMaxEnergy());
-    }
-
-    public CEHandler(ItemStack stack) {
-        this.type = EnergyType.INVALID;
-        this.energy = null;
+        var energy = CirculationEnergy.create(tileEntity);
+        if (energy == null) throw new IllegalStateException("energy is null");
+        this.energy = energy;
     }
 
     @Override

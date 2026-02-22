@@ -1,6 +1,6 @@
-package com.circulation.circulation_networks.blocks;
+package com.circulation.circulation_networks.blocks.nodes;
 
-import com.circulation.circulation_networks.blocks.tiles.TileEntityEnergyInductionTower;
+import com.circulation.circulation_networks.tiles.nodes.TileEntityEnergyInductionTower;
 
 public class BlockEnergyInductionTower extends BaseNodeBlock {
 

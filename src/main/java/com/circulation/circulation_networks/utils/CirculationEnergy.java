@@ -1,18 +1,25 @@
 package com.circulation.circulation_networks.utils;
 
+import com.circulation.circulation_networks.api.node.IMachineNode;
+import com.circulation.circulation_networks.proxy.CommonProxy;
 import lombok.Getter;
 import lombok.Setter;
+import net.minecraft.tileentity.TileEntity;
 
 public class CirculationEnergy {
 
-    @Getter
-    private final long maxEnergy;
+    private final IMachineNode node;
     @Setter
     @Getter
     private long energy;
 
-    public CirculationEnergy(long maxEnergy) {
-        this.maxEnergy = maxEnergy;
+    private CirculationEnergy(TileEntity te) {
+        node = (IMachineNode) te.getCapability(CommonProxy.nodeCapability, null);
+    }
+
+    public static CirculationEnergy create(TileEntity te) {
+        if (te.getCapability(CommonProxy.nodeCapability, null) == null) return null;
+        return new CirculationEnergy(te);
     }
 
     public long extractEnergy(long amount, boolean simulate) {
@@ -32,6 +39,6 @@ public class CirculationEnergy {
     }
 
     public long canReceiveValue() {
-        return maxEnergy - energy;
+        return node.getMaxEnergy() - energy;
     }
 }

@@ -1,7 +1,7 @@
 package com.circulation.circulation_networks.registry;
 
-import com.circulation.circulation_networks.blocks.BlockChargingTE;
-import com.circulation.circulation_networks.blocks.BlockEnergyInductionTower;
+import com.circulation.circulation_networks.blocks.nodes.BlockChargingTE;
+import com.circulation.circulation_networks.blocks.nodes.BlockEnergyInductionTower;
 import net.minecraft.block.Block;
 import net.minecraft.client.renderer.block.model.ModelBakery;
 import net.minecraft.client.renderer.block.model.ModelResourceLocation;

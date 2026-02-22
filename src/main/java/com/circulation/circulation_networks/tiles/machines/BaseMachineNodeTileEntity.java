@@ -1,9 +1,10 @@
-package com.circulation.circulation_networks.blocks.tiles;
+package com.circulation.circulation_networks.tiles.machines;
 
 import com.circulation.circulation_networks.api.IMachineNodeTileEntity;
 import com.circulation.circulation_networks.api.node.IMachineNode;
 import com.circulation.circulation_networks.energy.handler.CEHandler;
 import com.circulation.circulation_networks.proxy.CommonProxy;
+import com.circulation.circulation_networks.tiles.nodes.BaseNodeTileEntity;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.EnumFacing;
 import net.minecraftforge.common.capabilities.Capability;

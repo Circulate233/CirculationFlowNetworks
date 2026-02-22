@@ -1,6 +1,6 @@
-package com.circulation.circulation_networks.blocks;
+package com.circulation.circulation_networks.blocks.nodes;
 
-import com.circulation.circulation_networks.blocks.tiles.TileEntityChargingTE;
+import com.circulation.circulation_networks.tiles.nodes.TileEntityChargingTE;
 
 public class BlockChargingTE extends BaseNodeBlock {
 
