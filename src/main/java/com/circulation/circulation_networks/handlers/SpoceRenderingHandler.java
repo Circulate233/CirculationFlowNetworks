@@ -3,6 +3,8 @@ package com.circulation.circulation_networks.handlers;
 import com.circulation.circulation_networks.items.ItemInspectionTool;
 import com.circulation.circulation_networks.registry.RegistryItems;
 import com.circulation.circulation_networks.utils.BuckyBallGeometry;
+import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
@@ -12,6 +14,7 @@ import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
+import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
@@ -23,6 +26,7 @@ import net.minecraftforge.fml.relauncher.SideOnly;
 import org.lwjgl.opengl.GL11;
 
 import java.util.Arrays;
+import java.util.List;
 
 @SideOnly(Side.CLIENT)
 public final class SpoceRenderingHandler {
@@ -233,6 +237,10 @@ public final class SpoceRenderingHandler {
         double innerSq = inner * inner;
         BlockPos center = te.getPos();
 
+        double cx = center.getX() + 0.5;
+        double cy = center.getY() + 0.5;
+        double cz = center.getZ() + 0.5;
+
         for (int dx = -radInt; dx <= radInt; dx++) {
             double dx2 = (double) dx * dx;
             if (dx2 > outerSq) continue;
@@ -247,9 +255,49 @@ public final class SpoceRenderingHandler {
                     IBlockState state = world.getBlockState(worldBP);
                     if (state.getBlock().isAir(state, world, worldBP)) continue;
 
-                    for (EnumFacing face : EnumFacing.VALUES) {
-                        if (!world.getBlockState(worldBP.offset(face)).isOpaqueCube()) {
-                            appendFaceArcs(face, dx, dy, dz, radius);
+                    double mathCellMinX = dx - 0.5;
+                    double mathCellMaxX = dx + 0.5;
+                    double mathCellMinY = dy - 0.5;
+                    double mathCellMaxY = dy + 0.5;
+                    double mathCellMinZ = dz - 0.5;
+                    double mathCellMaxZ = dz + 0.5;
+
+                    List<AxisAlignedBB> boxes = new ObjectArrayList<>();
+                    state.addCollisionBoxToList(world, worldBP, new AxisAlignedBB(worldBP), boxes, null, false);
+
+                    if (boxes.isEmpty()) {
+                        AxisAlignedBB bb = state.getBoundingBox(world, worldBP);
+                        if (bb != null && bb != Block.NULL_AABB) {
+                            boxes.add(bb.offset(worldBP));
+                        }
+                    }
+
+                    for (AxisAlignedBB bb : boxes) {
+                        AxisAlignedBB mathBox = new AxisAlignedBB(
+                            bb.minX - cx, bb.minY - cy, bb.minZ - cz,
+                            bb.maxX - cx, bb.maxY - cy, bb.maxZ - cz
+                        );
+
+                        for (EnumFacing face : EnumFacing.VALUES) {
+                            boolean isFlush = switch (face) {
+                                case WEST -> Math.abs(mathBox.minX - mathCellMinX) < 1E-5;
+                                case EAST -> Math.abs(mathBox.maxX - mathCellMaxX) < 1E-5;
+                                case DOWN -> Math.abs(mathBox.minY - mathCellMinY) < 1E-5;
+                                case UP -> Math.abs(mathBox.maxY - mathCellMaxY) < 1E-5;
+                                case NORTH -> Math.abs(mathBox.minZ - mathCellMinZ) < 1E-5;
+                                case SOUTH -> Math.abs(mathBox.maxZ - mathCellMaxZ) < 1E-5;
+                            };
+
+                            boolean shouldDraw = true;
+                            if (isFlush) {
+                                if (world.getBlockState(worldBP.offset(face)).isOpaqueCube()) {
+                                    shouldDraw = false;
+                                }
+                            }
+
+                            if (shouldDraw) {
+                                appendAABBFace(face, mathBox, radius);
+                            }
                         }
                     }
                 }
@@ -259,50 +307,50 @@ public final class SpoceRenderingHandler {
         return Arrays.copyOf(buildBuf, buildCount);
     }
 
-    private void appendFaceArcs(EnumFacing face, int dx, int dy, int dz, double R) {
+    private void appendAABBFace(EnumFacing face, AxisAlignedBB box, double R) {
         double planeW, minU, maxU, minV, maxV;
         switch (face) {
             case UP:
-                planeW = dy + 0.5;
-                minU = dx - 0.5;
-                maxU = dx + 0.5;
-                minV = dz - 0.5;
-                maxV = dz + 0.5;
+                planeW = box.maxY;
+                minU = box.minX;
+                maxU = box.maxX;
+                minV = box.minZ;
+                maxV = box.maxZ;
                 break;
             case DOWN:
-                planeW = dy - 0.5;
-                minU = dx - 0.5;
-                maxU = dx + 0.5;
-                minV = dz - 0.5;
-                maxV = dz + 0.5;
+                planeW = box.minY;
+                minU = box.minX;
+                maxU = box.maxX;
+                minV = box.minZ;
+                maxV = box.maxZ;
                 break;
             case SOUTH:
-                planeW = dz + 0.5;
-                minU = dx - 0.5;
-                maxU = dx + 0.5;
-                minV = dy - 0.5;
-                maxV = dy + 0.5;
+                planeW = box.maxZ;
+                minU = box.minX;
+                maxU = box.maxX;
+                minV = box.minY;
+                maxV = box.maxY;
                 break;
             case NORTH:
-                planeW = dz - 0.5;
-                minU = dx - 0.5;
-                maxU = dx + 0.5;
-                minV = dy - 0.5;
-                maxV = dy + 0.5;
+                planeW = box.minZ;
+                minU = box.minX;
+                maxU = box.maxX;
+                minV = box.minY;
+                maxV = box.maxY;
                 break;
             case EAST:
-                planeW = dx + 0.5;
-                minU = dz - 0.5;
-                maxU = dz + 0.5;
-                minV = dy - 0.5;
-                maxV = dy + 0.5;
+                planeW = box.maxX;
+                minU = box.minZ;
+                maxU = box.maxZ;
+                minV = box.minY;
+                maxV = box.maxY;
                 break;
             case WEST:
-                planeW = dx - 0.5;
-                minU = dz - 0.5;
-                maxU = dz + 0.5;
-                minV = dy - 0.5;
-                maxV = dy + 0.5;
+                planeW = box.minX;
+                minU = box.minZ;
+                maxU = box.maxZ;
+                minV = box.minY;
+                maxV = box.maxY;
                 break;
             default:
                 return;
@@ -337,8 +385,7 @@ public final class SpoceRenderingHandler {
             double aMid = (aStart + aEnd) * 0.5;
             double uMid = r * Math.cos(aMid);
             double vMid = r * Math.sin(aMid);
-            if (uMid < minU - 1E-6 || uMid > maxU + 1E-6
-                || vMid < minV - 1E-6 || vMid > maxV + 1E-6) continue;
+            if (uMid < minU - 1E-6 || uMid > maxU + 1E-6 || vMid < minV - 1E-6 || vMid > maxV + 1E-6) continue;
 
             double span = aEnd - aStart;
             for (int j = 0; j < SUB; j++) {

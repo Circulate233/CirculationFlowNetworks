@@ -30,6 +30,9 @@ public final class NodeNetworkRenderingHandler {
     private static final float CORE_RADIUS = 0.04f;
     private static final float GLOW_RADIUS = 0.10f;
 
+    private static final float SPHERE_CORE_RADIUS = 0.12f;
+    private static final float SPHERE_GLOW_RADIUS = 0.28f;
+
     private final ObjectSet<Line> nodeLinks = new ObjectLinkedOpenHashSet<>();
     private final ObjectSet<Line> machineLinks = new ObjectLinkedOpenHashSet<>();
     private final Multiset<Pos> nodePoss = ConcurrentHashMultiset.create();
@@ -110,7 +113,6 @@ public final class NodeNetworkRenderingHandler {
             drawLaserCylinder(link.from, link.to, GLOW_RADIUS, 0.3f, 0.3f, 1.0f, 0.25f);
             drawLaserCylinder(link.from, link.to, CORE_RADIUS, 0.3f, 0.3f, 1.0f, 1.0f);
         }
-
         for (var link : machineLinks) {
             drawLaserCylinder(link.from, link.to, GLOW_RADIUS, 1.0f, 0.3f, 0.3f, 0.25f);
             drawLaserCylinder(link.from, link.to, CORE_RADIUS, 1.0f, 0.3f, 0.3f, 1.0f);
@@ -118,21 +120,21 @@ public final class NodeNetworkRenderingHandler {
 
         for (var pos : nodePoss.elementSet()) {
             boolean alsoMachine = machinePoss.contains(pos);
+            float r = alsoMachine ? 1.0f : 0.0f;
+            float g = 0.0f;
+            float b = 1.0f;
             GlStateManager.pushMatrix();
             GlStateManager.translate(pos.x, pos.y, pos.z);
-            if (alsoMachine) {
-                drawSphere(1.0f, 0.0f, 1.0f, 0.25f, 0.6f);
-            } else {
-                drawSphere(0.0f, 0.0f, 1.0f, 0.25f, 0.6f);
-            }
+            drawSphere(r, g, b, SPHERE_GLOW_RADIUS, 0.3f);
+            drawSphere(r, g, b, SPHERE_CORE_RADIUS, 0.9f);
             GlStateManager.popMatrix();
         }
-
         for (var pos : machinePoss.elementSet()) {
             if (nodePoss.contains(pos)) continue;
             GlStateManager.pushMatrix();
             GlStateManager.translate(pos.x, pos.y, pos.z);
-            drawSphere(1.0f, 0.0f, 0.0f, 0.25f, 0.6f);
+            drawSphere(1.0f, 0.0f, 0.0f, SPHERE_GLOW_RADIUS, 0.3f);
+            drawSphere(1.0f, 0.0f, 0.0f, SPHERE_CORE_RADIUS, 0.9f);
             GlStateManager.popMatrix();
         }
 
@@ -189,7 +191,6 @@ public final class NodeNetworkRenderingHandler {
             double nx = radius * (cos * bx + sin * cx);
             double ny = radius * (cos * by + sin * cy);
             double nz = radius * (cos * bz + sin * cz);
-
             buf.pos(from.x + nx, from.y + ny, from.z + nz).endVertex();
             buf.pos(to.x + nx, to.y + ny, to.z + nz).endVertex();
         }
