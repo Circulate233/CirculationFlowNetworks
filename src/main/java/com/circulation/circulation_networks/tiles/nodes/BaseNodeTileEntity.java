@@ -8,6 +8,8 @@ import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.common.capabilities.Capability;
+import net.minecraftforge.fml.relauncher.Side;
+import net.minecraftforge.fml.relauncher.SideOnly;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -25,25 +27,41 @@ public abstract class BaseNodeTileEntity extends TileEntity implements INodeTile
     @Override
     public final void invalidate() {
         super.invalidate();
-        onInvalidate();
+        if (!this.world.isRemote) {
+            onInvalidate();
+        } else {
+            onClientInvalidate();
+        }
     }
 
     @Override
     public final void validate() {
         super.validate();
-        onValidate();
+        if (!this.world.isRemote) {
+            onValidate();
+        } else {
+            onClientValidate();
+        }
     }
 
     protected void onInvalidate() {
 
     }
 
+    @SideOnly(Side.CLIENT)
+    protected void onClientInvalidate() {
+
+    }
+
     protected void onValidate() {
-        if (!this.world.isRemote) {
-            if (node == null)
-                node = createNode();
-            node.setActive(true);
-        }
+        if (node == null)
+            node = createNode();
+        node.setActive(true);
+    }
+
+    @SideOnly(Side.CLIENT)
+    protected void onClientValidate() {
+
     }
 
     @Override

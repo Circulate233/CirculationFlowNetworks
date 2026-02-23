@@ -1,6 +1,8 @@
 package com.circulation.circulation_networks.registry;
 
-import com.circulation.circulation_networks.blocks.nodes.BlockChargingTE;
+import com.circulation.circulation_networks.blocks.machines.BlockCirculationFurnace;
+import com.circulation.circulation_networks.blocks.machines.BlockWindTurbine;
+import com.circulation.circulation_networks.blocks.nodes.BlockChargingTower;
 import com.circulation.circulation_networks.blocks.nodes.BlockEnergyInductionTower;
 import net.minecraft.block.Block;
 import net.minecraft.client.renderer.block.model.ModelBakery;
@@ -21,12 +23,16 @@ public final class RegistryBlocks {
     private static final List<Block> BLOCKS_TO_REGISTER = new LinkedList<>();
     private static final List<Block> BLOCK_MODELS_TO_REGISTER = new LinkedList<>();
 
-    public static BlockEnergyInductionTower energyInductionTower;
-    public static BlockChargingTE blockChargingTE;
+    public static BlockEnergyInductionTower blockEnergyInductionTower;
+    public static BlockChargingTower blockChargingTower;
+    public static BlockWindTurbine blockWindTurbine;
+    public static BlockCirculationFurnace blockCirculationFurnace;
 
     public static void registerBlocks(RegistryEvent.Register<Block> event) {
-        prepareItemBlockRegister(energyInductionTower = registerBlock(new BlockEnergyInductionTower()));
-        prepareItemBlockRegister(blockChargingTE = registerBlock(new BlockChargingTE()));
+        prepareItemBlockRegister(blockEnergyInductionTower = registerBlock(new BlockEnergyInductionTower()));
+        prepareItemBlockRegister(blockChargingTower = registerBlock(new BlockChargingTower()));
+        prepareItemBlockRegister(blockWindTurbine = registerBlock(new BlockWindTurbine()));
+        prepareItemBlockRegister(blockCirculationFurnace = registerBlock(new BlockCirculationFurnace()));
 
         BLOCKS_TO_REGISTER.forEach(event.getRegistry()::register);
         BLOCKS_TO_REGISTER.clear();

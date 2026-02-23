@@ -6,7 +6,7 @@ import net.minecraft.util.math.Vec3d;
 
 import java.util.List;
 
-public class BuckyBallGeometry {
+public final class BuckyBallGeometry {
     public static final List<Vec3d> vertices = new ObjectArrayList<>();
     public static final ObjectList<int[]> edges = new ObjectArrayList<>();
 

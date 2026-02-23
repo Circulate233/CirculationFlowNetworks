@@ -8,7 +8,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraftforge.fml.common.network.simpleimpl.IMessage;
 import net.minecraftforge.fml.common.network.simpleimpl.MessageContext;
 
-public class UpdateItemModeMessage implements Packet<UpdateItemModeMessage> {
+public final class UpdateItemModeMessage implements Packet<UpdateItemModeMessage> {
 
     private byte mode;
 

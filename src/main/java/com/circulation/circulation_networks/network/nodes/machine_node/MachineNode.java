@@ -7,13 +7,23 @@ import com.circulation.circulation_networks.network.nodes.Node;
 
 public abstract class MachineNode extends Node implements IMachineNode {
 
-    public MachineNode(IMachineNodeTileEntity tileEntity) {
+    protected final double energyScope;
+    protected final double linkScope;
+
+    public MachineNode(IMachineNodeTileEntity tileEntity, double energyScope, double linkScope) {
         super(tileEntity);
+        this.energyScope = energyScope;
+        this.linkScope = linkScope;
+    }
+
+    @Override
+    public double getLinkScope() {
+        return linkScope;
     }
 
     @Override
     public double getEnergyScope() {
-        return 4;
+        return energyScope;
     }
 
 }

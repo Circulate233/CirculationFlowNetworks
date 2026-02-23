@@ -26,6 +26,7 @@ import net.minecraftforge.fml.common.Optional;
 import java.util.Collection;
 import java.util.EnumMap;
 import java.util.List;
+import java.util.Set;
 
 import static com.circulation.circulation_networks.CirculationFlowNetworks.server;
 import static com.circulation.circulation_networks.manager.EnergyMachineManager.transferEnergy;
@@ -53,7 +54,7 @@ public final class ChargingManager {
         }
     }
 
-    public void onServerTick(Reference2ObjectOpenHashMap<IGrid, EnumMap<IEnergyHandler.EnergyType, List<IEnergyHandler>>> machineMap) {
+    public void onServerTick(Reference2ObjectOpenHashMap<IGrid, EnumMap<IEnergyHandler.EnergyType, Set<IEnergyHandler>>> machineMap) {
         var gridMap = new Reference2ObjectOpenHashMap<IGrid, List<IEnergyHandler>>();
         gridMap.defaultReturnValue(ObjectLists.emptyList());
         var players = server.getPlayerList().getPlayers();
@@ -96,10 +97,10 @@ public final class ChargingManager {
 
             var m = machineMap.get(grid);
             if (m != null) {
-                var send = m.getOrDefault(IEnergyHandler.EnergyType.SEND, ObjectLists.emptyList());
+                var send = m.getOrDefault(IEnergyHandler.EnergyType.SEND, ObjectSets.emptySet());
                 transferEnergy(send, receive, EnergyMachineManager.Status.EXTRACT, grid);
 
-                var storage = machineMap.get(grid).getOrDefault(IEnergyHandler.EnergyType.STORAGE, ObjectLists.emptyList());
+                var storage = machineMap.get(grid).getOrDefault(IEnergyHandler.EnergyType.STORAGE, ObjectSets.emptySet());
                 transferEnergy(storage, receive, EnergyMachineManager.Status.EXTRACT, grid);
             }
         }

@@ -2,18 +2,25 @@ package com.circulation.circulation_networks.tiles.machines;
 
 import com.circulation.circulation_networks.api.IMachineNodeTileEntity;
 import com.circulation.circulation_networks.api.node.IMachineNode;
+import com.circulation.circulation_networks.container.CFNBaseContainer;
 import com.circulation.circulation_networks.energy.handler.CEHandler;
 import com.circulation.circulation_networks.proxy.CommonProxy;
 import com.circulation.circulation_networks.tiles.nodes.BaseNodeTileEntity;
+import com.circulation.circulation_networks.utils.CirculationEnergy;
+import net.minecraft.client.gui.inventory.GuiContainer;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.EnumFacing;
 import net.minecraftforge.common.capabilities.Capability;
+import net.minecraftforge.fml.relauncher.Side;
+import net.minecraftforge.fml.relauncher.SideOnly;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 public abstract class BaseMachineNodeTileEntity extends BaseNodeTileEntity implements IMachineNodeTileEntity {
 
     protected CEHandler ceHandler;
+    private transient NBTTagCompound initNbt;
 
     @Override
     public @NotNull IMachineNode getNode() {
@@ -21,19 +28,46 @@ public abstract class BaseMachineNodeTileEntity extends BaseNodeTileEntity imple
     }
 
     @Override
-    public long getEnergy() {
-        return ceHandler.getEnergy().getEnergy();
+    public @NotNull CEHandler getCEHandler() {
+        assert ceHandler != null;
+        return ceHandler;
     }
 
-    @Override
+    public boolean hasGui() {
+        return false;
+    }
+
+    public CFNBaseContainer getContainer(EntityPlayer player) {
+        return null;
+    }
+
+    @SideOnly(Side.CLIENT)
+    public GuiContainer getGui(EntityPlayer player) {
+        return null;
+    }
+
+    public final CirculationEnergy getCirculationEnergy() {
+        return getCEHandler().getEnergy();
+    }
+
     public long getMaxEnergy() {
         return getNode().getMaxEnergy();
     }
 
-    @Override
-    public @NotNull CEHandler getCEHandler() {
-        assert ceHandler != null;
-        return ceHandler;
+    public void setMaxEnergy(long energy) {
+        getNode().setMaxEnergy(energy);
+    }
+
+    public long getEnergy() {
+        return getCirculationEnergy().getEnergy();
+    }
+
+    public long addEnergy(long energy, boolean simulate) {
+        return getCirculationEnergy().receiveEnergy(energy, simulate);
+    }
+
+    public long removeEnergy(long energy, boolean simulate) {
+        return getCirculationEnergy().extractEnergy(energy, simulate);
     }
 
     @Override
@@ -46,8 +80,7 @@ public abstract class BaseMachineNodeTileEntity extends BaseNodeTileEntity imple
     @Override
     public void readFromNBT(@NotNull NBTTagCompound compound) {
         super.readFromNBT(compound);
-        if (ceHandler == null) ceHandler = new CEHandler(this);
-        ceHandler.readNBT(compound);
+        initNbt = compound;
     }
 
     @Override
@@ -65,5 +98,9 @@ public abstract class BaseMachineNodeTileEntity extends BaseNodeTileEntity imple
     protected void onValidate() {
         super.onValidate();
         if (ceHandler == null) ceHandler = new CEHandler(this);
+        if (initNbt != null) {
+            ceHandler.readNBT(initNbt);
+            initNbt = null;
+        }
     }
 }

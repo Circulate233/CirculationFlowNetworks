@@ -2,14 +2,19 @@ package com.circulation.circulation_networks;
 
 import com.circulation.circulation_networks.manager.ChargingManager;
 import com.circulation.circulation_networks.manager.EnergyMachineManager;
+import com.circulation.circulation_networks.manager.MachineNodeTEManager;
 import com.circulation.circulation_networks.manager.NetworkManager;
 import com.circulation.circulation_networks.proxy.CommonProxy;
+import com.circulation.circulation_networks.recipes.FurnaceRecipe;
 import net.minecraft.creativetab.CreativeTabs;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.World;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.SidedProxy;
 import net.minecraftforge.fml.common.event.FMLInitializationEvent;
+import net.minecraftforge.fml.common.event.FMLLoadCompleteEvent;
 import net.minecraftforge.fml.common.event.FMLPostInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
@@ -42,6 +47,10 @@ public class CirculationFlowNetworks {
     public static CirculationFlowNetworks instance;
     public static MinecraftServer server;
 
+    public static void openGui(EntityPlayer player, World world, int x, int y, int z) {
+        proxy.openGui(player, world, x, y, z);
+    }
+
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
         proxy.preInit();
@@ -58,16 +67,24 @@ public class CirculationFlowNetworks {
     }
 
     @Mod.EventHandler
+    public void loadComplete(FMLLoadCompleteEvent event) {
+
+    }
+
+    @Mod.EventHandler
     public void serverStarting(FMLServerStartingEvent event) {
+        FurnaceRecipe.INSTANCE.init();
         server = event.getServer();
     }
 
     @Mod.EventHandler
     public void serverStopping(FMLServerStoppingEvent event) {
+        FurnaceRecipe.INSTANCE.clear();
         server = null;
         NetworkManager.INSTANCE.onServerStop();
         EnergyMachineManager.INSTANCE.onServerStop();
         ChargingManager.INSTANCE.onServerStop();
+        MachineNodeTEManager.INSTANCE.clear();
     }
 
 }

@@ -11,4 +11,6 @@ public interface IMachineNode extends IEnergySupplyNode {
 
     long getMaxEnergy();
 
+    void setMaxEnergy(long maxEnergy);
+
 }

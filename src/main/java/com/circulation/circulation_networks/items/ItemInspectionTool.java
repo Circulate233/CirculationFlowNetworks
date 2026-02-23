@@ -32,7 +32,7 @@ public class ItemInspectionTool extends BaseItem {
     @Override
     public @NotNull EnumActionResult onItemUse(@NotNull EntityPlayer player, @NotNull World worldIn, @NotNull BlockPos pos, @NotNull EnumHand hand, @NotNull EnumFacing facing, float hitX, float hitY, float hitZ) {
         if (player instanceof EntityPlayerMP p) {
-            INode node = NetworkManager.INSTANCE.getNodeFromPos(worldIn, pos);
+            INode node = NetworkManager.getNodeFromPos(worldIn, pos);
             if (node == null) return EnumActionResult.PASS;
             var mode = getMode(p.getHeldItemMainhand());
             return mode.sendPacket(p, node);

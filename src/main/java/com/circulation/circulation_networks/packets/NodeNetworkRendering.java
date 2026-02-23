@@ -4,6 +4,7 @@ import com.circulation.circulation_networks.api.IGrid;
 import com.circulation.circulation_networks.api.node.INode;
 import com.circulation.circulation_networks.handlers.NodeNetworkRenderingHandler;
 import com.circulation.circulation_networks.manager.EnergyMachineManager;
+import com.circulation.circulation_networks.manager.NetworkManager;
 import com.circulation.circulation_networks.proxy.CommonProxy;
 import com.circulation.circulation_networks.utils.Packet;
 import com.github.bsideup.jabel.Desugar;
@@ -20,6 +21,7 @@ import it.unimi.dsi.fastutil.objects.ReferenceLinkedOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSets;
+import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.tileentity.TileEntity;
@@ -27,16 +29,16 @@ import net.minecraftforge.fml.common.network.simpleimpl.IMessage;
 import net.minecraftforge.fml.common.network.simpleimpl.MessageContext;
 
 import java.util.List;
-import java.util.function.BiConsumer;
 import java.util.function.IntSupplier;
 
-public class NodeNetworkRendering implements Packet<NodeNetworkRendering> {
+public final class NodeNetworkRendering implements Packet<NodeNetworkRendering> {
 
     public static final int SET = 0;
     public static final int NODE_ADD = 1;
     public static final int NODE_REMOVE = 2;
     public static final int MACHINE_ADD = 3;
     public static final int MACHINE_REMOVE = 4;
+    public static final int CLEAR = 5;
 
     private static final Object2ReferenceMap<IGrid, ReferenceLinkedOpenHashSet<EntityPlayerMP>> gridPlayers = new Object2ReferenceOpenHashMap<>();
     private static final Reference2ReferenceMap<EntityPlayerMP, IGrid> playerGrid = new Reference2ReferenceOpenHashMap<>();
@@ -46,7 +48,12 @@ public class NodeNetworkRendering implements Packet<NodeNetworkRendering> {
     private ReferenceSet<INode> nodes;
     private INode targetNode;
     private List<Pair> entryList;
-    private int mode;
+    private final int mode;
+
+    private transient int parsedMode;
+    private transient long[] parsedNodeLinks;
+    private transient long[] parsedNodeRemoveMachineLinks;
+    private transient long[] parsedMachineLinks;
 
     public NodeNetworkRendering(EntityPlayer player, IGrid grid) {
         this.dim = player.getEntityWorld().provider.getDimension();
@@ -68,12 +75,9 @@ public class NodeNetworkRendering implements Packet<NodeNetworkRendering> {
         this.mode = mode;
         this.targetNode = node;
         ReferenceSet<INode> relevant = new ReferenceOpenHashSet<>();
-        relevant.add(node);
-        if (grid != null) {
-            for (INode other : grid.getNodes()) {
-                if (other.getNeighbors().contains(node)) {
-                    relevant.add(other);
-                }
+        for (INode other : NetworkManager.INSTANCE.getNodesCoveringPosition(node.getWorld(), node.getPos())) {
+            if (node.linkScopeCheck(other) != INode.LinkType.DISCONNECT) {
+                relevant.add(other);
             }
         }
         this.nodes = ReferenceSets.unmodifiable(relevant);
@@ -87,6 +91,7 @@ public class NodeNetworkRendering implements Packet<NodeNetworkRendering> {
     }
 
     public NodeNetworkRendering() {
+        this.mode = CLEAR;
     }
 
     public static void addPlayer(IGrid grid, EntityPlayerMP player) {
@@ -111,62 +116,114 @@ public class NodeNetworkRendering implements Packet<NodeNetworkRendering> {
         return gridPlayers.get(grid);
     }
 
+    private static void writeLinks(ByteBuf buf, IntSupplier writer) {
+        int pos = buf.writerIndex();
+        buf.writeInt(0);
+        int count = writer.getAsInt();
+        buf.setInt(pos, count);
+    }
+
+    private static long[] readLongPairs(ByteBuf buf) {
+        int count = buf.readInt();
+        long[] data = new long[count * 2];
+        for (int i = 0; i < count * 2; i++) {
+            data[i] = buf.readLong();
+        }
+        return data;
+    }
+
     @Override
     public void fromBytes(ByteBuf buf) {
-        int mode = buf.readByte();
+        parsedMode = buf.readByte();
+        if (parsedMode == CLEAR) return;
 
-        if (mode == SET) {
-            NodeNetworkRenderingHandler.INSTANCE.clearLinks();
+        if (parsedMode == SET || parsedMode == NODE_ADD || parsedMode == NODE_REMOVE) {
+            parsedNodeLinks = readLongPairs(buf);
         }
+        if (parsedMode == NODE_REMOVE) {
+            parsedNodeRemoveMachineLinks = readLongPairs(buf);
+        }
+        if (parsedMode == SET || parsedMode == MACHINE_ADD || parsedMode == MACHINE_REMOVE) {
+            parsedMachineLinks = readLongPairs(buf);
+        }
+    }
 
-        if (mode == SET || mode == NODE_ADD || mode == NODE_REMOVE) {
-            int count = buf.readInt();
-            LongBiConsumer handler = (mode == NODE_REMOVE)
-                ? NodeNetworkRenderingHandler.INSTANCE::removeNodeLink
-                : NodeNetworkRenderingHandler.INSTANCE::addNodeLink;
-            for (int i = 0; i < count; i++) {
-                handler.accept(buf.readLong(), buf.readLong());
+    @Override
+    public IMessage onMessage(NodeNetworkRendering message, MessageContext ctx) {
+        Minecraft.getMinecraft().addScheduledTask(() -> {
+            var handler = NodeNetworkRenderingHandler.INSTANCE;
+
+            if (message.parsedMode == CLEAR) {
+                handler.clearLinks();
+                return;
             }
-        }
 
-        if (mode == NODE_REMOVE) {
-            int count = buf.readInt();
-            for (int i = 0; i < count; i++) {
-                NodeNetworkRenderingHandler.INSTANCE.removeMachineLink(buf.readLong(), buf.readLong());
+            if (message.parsedMode == SET) {
+                handler.clearLinks();
             }
-        }
 
-        if (mode == SET || mode == MACHINE_ADD || mode == MACHINE_REMOVE) {
-            int count = buf.readInt();
-            LongBiConsumer handler = (mode == MACHINE_REMOVE)
-                ? NodeNetworkRenderingHandler.INSTANCE::removeMachineLink
-                : NodeNetworkRenderingHandler.INSTANCE::addMachineLink;
-            for (int i = 0; i < count; i++) {
-                handler.accept(buf.readLong(), buf.readLong());
+            if (message.parsedNodeLinks != null) {
+                boolean remove = message.parsedMode == NODE_REMOVE;
+                for (int i = 0; i < message.parsedNodeLinks.length; i += 2) {
+                    if (remove) {
+                        handler.removeNodeLink(message.parsedNodeLinks[i], message.parsedNodeLinks[i + 1]);
+                    } else {
+                        handler.addNodeLink(message.parsedNodeLinks[i], message.parsedNodeLinks[i + 1]);
+                    }
+                }
             }
-        }
+
+            if (message.parsedNodeRemoveMachineLinks != null) {
+                for (int i = 0; i < message.parsedNodeRemoveMachineLinks.length; i += 2) {
+                    handler.removeMachineLink(message.parsedNodeRemoveMachineLinks[i], message.parsedNodeRemoveMachineLinks[i + 1]);
+                }
+            }
+
+            if (message.parsedMachineLinks != null) {
+                boolean remove = message.parsedMode == MACHINE_REMOVE;
+                for (int i = 0; i < message.parsedMachineLinks.length; i += 2) {
+                    if (remove) {
+                        handler.removeMachineLink(message.parsedMachineLinks[i], message.parsedMachineLinks[i + 1]);
+                    } else {
+                        handler.addMachineLink(message.parsedMachineLinks[i], message.parsedMachineLinks[i + 1]);
+                    }
+                }
+            }
+        });
+        return null;
     }
 
     @Override
     public void toBytes(ByteBuf buf) {
         buf.writeByte(mode);
 
+        if (mode == CLEAR) return;
+
         if (mode == SET || mode == NODE_ADD || mode == NODE_REMOVE) {
             writeLinks(buf, () -> {
                 int count = 0;
                 LongSet processedLinks = new LongOpenHashSet();
-                for (var node : nodes) {
-                    if (dim != node.getWorld().provider.getDimension()) continue;
-                    long posA = node.getPos().toLong();
-                    for (var neighbor : node.getNeighbors()) {
-                        if (mode == NODE_REMOVE && node != targetNode && neighbor != targetNode) continue;
-                        long posB = neighbor.getPos().toLong();
-                        long min = Math.min(posA, posB), max = Math.max(posA, posB);
-                        if (processedLinks.add(min ^ Long.rotateLeft(max, 32))) {
-                            buf.writeLong(posA);
-                            buf.writeLong(posB);
-                            count++;
+                if (mode == SET) {
+                    for (var node : nodes) {
+                        if (dim != node.getWorld().provider.getDimension()) continue;
+                        long posA = node.getPos().toLong();
+                        for (var neighbor : node.getNeighbors()) {
+                            long posB = neighbor.getPos().toLong();
+                            long min = Math.min(posA, posB), max = Math.max(posA, posB);
+                            if (processedLinks.add(min ^ Long.rotateLeft(max, 32))) {
+                                buf.writeLong(posA);
+                                buf.writeLong(posB);
+                                count++;
+                            }
                         }
+                    }
+                } else {
+                    for (var node : nodes) {
+                        long posA = node.getPos().toLong();
+                        long posB = targetNode.getPos().toLong();
+                        buf.writeLong(posA);
+                        buf.writeLong(posB);
+                        count++;
                     }
                 }
                 return count;
@@ -176,15 +233,11 @@ public class NodeNetworkRendering implements Packet<NodeNetworkRendering> {
         if (mode == NODE_REMOVE) {
             writeLinks(buf, () -> {
                 int count = 0;
-                for (var node : nodes) {
-                    if (node != targetNode) continue;
-                    if (dim != node.getWorld().provider.getDimension()) continue;
-                    var set = EnergyMachineManager.INSTANCE.getTileEntities(node);
-                    for (var te : set) {
-                        buf.writeLong(te.getPos().toLong());
-                        buf.writeLong(node.getPos().toLong());
-                        count++;
-                    }
+                var set = EnergyMachineManager.INSTANCE.getTileEntities(targetNode);
+                for (var te : set) {
+                    buf.writeLong(te.getPos().toLong());
+                    buf.writeLong(targetNode.getPos().toLong());
+                    count++;
                 }
                 return count;
             });
@@ -206,26 +259,7 @@ public class NodeNetworkRendering implements Packet<NodeNetworkRendering> {
         }
     }
 
-    private void writeLinks(ByteBuf buf, IntSupplier writer) {
-        int pos = buf.writerIndex();
-        buf.writeInt(0);
-        int count = writer.getAsInt();
-        buf.setInt(pos, count);
-    }
-
-    private interface LongBiConsumer extends BiConsumer<Long, Long> {
-        default void accept(Long t, Long u) {
-            accept(t.longValue(), u.longValue());
-        }
-        void accept(long t, long u);
-    }
-
     @Desugar
     private record Pair(TileEntity tileEntity, INode node) {
-    }
-
-    @Override
-    public IMessage onMessage(NodeNetworkRendering message, MessageContext ctx) {
-        return null;
     }
 }

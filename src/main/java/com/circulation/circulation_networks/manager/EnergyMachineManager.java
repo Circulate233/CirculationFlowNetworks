@@ -11,8 +11,7 @@ import com.circulation.circulation_networks.registry.RegistryEnergyHandler;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMaps;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
-import it.unimi.dsi.fastutil.objects.ObjectArrayList;
-import it.unimi.dsi.fastutil.objects.ObjectLists;
+import it.unimi.dsi.fastutil.objects.ObjectLinkedOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ObjectSet;
 import it.unimi.dsi.fastutil.objects.ObjectSets;
@@ -32,7 +31,6 @@ import javax.annotation.Nonnull;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumMap;
-import java.util.List;
 import java.util.Set;
 import java.util.WeakHashMap;
 
@@ -94,7 +92,7 @@ public final class EnergyMachineManager {
     public void onServerTick() {
         if (server == null) return;
         interaction.values().forEach(Interaction::reset);
-        var gridMap = new Reference2ObjectOpenHashMap<IGrid, EnumMap<IEnergyHandler.EnergyType, List<IEnergyHandler>>>();
+        var gridMap = new Reference2ObjectOpenHashMap<IGrid, EnumMap<IEnergyHandler.EnergyType, Set<IEnergyHandler>>>();
         for (var entry : machineGridMap.entrySet()) {
             var te = entry.getKey();
             var handler = IEnergyHandler.release(te);
@@ -108,7 +106,7 @@ public final class EnergyMachineManager {
 
             for (var node : entry.getValue()) {
                 gridMap.computeIfAbsent(node.getGrid(), g -> new EnumMap<>(IEnergyHandler.EnergyType.class))
-                       .computeIfAbsent(handler.getType(), s -> new ObjectArrayList<>())
+                       .computeIfAbsent(handler.getType(), s -> new ObjectLinkedOpenHashSet<>())
                        .add(handler);
             }
         }
@@ -116,9 +114,9 @@ public final class EnergyMachineManager {
         for (var e : gridMap.entrySet()) {
             var grid = e.getKey();
             var hanlers = e.getValue();
-            var send = hanlers.getOrDefault(IEnergyHandler.EnergyType.SEND, ObjectLists.emptyList());
-            var storage = hanlers.getOrDefault(IEnergyHandler.EnergyType.STORAGE, ObjectLists.emptyList());
-            var receive = hanlers.getOrDefault(IEnergyHandler.EnergyType.RECEIVE, ObjectLists.emptyList());
+            var send = hanlers.getOrDefault(IEnergyHandler.EnergyType.SEND, ObjectSets.emptySet());
+            var storage = hanlers.getOrDefault(IEnergyHandler.EnergyType.STORAGE, ObjectSets.emptySet());
+            var receive = hanlers.getOrDefault(IEnergyHandler.EnergyType.RECEIVE, ObjectSets.emptySet());
 
             transferEnergy(send, receive, Status.INTERACTION, grid);
             transferEnergy(storage, receive, Status.EXTRACT, grid);
@@ -188,13 +186,18 @@ public final class EnergyMachineManager {
         }
     }
 
-    public void addMachineNode(IMachineNode iMachineNode) {
-        var te = iMachineNode.getTileEntity();
-        var set = iMachineNode.getNeighbors();
-        if (!set.isEmpty()) {
+    public void addMachineNode(IMachineNode iMachineNode, TileEntity te) {
+        var allConnected = new ReferenceOpenHashSet<INode>();
+        for (INode candidate : NetworkManager.INSTANCE.getNodesCoveringPosition(iMachineNode.getWorld(), iMachineNode.getPos())) {
+            if (candidate.linkScopeCheck(iMachineNode) != INode.LinkType.DISCONNECT) {
+                allConnected.add(candidate);
+            }
+        }
+
+        if (!allConnected.isEmpty()) {
             var s = machineGridMap.get(te);
             if (s == null) s = new ReferenceOpenHashSet<>();
-            for (var node : set) {
+            for (var node : allConnected) {
                 var set1 = gridMachineMap.get(node);
                 if (set1 == gridMachineMap.defaultReturnValue()) {
                     gridMachineMap.put(node, set1 = Collections.newSetFromMap(new WeakHashMap<>()));
@@ -207,7 +210,7 @@ public final class EnergyMachineManager {
         }
     }
 
-    public void addNode(INode node) {
+    public void addNode(INode node, TileEntity te) {
         if (node instanceof IEnergySupplyNode energySupplyNode) {
             int nodeX = energySupplyNode.getPos().getX();
             int nodeZ = energySupplyNode.getPos().getZ();
@@ -267,7 +270,7 @@ public final class EnergyMachineManager {
                 }
             ).put(energySupplyNode, ObjectSets.unmodifiable(chunksCovered));
 
-            if (energySupplyNode instanceof IMachineNode node1) addMachineNode(node1);
+            if (energySupplyNode instanceof IMachineNode node1) addMachineNode(node1, te);
         }
     }
 

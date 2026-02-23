@@ -21,6 +21,7 @@ import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSets;
 import lombok.Getter;
+import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.world.World;
@@ -50,93 +51,15 @@ public final class NetworkManager {
         return grids.values();
     }
 
-    public void addNode(INode newNode) {
-        if (newNode == null || newNode.getWorld().isRemote || !newNode.isActive() || activeNodes.contains(newNode))
-            return;
-
-        var world = newNode.getWorld();
-        activeNodes.add(newNode);
-        var pos = newNode.getPos();
-
-        ChunkPos ownChunk = new ChunkPos(pos);
-        var locMap = nodeLocation.computeIfAbsent(world, k -> {
-            var ma = new Object2ObjectOpenHashMap<ChunkPos, ReferenceSet<INode>>();
-            ma.defaultReturnValue(ReferenceSets.emptySet());
-            return ma;
-        });
-        var locSet = locMap.get(ownChunk);
-        if (locSet == locMap.defaultReturnValue()) {
-            locMap.put(ownChunk, locSet = new ReferenceOpenHashSet<>());
-        }
-        locSet.add(newNode);
-
-        int nodeX = pos.getX();
-        int nodeZ = pos.getZ();
-        int range = (int) newNode.getLinkScope();
-        int minChunkX = (nodeX - range) >> 4, maxChunkX = (nodeX + range) >> 4;
-        int minChunkZ = (nodeZ - range) >> 4, maxChunkZ = (nodeZ + range) >> 4;
-        ObjectSet<ChunkPos> chunksCovered = new ObjectOpenHashSet<>();
-        for (int cx = minChunkX; cx <= maxChunkX; ++cx)
-            for (int cz = minChunkZ; cz <= maxChunkZ; ++cz)
-                chunksCovered.add(new ChunkPos(cx, cz));
-
-        ReferenceSet<INode> candidates = new ReferenceOpenHashSet<>();
-        for (var chunkPos : chunksCovered) {
-            var scopeMap = scopeNode.computeIfAbsent(world, l -> {
-                var ma = new Object2ObjectOpenHashMap<ChunkPos, ReferenceSet<INode>>();
-                ma.defaultReturnValue(ReferenceSets.emptySet());
-                return ma;
-            });
-            var set1 = scopeMap.get(chunkPos);
-            candidates.addAll(set1);
-            if (set1 == scopeMap.defaultReturnValue()) {
-                scopeMap.put(chunkPos, set1 = new ReferenceOpenHashSet<>());
-            }
-            set1.add(newNode);
-        }
-        nodeScope.computeIfAbsent(world, l -> {
-            var ma = new Object2ObjectOpenHashMap<INode, ObjectSet<ChunkPos>>();
-            ma.defaultReturnValue(ObjectSets.emptySet());
-            return ma;
-        }).put(newNode, ObjectSets.unmodifiable(chunksCovered));
-
-        assignNodeToGrid(newNode, allocGrid());
-
-        for (INode existing : candidates) {
-            if (existing == newNode || !existing.isActive()) continue;
-            var linkType = newNode.linkScopeCheck(existing);
-            if (linkType == INode.LinkType.DISCONNECT) continue;
-            switch (linkType) {
-                case DOUBLY -> {
-                    newNode.addNeighbor(existing);
-                    existing.addNeighbor(newNode);
-                }
-                case A_TO_B -> newNode.addNeighbor(existing);
-                case B_TO_A -> existing.addNeighbor(newNode);
-            }
-            IGrid ng = existing.getGrid();
-            IGrid cg = newNode.getGrid();
-            if (ng != null && ng != cg) {
-                IGrid dst = cg.getNodes().size() >= ng.getNodes().size() ? cg : ng;
-                IGrid src = dst == cg ? ng : cg;
-                for (INode n : src.getNodes()) {
-                    dst.getNodes().add(n);
-                    n.setGrid(dst);
-                }
-                src.getNodes().clear();
-                destroyGrid(src);
-            }
-        }
-
-        var players = NodeNetworkRendering.getPlayers(newNode.getGrid());
-        if (players != null && !players.isEmpty()) {
-            for (var player : players) {
-                CirculationFlowNetworks.NET_CHANNEL.sendTo(
-                    new NodeNetworkRendering(player, newNode, NodeNetworkRendering.NODE_ADD), player);
-            }
-        }
-        EnergyMachineManager.INSTANCE.addNode(newNode);
-        ChargingManager.INSTANCE.addNode(newNode);
+    /**
+     * @param world w
+     * @param pos   p
+     * @return 此位置的节点
+     */
+    public static @Nullable INode getNodeFromPos(World world, BlockPos pos) {
+        var te = world.getTileEntity(pos);
+        if (te != null) return te.getCapability(CommonProxy.nodeCapability, null);
+        return null;
     }
 
     public void removeNode(INode removedNode) {
@@ -261,15 +184,9 @@ public final class NetworkManager {
         }).get(pos);
     }
 
-    /**
-     * @param world w
-     * @param pos p
-     * @return 此位置的节点
-     */
-    public @Nullable INode getNodeFromPos(World world, BlockPos pos) {
-        var te = world.getTileEntity(pos);
-        if (te != null) return te.getCapability(CommonProxy.nodeCapability, null);
-        return null;
+    private static void assignNodeToGrid(INode node, IGrid grid) {
+        grid.getNodes().add(node);
+        node.setGrid(grid);
     }
 
     /**
@@ -300,9 +217,93 @@ public final class NetworkManager {
         return grid;
     }
 
-    private void assignNodeToGrid(INode node, IGrid grid) {
-        grid.getNodes().add(node);
-        node.setGrid(grid);
+    public void addNode(INode newNode, TileEntity te) {
+        if (newNode == null || newNode.getWorld().isRemote || !newNode.isActive() || activeNodes.contains(newNode))
+            return;
+
+        var world = newNode.getWorld();
+        activeNodes.add(newNode);
+        var pos = newNode.getPos();
+
+        ChunkPos ownChunk = new ChunkPos(pos);
+        var locMap = nodeLocation.computeIfAbsent(world, k -> {
+            var ma = new Object2ObjectOpenHashMap<ChunkPos, ReferenceSet<INode>>();
+            ma.defaultReturnValue(ReferenceSets.emptySet());
+            return ma;
+        });
+        var locSet = locMap.get(ownChunk);
+        if (locSet == locMap.defaultReturnValue()) {
+            locMap.put(ownChunk, locSet = new ReferenceOpenHashSet<>());
+        }
+        locSet.add(newNode);
+
+        int nodeX = pos.getX();
+        int nodeZ = pos.getZ();
+        int range = (int) newNode.getLinkScope();
+        int minChunkX = (nodeX - range) >> 4, maxChunkX = (nodeX + range) >> 4;
+        int minChunkZ = (nodeZ - range) >> 4, maxChunkZ = (nodeZ + range) >> 4;
+        ObjectSet<ChunkPos> chunksCovered = new ObjectOpenHashSet<>();
+        for (int cx = minChunkX; cx <= maxChunkX; ++cx)
+            for (int cz = minChunkZ; cz <= maxChunkZ; ++cz)
+                chunksCovered.add(new ChunkPos(cx, cz));
+
+        ReferenceSet<INode> candidates = new ReferenceOpenHashSet<>();
+        for (var chunkPos : chunksCovered) {
+            var scopeMap = scopeNode.computeIfAbsent(world, l -> {
+                var ma = new Object2ObjectOpenHashMap<ChunkPos, ReferenceSet<INode>>();
+                ma.defaultReturnValue(ReferenceSets.emptySet());
+                return ma;
+            });
+            var set1 = scopeMap.get(chunkPos);
+            candidates.addAll(set1);
+            if (set1 == scopeMap.defaultReturnValue()) {
+                scopeMap.put(chunkPos, set1 = new ReferenceOpenHashSet<>());
+            }
+            set1.add(newNode);
+        }
+        nodeScope.computeIfAbsent(world, l -> {
+            var ma = new Object2ObjectOpenHashMap<INode, ObjectSet<ChunkPos>>();
+            ma.defaultReturnValue(ObjectSets.emptySet());
+            return ma;
+        }).put(newNode, ObjectSets.unmodifiable(chunksCovered));
+
+        assignNodeToGrid(newNode, allocGrid());
+
+        for (INode existing : candidates) {
+            if (existing == newNode || !existing.isActive()) continue;
+            var linkType = newNode.linkScopeCheck(existing);
+            if (linkType == INode.LinkType.DISCONNECT) continue;
+            switch (linkType) {
+                case DOUBLY -> {
+                    newNode.addNeighbor(existing);
+                    existing.addNeighbor(newNode);
+                }
+                case A_TO_B -> newNode.addNeighbor(existing);
+                case B_TO_A -> existing.addNeighbor(newNode);
+            }
+            IGrid ng = existing.getGrid();
+            IGrid cg = newNode.getGrid();
+            if (ng != null && ng != cg) {
+                IGrid dst = cg.getNodes().size() >= ng.getNodes().size() ? cg : ng;
+                IGrid src = dst == cg ? ng : cg;
+                for (INode n : src.getNodes()) {
+                    dst.getNodes().add(n);
+                    n.setGrid(dst);
+                }
+                src.getNodes().clear();
+                destroyGrid(src);
+            }
+        }
+
+        var players = NodeNetworkRendering.getPlayers(newNode.getGrid());
+        if (players != null && !players.isEmpty()) {
+            for (var player : players) {
+                CirculationFlowNetworks.NET_CHANNEL.sendTo(
+                    new NodeNetworkRendering(player, newNode, NodeNetworkRendering.NODE_ADD), player);
+            }
+        }
+        EnergyMachineManager.INSTANCE.addNode(newNode, te);
+        ChargingManager.INSTANCE.addNode(newNode);
     }
 
     private void destroyGrid(IGrid grid) {

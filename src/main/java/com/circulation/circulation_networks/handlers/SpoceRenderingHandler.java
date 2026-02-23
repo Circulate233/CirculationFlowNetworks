@@ -79,21 +79,25 @@ public final class SpoceRenderingHandler {
         linkDirty = energyDirty = chargingDirty = true;
     }
 
-    private void clear() {
-        te = null;
-        linkScope = energyScope = chargingScope = 0;
-        animProgress = lastAnimProgress = 0;
-        rs = null;
-        linkVerts = energyVerts = chargingVerts = EMPTY_VERTS;
-        linkDirty = energyDirty = chargingDirty = false;
+    private static float easeOutCubic(float t) {
+        return (float) (1.0 - Math.pow(1.0 - t, 3));
     }
 
     private boolean isAnimating() {
         return animProgress < 1.0f;
     }
 
-    private float easeOutCubic(float t) {
-        return (float) (1.0 - Math.pow(1.0 - t, 3));
+    private static void drawCachedIntersection(float[] verts, float r, float g, float b) {
+        if (verts.length == 0) return;
+        GlStateManager.color(r, g, b, 1.0f);
+        GlStateManager.glLineWidth(4.0f);
+        Tessellator tess = Tessellator.getInstance();
+        BufferBuilder buf = tess.getBuffer();
+        buf.begin(GL11.GL_LINES, DefaultVertexFormats.POSITION);
+        for (int i = 0; i < verts.length; i += 3) {
+            buf.pos(verts[i], verts[i + 1], verts[i + 2]).endVertex();
+        }
+        tess.draw();
     }
 
     @SubscribeEvent
@@ -114,112 +118,12 @@ public final class SpoceRenderingHandler {
         }
     }
 
-    @SubscribeEvent
-    public void onRenderWorldLast(RenderWorldLastEvent event) {
-        if (te == null) return;
-        if (te.isInvalid()) {
-            clear();
-            return;
-        }
-        if (rs == null) {
-            clear();
-            return;
-        }
-
-        Minecraft mc = Minecraft.getMinecraft();
-        EntityPlayerSP p = mc.player;
-        BlockPos pos = te.getPos();
-        if (pos.distanceSq(p.posX, p.posY, p.posZ) > 2500) {
-            clear();
-            return;
-        }
-
-        var stack = p.getHeldItemMainhand();
-        if (!(stack.getItem() == RegistryItems.inspectionTool
-            && RegistryItems.inspectionTool.getMode(stack).isMode(ItemInspectionTool.Mode.Spoce))) return;
-
-        float partial = event.getPartialTicks();
-        double renderPosX = p.lastTickPosX + (p.posX - p.lastTickPosX) * partial;
-        double renderPosY = p.lastTickPosY + (p.posY - p.lastTickPosY) * partial;
-        double renderPosZ = p.lastTickPosZ + (p.posZ - p.lastTickPosZ) * partial;
-
-        double tx = pos.getX() + 0.5 - renderPosX;
-        double ty = pos.getY() + 0.5 - renderPosY;
-        double tz = pos.getZ() + 0.5 - renderPosZ;
-
-        float interpFactor = easeOutCubic(lastAnimProgress + (animProgress - lastAnimProgress) * partial);
-        boolean animating = isAnimating() || (animProgress == 1.0f && lastAnimProgress < 1.0f);
-
-        World world = mc.world;
-
+    private static void draw(float rotation, float r, float g, float b, float radius, float r1, float g1, float b1) {
         GlStateManager.pushMatrix();
-        GlStateManager.color(1f, 1f, 1f, 1f);
-        GlStateManager.translate(tx, ty, tz);
-        GlStateManager.enableBlend();
-        GlStateManager.disableTexture2D();
-        GlStateManager.disableLighting();
-        GlStateManager.disableCull();
-        GlStateManager.depthMask(false);
-
-        float time = world.getTotalWorldTime() + partial;
-        float rotation = time * 0.8f;
-
-        if (linkScope > 0) {
-            final float radius = linkScope * interpFactor;
-            final float wr = 0.4f, wg = 0.8f, wb = 1.0f;
-            GlStateManager.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
-            draw(rotation * rs[0], 0, 0.4f, 0.8f, radius, wr, wg, wb);
-            GlStateManager.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE);
-            if (animating) {
-                drawIntersectionImmediate(world, radius, bright(wr), bright(wg), bright(wb));
-            } else {
-                if (linkDirty) {
-                    linkVerts = buildIntersectionGeometry(world, linkScope);
-                    linkDirty = false;
-                }
-                drawCachedIntersection(linkVerts, bright(wr), bright(wg), bright(wb));
-            }
-        }
-
-        if (energyScope > 0) {
-            final float radius = energyScope * interpFactor;
-            final float wr = 0.8f, wg = 0.6f, wb = 1.0f;
-            GlStateManager.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
-            draw(rotation * rs[1], 0.4f, 0.2f, 0.8f, radius, wr, wg, wb);
-            GlStateManager.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE);
-            if (animating) {
-                drawIntersectionImmediate(world, radius, bright(wr), bright(wg), bright(wb));
-            } else {
-                if (energyDirty) {
-                    energyVerts = buildIntersectionGeometry(world, energyScope);
-                    energyDirty = false;
-                }
-                drawCachedIntersection(energyVerts, bright(wr), bright(wg), bright(wb));
-            }
-        }
-
-        if (chargingScope > 0) {
-            final float radius = chargingScope * interpFactor;
-            final float wr = 0.4f, wg = 1.0f, wb = 0.4f;
-            GlStateManager.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
-            draw(rotation * rs[2], 0, 0.5f, 0.1f, radius, wr, wg, wb);
-            GlStateManager.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE);
-            if (animating) {
-                drawIntersectionImmediate(world, radius, bright(wr), bright(wg), bright(wb));
-            } else {
-                if (chargingDirty) {
-                    chargingVerts = buildIntersectionGeometry(world, chargingScope);
-                    chargingDirty = false;
-                }
-                drawCachedIntersection(chargingVerts, bright(wr), bright(wg), bright(wb));
-            }
-        }
-
-        GlStateManager.depthMask(true);
-        GlStateManager.enableCull();
-        GlStateManager.enableLighting();
-        GlStateManager.enableTexture2D();
-        GlStateManager.disableBlend();
+        drawSphere(r, g, b, radius, 0.2f);
+        GlStateManager.rotate(rotation, 0.0F, 1.0F, 0.0F);
+        GlStateManager.rotate(rotation * 0.5F, 1.0F, 0.0F, 0.0F);
+        drawBuckyBallWireframe(r1, g1, b1, radius + 0.01f, 0.8f);
         GlStateManager.popMatrix();
     }
 
@@ -421,29 +325,7 @@ public final class SpoceRenderingHandler {
         }
     }
 
-    private void drawCachedIntersection(float[] verts, float r, float g, float b) {
-        if (verts.length == 0) return;
-        GlStateManager.color(r, g, b, 1.0f);
-        GlStateManager.glLineWidth(4.0f);
-        Tessellator tess = Tessellator.getInstance();
-        BufferBuilder buf = tess.getBuffer();
-        buf.begin(GL11.GL_LINES, DefaultVertexFormats.POSITION);
-        for (int i = 0; i < verts.length; i += 3) {
-            buf.pos(verts[i], verts[i + 1], verts[i + 2]).endVertex();
-        }
-        tess.draw();
-    }
-
-    private void draw(float rotation, float r, float g, float b, float radius, float r1, float g1, float b1) {
-        GlStateManager.pushMatrix();
-        drawSphere(r, g, b, radius, 0.2f);
-        GlStateManager.rotate(rotation, 0.0F, 1.0F, 0.0F);
-        GlStateManager.rotate(rotation * 0.5F, 1.0F, 0.0F, 0.0F);
-        drawBuckyBallWireframe(r1, g1, b1, radius + 0.01f, 0.8f);
-        GlStateManager.popMatrix();
-    }
-
-    private void drawSphere(float r, float g, float b, float radius, float alpha) {
+    private static void drawSphere(float r, float g, float b, float radius, float alpha) {
         GlStateManager.color(r, g, b, alpha);
         Tessellator tess = Tessellator.getInstance();
         BufferBuilder buf = tess.getBuffer();
@@ -467,7 +349,7 @@ public final class SpoceRenderingHandler {
         }
     }
 
-    private void drawBuckyBallWireframe(float r, float g, float b, float radius, float alpha) {
+    private static void drawBuckyBallWireframe(float r, float g, float b, float radius, float alpha) {
         GlStateManager.color(r, g, b, alpha);
         GlStateManager.glLineWidth(2.0f);
         Tessellator tess = Tessellator.getInstance();
@@ -482,7 +364,7 @@ public final class SpoceRenderingHandler {
         tess.draw();
     }
 
-    private int addCos(double[] buf, int count, double val) {
+    private static int addCos(double[] buf, int count, double val) {
         if (val < -1.0 - 1E-9 || val > 1.0 + 1E-9) return count;
         val = val < -1.0 ? -1.0 : Math.min(val, 1.0);
         double a = Math.acos(val);
@@ -491,7 +373,7 @@ public final class SpoceRenderingHandler {
         return count;
     }
 
-    private int addSin(double[] buf, int count, double val) {
+    private static int addSin(double[] buf, int count, double val) {
         if (val < -1.0 - 1E-9 || val > 1.0 + 1E-9) return count;
         val = val < -1.0 ? -1.0 : Math.min(val, 1.0);
         double a = Math.asin(val);
@@ -500,12 +382,12 @@ public final class SpoceRenderingHandler {
         return count;
     }
 
-    private double normalizeAngle(double a) {
+    private static double normalizeAngle(double a) {
         a %= Math.PI * 2.0;
         return a < 0 ? a + Math.PI * 2.0 : a;
     }
 
-    private void sortAngles(double[] buf, int count) {
+    private static void sortAngles(double[] buf, int count) {
         for (int i = 1; i < count; i++) {
             double key = buf[i];
             int j = i - 1;
@@ -515,5 +397,119 @@ public final class SpoceRenderingHandler {
             }
             buf[j + 1] = key;
         }
+    }
+
+    public void clear() {
+        te = null;
+        linkScope = energyScope = chargingScope = 0;
+        animProgress = lastAnimProgress = 0;
+        rs = null;
+        linkVerts = energyVerts = chargingVerts = EMPTY_VERTS;
+        linkDirty = energyDirty = chargingDirty = false;
+    }
+
+    @SubscribeEvent
+    public void onRenderWorldLast(RenderWorldLastEvent event) {
+        if (te == null) return;
+        if (te.isInvalid() || rs == null) {
+            clear();
+            return;
+        }
+
+        Minecraft mc = Minecraft.getMinecraft();
+        EntityPlayerSP p = mc.player;
+        BlockPos pos = te.getPos();
+        if (p.dimension != te.getWorld().provider.getDimension() || pos.distanceSq(p.posX, p.posY, p.posZ) > 2500) {
+            clear();
+            return;
+        }
+
+        var stack = p.getHeldItemMainhand();
+        if (!(stack.getItem() == RegistryItems.inspectionTool
+            && RegistryItems.inspectionTool.getMode(stack).isMode(ItemInspectionTool.Mode.Spoce))) return;
+
+        float partial = event.getPartialTicks();
+        double renderPosX = p.lastTickPosX + (p.posX - p.lastTickPosX) * partial;
+        double renderPosY = p.lastTickPosY + (p.posY - p.lastTickPosY) * partial;
+        double renderPosZ = p.lastTickPosZ + (p.posZ - p.lastTickPosZ) * partial;
+
+        double tx = pos.getX() + 0.5 - renderPosX;
+        double ty = pos.getY() + 0.5 - renderPosY;
+        double tz = pos.getZ() + 0.5 - renderPosZ;
+
+        float interpFactor = easeOutCubic(lastAnimProgress + (animProgress - lastAnimProgress) * partial);
+        boolean animating = isAnimating() || (animProgress == 1.0f && lastAnimProgress < 1.0f);
+
+        World world = mc.world;
+
+        GlStateManager.pushMatrix();
+        GlStateManager.color(1f, 1f, 1f, 1f);
+        GlStateManager.translate(tx, ty, tz);
+        GlStateManager.enableBlend();
+        GlStateManager.disableTexture2D();
+        GlStateManager.disableLighting();
+        GlStateManager.disableCull();
+        GlStateManager.depthMask(false);
+
+        float time = world.getTotalWorldTime() + partial;
+        float rotation = time * 0.8f;
+
+        if (linkScope > 0) {
+            final float radius = linkScope * interpFactor;
+            final float wr = 0.4f, wg = 0.8f, wb = 1.0f;
+            GlStateManager.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
+            draw(rotation * rs[0], 0, 0.4f, 0.8f, radius, wr, wg, wb);
+            GlStateManager.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE);
+            if (animating) {
+                drawIntersectionImmediate(world, radius, bright(wr), bright(wg), bright(wb));
+            } else {
+                if (linkDirty) {
+                    linkVerts = buildIntersectionGeometry(world, linkScope);
+                    linkDirty = false;
+                }
+                drawCachedIntersection(linkVerts, bright(wr), bright(wg), bright(wb));
+            }
+        }
+
+        if (energyScope > 0) {
+            final float radius = energyScope * interpFactor;
+            final float wr = 0.8f, wg = 0.6f, wb = 1.0f;
+            GlStateManager.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
+            draw(rotation * rs[1], 0.4f, 0.2f, 0.8f, radius, wr, wg, wb);
+            GlStateManager.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE);
+            if (animating) {
+                drawIntersectionImmediate(world, radius, bright(wr), bright(wg), bright(wb));
+            } else {
+                if (energyDirty) {
+                    energyVerts = buildIntersectionGeometry(world, energyScope);
+                    energyDirty = false;
+                }
+                drawCachedIntersection(energyVerts, bright(wr), bright(wg), bright(wb));
+            }
+        }
+
+        if (chargingScope > 0) {
+            final float radius = chargingScope * interpFactor;
+            final float wr = 0.4f, wg = 1.0f, wb = 0.4f;
+            GlStateManager.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
+            draw(rotation * rs[2], 0, 0.5f, 0.1f, radius, wr, wg, wb);
+            GlStateManager.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE);
+            if (animating) {
+                drawIntersectionImmediate(world, radius, bright(wr), bright(wg), bright(wb));
+            } else {
+                if (chargingDirty) {
+                    chargingVerts = buildIntersectionGeometry(world, chargingScope);
+                    chargingDirty = false;
+                }
+                drawCachedIntersection(chargingVerts, bright(wr), bright(wg), bright(wb));
+            }
+        }
+
+        GlStateManager.depthMask(true);
+        GlStateManager.enableCull();
+        GlStateManager.enableLighting();
+        GlStateManager.enableTexture2D();
+        GlStateManager.disableBlend();
+        GlStateManager.popMatrix();
     }
 }
