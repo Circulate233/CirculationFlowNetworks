@@ -8,6 +8,7 @@ import com.circulation.circulation_networks.api.node.IMachineNode;
 import com.circulation.circulation_networks.api.node.INode;
 import com.circulation.circulation_networks.packets.NodeNetworkRendering;
 import com.circulation.circulation_networks.registry.RegistryEnergyHandler;
+import com.circulation.circulation_networks.utils.TileEntityLifeCycleEvent;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMaps;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
@@ -87,6 +88,16 @@ public final class EnergyMachineManager {
                 }
             }
         }
+    }
+
+    public void onTileEntityValidate(TileEntityLifeCycleEvent.Validate event) {
+        if (event.getWorld().isRemote) return;
+        addMachine(event.getTileEntity());
+    }
+
+    public void onTileEntityInvalidate(TileEntityLifeCycleEvent.Invalidate event) {
+        if (event.getWorld().isRemote) return;
+        removeMachine(event.getTileEntity());
     }
 
     public void onServerTick() {

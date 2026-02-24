@@ -14,7 +14,6 @@ import net.minecraft.world.World;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.SidedProxy;
 import net.minecraftforge.fml.common.event.FMLInitializationEvent;
-import net.minecraftforge.fml.common.event.FMLLoadCompleteEvent;
 import net.minecraftforge.fml.common.event.FMLPostInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
@@ -48,7 +47,11 @@ public class CirculationFlowNetworks {
     public static MinecraftServer server;
 
     public static void openGui(EntityPlayer player, World world, int x, int y, int z) {
-        proxy.openGui(player, world, x, y, z);
+        openGui(0, player, world, x, y, z);
+    }
+
+    public static void openGui(int guiId, EntityPlayer player, World world, int x, int y, int z) {
+        player.openGui(CirculationFlowNetworks.instance, guiId, world, x, y, z);
     }
 
     @Mod.EventHandler
@@ -64,11 +67,6 @@ public class CirculationFlowNetworks {
     @Mod.EventHandler
     public void postInit(FMLPostInitializationEvent event) {
         proxy.postInit();
-    }
-
-    @Mod.EventHandler
-    public void loadComplete(FMLLoadCompleteEvent event) {
-
     }
 
     @Mod.EventHandler

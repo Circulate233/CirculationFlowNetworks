@@ -32,21 +32,18 @@ import java.util.List;
 public final class SpoceRenderingHandler {
 
     public static final SpoceRenderingHandler INSTANCE = new SpoceRenderingHandler();
-
-    private TileEntity te;
-    private float linkScope;
-    private float energyScope;
-    private float chargingScope;
-
-    private float lastAnimProgress;
-    private float animProgress;
-    private float[] rs;
-
     private static final float[] EMPTY_VERTS = new float[0];
     private static final int BUILD_BUF_SIZE = 1 << 17;
     private static final int RESCAN_INTERVAL = 3;
     private final float[] buildBuf = new float[BUILD_BUF_SIZE];
     private final double[] angleScratch = new double[9];
+    private TileEntity te;
+    private float linkScope;
+    private float energyScope;
+    private float chargingScope;
+    private float lastAnimProgress;
+    private float animProgress;
+    private float[] rs;
     private int buildCount;
     private float[] linkVerts = EMPTY_VERTS;
     private float[] energyVerts = EMPTY_VERTS;
@@ -58,6 +55,106 @@ public final class SpoceRenderingHandler {
 
     private static float bright(float v) {
         return Math.min(1.0f, v * 1.3f);
+    }
+
+    private static float easeOutCubic(float t) {
+        return (float) (1.0 - Math.pow(1.0 - t, 3));
+    }
+
+    private static void drawCachedIntersection(float[] verts, float r, float g, float b) {
+        if (verts.length == 0) return;
+        GlStateManager.color(r, g, b, 1.0f);
+        GlStateManager.glLineWidth(4.0f);
+        Tessellator tess = Tessellator.getInstance();
+        BufferBuilder buf = tess.getBuffer();
+        buf.begin(GL11.GL_LINES, DefaultVertexFormats.POSITION);
+        for (int i = 0; i < verts.length; i += 3) {
+            buf.pos(verts[i], verts[i + 1], verts[i + 2]).endVertex();
+        }
+        tess.draw();
+    }
+
+    private static void draw(float rotation, float r, float g, float b, float radius, float r1, float g1, float b1) {
+        GlStateManager.pushMatrix();
+        drawSphere(r, g, b, radius, 0.2f);
+        GlStateManager.rotate(rotation, 0.0F, 1.0F, 0.0F);
+        GlStateManager.rotate(rotation * 0.5F, 1.0F, 0.0F, 0.0F);
+        drawBuckyBallWireframe(r1, g1, b1, radius + 0.01f, 0.8f);
+        GlStateManager.popMatrix();
+    }
+
+    private static void drawSphere(float r, float g, float b, float radius, float alpha) {
+        GlStateManager.color(r, g, b, alpha);
+        Tessellator tess = Tessellator.getInstance();
+        BufferBuilder buf = tess.getBuffer();
+        final int slices = 32, stacks = 32;
+        for (int i = 0; i < slices; i++) {
+            double phi1 = Math.PI * i / slices;
+            double phi2 = Math.PI * (i + 1) / slices;
+            buf.begin(GL11.GL_QUAD_STRIP, DefaultVertexFormats.POSITION_NORMAL);
+            for (int j = 0; j <= stacks; j++) {
+                double theta = 2.0 * Math.PI * j / stacks;
+                float x1 = (float) (radius * Math.sin(phi1) * Math.cos(theta));
+                float y1 = (float) (radius * Math.cos(phi1));
+                float z1 = (float) (radius * Math.sin(phi1) * Math.sin(theta));
+                buf.pos(x1, y1, z1).normal(x1 / radius, y1 / radius, z1 / radius).endVertex();
+                float x2 = (float) (radius * Math.sin(phi2) * Math.cos(theta));
+                float y2 = (float) (radius * Math.cos(phi2));
+                float z2 = (float) (radius * Math.sin(phi2) * Math.sin(theta));
+                buf.pos(x2, y2, z2).normal(x2 / radius, y2 / radius, z2 / radius).endVertex();
+            }
+            tess.draw();
+        }
+    }
+
+    private static void drawBuckyBallWireframe(float r, float g, float b, float radius, float alpha) {
+        GlStateManager.color(r, g, b, alpha);
+        GlStateManager.glLineWidth(2.0f);
+        Tessellator tess = Tessellator.getInstance();
+        BufferBuilder buf = tess.getBuffer();
+        buf.begin(GL11.GL_LINES, DefaultVertexFormats.POSITION_NORMAL);
+        for (int[] edge : BuckyBallGeometry.edges) {
+            Vec3d v1 = BuckyBallGeometry.vertices.get(edge[0]);
+            Vec3d v2 = BuckyBallGeometry.vertices.get(edge[1]);
+            buf.pos(v1.x * radius, v1.y * radius, v1.z * radius).normal((float) v1.x, (float) v1.y, (float) v1.z).endVertex();
+            buf.pos(v2.x * radius, v2.y * radius, v2.z * radius).normal((float) v2.x, (float) v2.y, (float) v2.z).endVertex();
+        }
+        tess.draw();
+    }
+
+    private static int addCos(double[] buf, int count, double val) {
+        if (val < -1.0 - 1E-9 || val > 1.0 + 1E-9) return count;
+        val = val < -1.0 ? -1.0 : Math.min(val, 1.0);
+        double a = Math.acos(val);
+        buf[count++] = normalizeAngle(a);
+        buf[count++] = normalizeAngle(-a);
+        return count;
+    }
+
+    private static int addSin(double[] buf, int count, double val) {
+        if (val < -1.0 - 1E-9 || val > 1.0 + 1E-9) return count;
+        val = val < -1.0 ? -1.0 : Math.min(val, 1.0);
+        double a = Math.asin(val);
+        buf[count++] = normalizeAngle(a);
+        buf[count++] = normalizeAngle(Math.PI - a);
+        return count;
+    }
+
+    private static double normalizeAngle(double a) {
+        a %= Math.PI * 2.0;
+        return a < 0 ? a + Math.PI * 2.0 : a;
+    }
+
+    private static void sortAngles(double[] buf, int count) {
+        for (int i = 1; i < count; i++) {
+            double key = buf[i];
+            int j = i - 1;
+            while (j >= 0 && buf[j] > key) {
+                buf[j + 1] = buf[j];
+                j--;
+            }
+            buf[j + 1] = key;
+        }
     }
 
     public void setStaus(TileEntity te, double linkScope, double energyScope, double chargingScope) {
@@ -79,25 +176,8 @@ public final class SpoceRenderingHandler {
         linkDirty = energyDirty = chargingDirty = true;
     }
 
-    private static float easeOutCubic(float t) {
-        return (float) (1.0 - Math.pow(1.0 - t, 3));
-    }
-
     private boolean isAnimating() {
         return animProgress < 1.0f;
-    }
-
-    private static void drawCachedIntersection(float[] verts, float r, float g, float b) {
-        if (verts.length == 0) return;
-        GlStateManager.color(r, g, b, 1.0f);
-        GlStateManager.glLineWidth(4.0f);
-        Tessellator tess = Tessellator.getInstance();
-        BufferBuilder buf = tess.getBuffer();
-        buf.begin(GL11.GL_LINES, DefaultVertexFormats.POSITION);
-        for (int i = 0; i < verts.length; i += 3) {
-            buf.pos(verts[i], verts[i + 1], verts[i + 2]).endVertex();
-        }
-        tess.draw();
     }
 
     @SubscribeEvent
@@ -116,15 +196,6 @@ public final class SpoceRenderingHandler {
                 linkDirty = energyDirty = chargingDirty = true;
             }
         }
-    }
-
-    private static void draw(float rotation, float r, float g, float b, float radius, float r1, float g1, float b1) {
-        GlStateManager.pushMatrix();
-        drawSphere(r, g, b, radius, 0.2f);
-        GlStateManager.rotate(rotation, 0.0F, 1.0F, 0.0F);
-        GlStateManager.rotate(rotation * 0.5F, 1.0F, 0.0F, 0.0F);
-        drawBuckyBallWireframe(r1, g1, b1, radius + 0.01f, 0.8f);
-        GlStateManager.popMatrix();
     }
 
     private void drawIntersectionImmediate(World world, float radius, float r, float g, float b) {
@@ -322,80 +393,6 @@ public final class SpoceRenderingHandler {
                     buildBuf[buildCount++] = (float) u2;
                 }
             }
-        }
-    }
-
-    private static void drawSphere(float r, float g, float b, float radius, float alpha) {
-        GlStateManager.color(r, g, b, alpha);
-        Tessellator tess = Tessellator.getInstance();
-        BufferBuilder buf = tess.getBuffer();
-        final int slices = 32, stacks = 32;
-        for (int i = 0; i < slices; i++) {
-            double phi1 = Math.PI * i / slices;
-            double phi2 = Math.PI * (i + 1) / slices;
-            buf.begin(GL11.GL_QUAD_STRIP, DefaultVertexFormats.POSITION_NORMAL);
-            for (int j = 0; j <= stacks; j++) {
-                double theta = 2.0 * Math.PI * j / stacks;
-                float x1 = (float) (radius * Math.sin(phi1) * Math.cos(theta));
-                float y1 = (float) (radius * Math.cos(phi1));
-                float z1 = (float) (radius * Math.sin(phi1) * Math.sin(theta));
-                buf.pos(x1, y1, z1).normal(x1 / radius, y1 / radius, z1 / radius).endVertex();
-                float x2 = (float) (radius * Math.sin(phi2) * Math.cos(theta));
-                float y2 = (float) (radius * Math.cos(phi2));
-                float z2 = (float) (radius * Math.sin(phi2) * Math.sin(theta));
-                buf.pos(x2, y2, z2).normal(x2 / radius, y2 / radius, z2 / radius).endVertex();
-            }
-            tess.draw();
-        }
-    }
-
-    private static void drawBuckyBallWireframe(float r, float g, float b, float radius, float alpha) {
-        GlStateManager.color(r, g, b, alpha);
-        GlStateManager.glLineWidth(2.0f);
-        Tessellator tess = Tessellator.getInstance();
-        BufferBuilder buf = tess.getBuffer();
-        buf.begin(GL11.GL_LINES, DefaultVertexFormats.POSITION_NORMAL);
-        for (int[] edge : BuckyBallGeometry.edges) {
-            Vec3d v1 = BuckyBallGeometry.vertices.get(edge[0]);
-            Vec3d v2 = BuckyBallGeometry.vertices.get(edge[1]);
-            buf.pos(v1.x * radius, v1.y * radius, v1.z * radius).normal((float) v1.x, (float) v1.y, (float) v1.z).endVertex();
-            buf.pos(v2.x * radius, v2.y * radius, v2.z * radius).normal((float) v2.x, (float) v2.y, (float) v2.z).endVertex();
-        }
-        tess.draw();
-    }
-
-    private static int addCos(double[] buf, int count, double val) {
-        if (val < -1.0 - 1E-9 || val > 1.0 + 1E-9) return count;
-        val = val < -1.0 ? -1.0 : Math.min(val, 1.0);
-        double a = Math.acos(val);
-        buf[count++] = normalizeAngle(a);
-        buf[count++] = normalizeAngle(-a);
-        return count;
-    }
-
-    private static int addSin(double[] buf, int count, double val) {
-        if (val < -1.0 - 1E-9 || val > 1.0 + 1E-9) return count;
-        val = val < -1.0 ? -1.0 : Math.min(val, 1.0);
-        double a = Math.asin(val);
-        buf[count++] = normalizeAngle(a);
-        buf[count++] = normalizeAngle(Math.PI - a);
-        return count;
-    }
-
-    private static double normalizeAngle(double a) {
-        a %= Math.PI * 2.0;
-        return a < 0 ? a + Math.PI * 2.0 : a;
-    }
-
-    private static void sortAngles(double[] buf, int count) {
-        for (int i = 1; i < count; i++) {
-            double key = buf[i];
-            int j = i - 1;
-            while (j >= 0 && buf[j] > key) {
-                buf[j + 1] = buf[j];
-                j--;
-            }
-            buf[j + 1] = key;
         }
     }
 

@@ -42,14 +42,12 @@ public final class NodeNetworkRendering implements Packet<NodeNetworkRendering> 
 
     private static final Object2ReferenceMap<IGrid, ReferenceLinkedOpenHashSet<EntityPlayerMP>> gridPlayers = new Object2ReferenceOpenHashMap<>();
     private static final Reference2ReferenceMap<EntityPlayerMP, IGrid> playerGrid = new Reference2ReferenceOpenHashMap<>();
-
+    private final int mode;
     private int dim;
     private IGrid grid;
     private ReferenceSet<INode> nodes;
     private INode targetNode;
     private List<Pair> entryList;
-    private final int mode;
-
     private transient int parsedMode;
     private transient long[] parsedNodeLinks;
     private transient long[] parsedNodeRemoveMachineLinks;

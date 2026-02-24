@@ -9,6 +9,7 @@ import com.circulation.circulation_networks.energy.manager.FEHandlerManager;
 import com.circulation.circulation_networks.energy.manager.MEKHandlerManager;
 import com.circulation.circulation_networks.manager.EnergyMachineManager;
 import com.circulation.circulation_networks.manager.MachineNodeTEManager;
+import com.circulation.circulation_networks.manager.NetworkManager;
 import com.circulation.circulation_networks.packets.ContainerProgressBar;
 import com.circulation.circulation_networks.packets.ContainerValueConfig;
 import com.circulation.circulation_networks.packets.NodeNetworkRendering;
@@ -17,8 +18,9 @@ import com.circulation.circulation_networks.packets.UpdateItemModeMessage;
 import com.circulation.circulation_networks.registry.RegistryBlocks;
 import com.circulation.circulation_networks.registry.RegistryEnergyHandler;
 import com.circulation.circulation_networks.registry.RegistryItems;
-import com.circulation.circulation_networks.tiles.machines.BaseMachineNodeTileEntity;
+import com.circulation.circulation_networks.tiles.BaseTileEntity;
 import com.circulation.circulation_networks.utils.Packet;
+import com.circulation.circulation_networks.utils.TileEntityLifeCycleEvent;
 import net.minecraft.block.Block;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -110,6 +112,20 @@ public class CommonProxy implements IGuiHandler {
     }
 
     @SubscribeEvent
+    public void onTileEntityValidate(TileEntityLifeCycleEvent.Validate event) {
+        MachineNodeTEManager.INSTANCE.onTileEntityValidate(event);
+        NetworkManager.INSTANCE.onTileEntityValidate(event);
+        EnergyMachineManager.INSTANCE.onTileEntityValidate(event);
+    }
+
+    @SubscribeEvent
+    public void onTileEntityInvalidate(TileEntityLifeCycleEvent.Invalidate event) {
+        MachineNodeTEManager.INSTANCE.onTileEntityInvalidate(event);
+        NetworkManager.INSTANCE.onTileEntityInvalidate(event);
+        EnergyMachineManager.INSTANCE.onTileEntityInvalidate(event);
+    }
+
+    @SubscribeEvent
     public void onPlayerChangedDimension(PlayerEvent.PlayerChangedDimensionEvent event) {
         if (event.player instanceof EntityPlayerMP player) {
             NET_CHANNEL.sendTo(new NodeNetworkRendering(), player);
@@ -121,7 +137,7 @@ public class CommonProxy implements IGuiHandler {
         var tile = world.getTileEntity(new BlockPos(x, y, z));
         if (tile == null) {
             return null;
-        } else if (tile instanceof BaseMachineNodeTileEntity te && te.hasGui()) {
+        } else if (tile instanceof BaseTileEntity te && te.hasGui()) {
             return te.getContainer(player);
         }
         return null;
@@ -130,10 +146,6 @@ public class CommonProxy implements IGuiHandler {
     @Override
     public @Nullable Object getClientGuiElement(int ID, EntityPlayer player, World world, int x, int y, int z) {
         return null;
-    }
-
-    public void openGui(EntityPlayer player, World world, int x, int y, int z) {
-        player.openGui(CirculationFlowNetworks.instance, 0, world, x, y, z);
     }
 
     private final static class EmptyStorage<T> implements Capability.IStorage<T> {

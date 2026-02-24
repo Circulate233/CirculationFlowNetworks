@@ -6,6 +6,7 @@ import com.circulation.circulation_networks.api.node.INode;
 import com.circulation.circulation_networks.network.Grid;
 import com.circulation.circulation_networks.packets.NodeNetworkRendering;
 import com.circulation.circulation_networks.proxy.CommonProxy;
+import com.circulation.circulation_networks.utils.TileEntityLifeCycleEvent;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
@@ -41,15 +42,10 @@ public final class NetworkManager {
     @Getter
     private final ReferenceSet<INode> activeNodes = new ReferenceOpenHashSet<>();
     private final Int2ObjectMap<IGrid> grids = new Int2ObjectOpenHashMap<>();
-    private int nextGridId = 0;
-
     private final Reference2ObjectMap<World, Object2ObjectMap<ChunkPos, ReferenceSet<INode>>> scopeNode = new Reference2ObjectOpenHashMap<>();
     private final Reference2ObjectMap<World, Object2ObjectMap<INode, ObjectSet<ChunkPos>>> nodeScope = new Reference2ObjectOpenHashMap<>();
     private final Reference2ObjectMap<World, Object2ObjectMap<ChunkPos, ReferenceSet<INode>>> nodeLocation = new Reference2ObjectLinkedOpenHashMap<>();
-
-    public Collection<IGrid> getAllGrids() {
-        return grids.values();
-    }
+    private int nextGridId = 0;
 
     /**
      * @param world w
@@ -60,6 +56,27 @@ public final class NetworkManager {
         var te = world.getTileEntity(pos);
         if (te != null) return te.getCapability(CommonProxy.nodeCapability, null);
         return null;
+    }
+
+    private static void assignNodeToGrid(INode node, IGrid grid) {
+        grid.getNodes().add(node);
+        node.setGrid(grid);
+    }
+
+    public void onTileEntityValidate(TileEntityLifeCycleEvent.Validate event) {
+        if (event.getWorld().isRemote) return;
+        var tileEntity = event.getTileEntity();
+        addNode(tileEntity.getCapability(CommonProxy.nodeCapability, null), tileEntity);
+    }
+
+    public void onTileEntityInvalidate(TileEntityLifeCycleEvent.Invalidate event) {
+        if (event.getWorld().isRemote) return;
+        var tileEntity = event.getTileEntity();
+        removeNode(tileEntity.getCapability(CommonProxy.nodeCapability, null));
+    }
+
+    public Collection<IGrid> getAllGrids() {
+        return grids.values();
     }
 
     public void removeNode(INode removedNode) {
@@ -176,7 +193,7 @@ public final class NetworkManager {
 
     /**
      * @param world w
-     * @param pos pos
+     * @param pos   pos
      * @return 可能链接到此位置的所有节点
      */
     public @Nonnull ReferenceSet<INode> getNodesCoveringPosition(World world, BlockPos pos) {
@@ -185,7 +202,7 @@ public final class NetworkManager {
 
     /**
      * @param world w
-     * @param pos p
+     * @param pos   p
      * @return 可能链接到此区块位置的所有节点
      */
     public @Nonnull ReferenceSet<INode> getNodesCoveringPosition(World world, ChunkPos pos) {
@@ -194,11 +211,6 @@ public final class NetworkManager {
             ma.defaultReturnValue(ReferenceSets.emptySet());
             return ma;
         }).get(pos);
-    }
-
-    private static void assignNodeToGrid(INode node, IGrid grid) {
-        grid.getNodes().add(node);
-        node.setGrid(grid);
     }
 
     /**

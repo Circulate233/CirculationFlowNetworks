@@ -105,7 +105,7 @@ public final class TileEntityCirculationFurnace extends BaseInvMachineNodeTileEn
     }
 
     @Override
-    public ContainerCirculationFurnace getContainer(EntityPlayer player) {
+    public @NotNull ContainerCirculationFurnace getContainer(EntityPlayer player) {
         return new ContainerCirculationFurnace(player, this);
     }
 

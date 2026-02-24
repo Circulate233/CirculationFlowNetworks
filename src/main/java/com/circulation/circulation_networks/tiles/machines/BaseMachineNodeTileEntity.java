@@ -2,18 +2,13 @@ package com.circulation.circulation_networks.tiles.machines;
 
 import com.circulation.circulation_networks.api.IMachineNodeTileEntity;
 import com.circulation.circulation_networks.api.node.IMachineNode;
-import com.circulation.circulation_networks.container.CFNBaseContainer;
 import com.circulation.circulation_networks.energy.handler.CEHandler;
 import com.circulation.circulation_networks.proxy.CommonProxy;
 import com.circulation.circulation_networks.tiles.nodes.BaseNodeTileEntity;
 import com.circulation.circulation_networks.utils.CirculationEnergy;
-import net.minecraft.client.gui.inventory.GuiContainer;
-import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.EnumFacing;
 import net.minecraftforge.common.capabilities.Capability;
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -31,19 +26,6 @@ public abstract class BaseMachineNodeTileEntity extends BaseNodeTileEntity imple
     public @NotNull CEHandler getCEHandler() {
         assert ceHandler != null;
         return ceHandler;
-    }
-
-    public boolean hasGui() {
-        return false;
-    }
-
-    public CFNBaseContainer getContainer(EntityPlayer player) {
-        return null;
-    }
-
-    @SideOnly(Side.CLIENT)
-    public GuiContainer getGui(EntityPlayer player) {
-        return null;
     }
 
     public final CirculationEnergy getCirculationEnergy() {

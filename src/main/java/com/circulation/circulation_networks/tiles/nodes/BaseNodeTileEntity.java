@@ -3,7 +3,7 @@ package com.circulation.circulation_networks.tiles.nodes;
 import com.circulation.circulation_networks.api.INodeTileEntity;
 import com.circulation.circulation_networks.api.node.INode;
 import com.circulation.circulation_networks.proxy.CommonProxy;
-import net.minecraft.tileentity.TileEntity;
+import com.circulation.circulation_networks.tiles.BaseTileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
@@ -13,7 +13,7 @@ import net.minecraftforge.fml.relauncher.SideOnly;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-public abstract class BaseNodeTileEntity extends TileEntity implements INodeTileEntity {
+public abstract class BaseNodeTileEntity extends BaseTileEntity implements INodeTileEntity {
 
     private INode node;
 

@@ -6,7 +6,7 @@ import com.circulation.circulation_networks.handlers.SpoceRenderingHandler;
 import com.circulation.circulation_networks.manager.MachineNodeTEManager;
 import com.circulation.circulation_networks.registry.RegistryBlocks;
 import com.circulation.circulation_networks.registry.RegistryItems;
-import com.circulation.circulation_networks.tiles.machines.BaseMachineNodeTileEntity;
+import com.circulation.circulation_networks.tiles.BaseTileEntity;
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.math.BlockPos;
@@ -49,7 +49,7 @@ public class ClientProxy extends CommonProxy {
         var tile = world.getTileEntity(new BlockPos(x, y, z));
         if (tile == null) {
             return null;
-        } else if (tile instanceof BaseMachineNodeTileEntity te && te.hasGui()) {
+        } else if (tile instanceof BaseTileEntity te && te.hasGui()) {
             return te.getGui(player);
         }
         return null;
@@ -67,7 +67,7 @@ public class ClientProxy extends CommonProxy {
         if (event.phase == TickEvent.Phase.START) {
 
         } else {
-            MachineNodeTEManager.INSTANCE.onServerTick();
+            MachineNodeTEManager.INSTANCE.onClientTick();
         }
     }
 }

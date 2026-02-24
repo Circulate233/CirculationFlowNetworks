@@ -1,6 +1,7 @@
 package com.circulation.circulation_networks.manager;
 
 import com.circulation.circulation_networks.api.IMachineNodeTileEntity;
+import com.circulation.circulation_networks.utils.TileEntityLifeCycleEvent;
 import it.unimi.dsi.fastutil.objects.ReferenceLinkedOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
 import net.minecraftforge.fml.relauncher.Side;
@@ -12,6 +13,16 @@ public class MachineNodeTEManager {
 
     private final ReferenceSet<IMachineNodeTileEntity> serverTe = new ReferenceLinkedOpenHashSet<>();
     private final ReferenceSet<IMachineNodeTileEntity> clientTe = new ReferenceLinkedOpenHashSet<>();
+
+    public void onTileEntityValidate(TileEntityLifeCycleEvent.Validate event) {
+        if (event.getTileEntity() instanceof IMachineNodeTileEntity te)
+            addTileEntity(te);
+    }
+
+    public void onTileEntityInvalidate(TileEntityLifeCycleEvent.Invalidate event) {
+        if (event.getTileEntity() instanceof IMachineNodeTileEntity te)
+            removeTileEntity(te);
+    }
 
     public void addTileEntity(IMachineNodeTileEntity tileEntity) {
         if (tileEntity.getNode() != null) {
