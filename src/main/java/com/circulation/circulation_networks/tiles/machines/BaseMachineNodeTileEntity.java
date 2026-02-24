@@ -78,9 +78,17 @@ public abstract class BaseMachineNodeTileEntity extends BaseNodeTileEntity imple
     }
 
     @Override
-    public void readFromNBT(@NotNull NBTTagCompound compound) {
+    public final void readFromNBT(@NotNull NBTTagCompound compound) {
         super.readFromNBT(compound);
-        initNbt = compound;
+        if (ceHandler == null) {
+            initNbt = compound;
+        } else {
+            delayedReadFromNBT(compound);
+        }
+    }
+
+    public void delayedReadFromNBT(@NotNull NBTTagCompound compound) {
+        ceHandler.readNBT(initNbt);
     }
 
     @Override
@@ -99,7 +107,7 @@ public abstract class BaseMachineNodeTileEntity extends BaseNodeTileEntity imple
         super.onValidate();
         if (ceHandler == null) ceHandler = new CEHandler(this);
         if (initNbt != null) {
-            ceHandler.readNBT(initNbt);
+            delayedReadFromNBT(initNbt);
             initNbt = null;
         }
     }

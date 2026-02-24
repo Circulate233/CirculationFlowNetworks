@@ -119,6 +119,7 @@ public final class NetworkManager {
                 queue.add(seed);
                 component.add(seed);
                 remaining.remove(seed);
+
                 while (!queue.isEmpty()) {
                     INode curr = queue.poll();
                     for (INode nb : curr.getNeighbors()) {
@@ -127,7 +128,18 @@ public final class NetworkManager {
                             queue.add(nb);
                         }
                     }
+
+                    var iter = remaining.iterator();
+                    while (iter.hasNext()) {
+                        INode nb = iter.next();
+                        if (nb.getNeighbors().contains(curr)) {
+                            iter.remove();
+                            component.add(nb);
+                            queue.add(nb);
+                        }
+                    }
                 }
+
                 components.add(component);
             }
 
@@ -267,8 +279,6 @@ public final class NetworkManager {
             return ma;
         }).put(newNode, ObjectSets.unmodifiable(chunksCovered));
 
-        assignNodeToGrid(newNode, allocGrid());
-
         for (INode existing : candidates) {
             if (existing == newNode || !existing.isActive()) continue;
             var linkType = newNode.linkScopeCheck(existing);
@@ -281,11 +291,13 @@ public final class NetworkManager {
                 case A_TO_B -> newNode.addNeighbor(existing);
                 case B_TO_A -> existing.addNeighbor(newNode);
             }
-            IGrid ng = existing.getGrid();
-            IGrid cg = newNode.getGrid();
-            if (ng != null && ng != cg) {
-                IGrid dst = cg.getNodes().size() >= ng.getNodes().size() ? cg : ng;
-                IGrid src = dst == cg ? ng : cg;
+            IGrid existingGrid = existing.getGrid();
+            IGrid currentGrid = newNode.getGrid();
+            if (currentGrid == null) {
+                assignNodeToGrid(newNode, existingGrid);
+            } else if (existingGrid != null && existingGrid != currentGrid) {
+                IGrid dst = currentGrid.getNodes().size() > existingGrid.getNodes().size() ? currentGrid : existingGrid;
+                IGrid src = dst == currentGrid ? existingGrid : currentGrid;
                 for (INode n : src.getNodes()) {
                     dst.getNodes().add(n);
                     n.setGrid(dst);
@@ -293,6 +305,10 @@ public final class NetworkManager {
                 src.getNodes().clear();
                 destroyGrid(src);
             }
+        }
+
+        if (newNode.getGrid() == null) {
+            assignNodeToGrid(newNode, allocGrid());
         }
 
         var players = NodeNetworkRendering.getPlayers(newNode.getGrid());

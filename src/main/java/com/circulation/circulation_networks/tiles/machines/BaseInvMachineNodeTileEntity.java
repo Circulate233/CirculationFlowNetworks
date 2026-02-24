@@ -20,8 +20,8 @@ public abstract class BaseInvMachineNodeTileEntity extends BaseMachineNodeTileEn
     public abstract IInventory createInventory();
 
     @Override
-    public void readFromNBT(@NotNull NBTTagCompound compound) {
-        super.readFromNBT(compound);
+    public void delayedReadFromNBT(@NotNull NBTTagCompound compound) {
+        super.delayedReadFromNBT(compound);
         CapabilityItemHandler.ITEM_HANDLER_CAPABILITY.readNBT(inventory, null, compound.getTag("inventory"));
     }
 

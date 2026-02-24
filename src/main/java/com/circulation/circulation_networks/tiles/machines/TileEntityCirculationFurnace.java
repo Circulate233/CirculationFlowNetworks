@@ -67,9 +67,10 @@ public final class TileEntityCirculationFurnace extends BaseInvMachineNodeTileEn
         }
     }
 
+
     @Override
-    public void readFromNBT(@NotNull NBTTagCompound compound) {
-        super.readFromNBT(compound);
+    public void delayedReadFromNBT(@NotNull NBTTagCompound compound) {
+        super.delayedReadFromNBT(compound);
         cookTime = compound.getInteger("cookTime");
         totalCookTime = compound.getInteger("totalCookTime");
         setMaxEnergy(compound.getInteger("maxEnergy"));

@@ -74,12 +74,17 @@ public final class NodeNetworkRendering implements Packet<NodeNetworkRendering> 
         this.grid = node.getGrid();
         this.mode = mode;
         this.targetNode = node;
+
         ReferenceSet<INode> relevant = new ReferenceOpenHashSet<>();
+
+        relevant.addAll(node.getNeighbors());
+
         for (INode other : NetworkManager.INSTANCE.getNodesCoveringPosition(node.getWorld(), node.getPos())) {
             if (node.linkScopeCheck(other) != INode.LinkType.DISCONNECT) {
                 relevant.add(other);
             }
         }
+
         this.nodes = ReferenceSets.unmodifiable(relevant);
     }
 
@@ -218,12 +223,15 @@ public final class NodeNetworkRendering implements Packet<NodeNetworkRendering> 
                         }
                     }
                 } else {
+                    long posB = targetNode.getPos().toLong();
                     for (var node : nodes) {
                         long posA = node.getPos().toLong();
-                        long posB = targetNode.getPos().toLong();
-                        buf.writeLong(posA);
-                        buf.writeLong(posB);
-                        count++;
+                        long min = Math.min(posA, posB), max = Math.max(posA, posB);
+                        if (processedLinks.add(min ^ Long.rotateLeft(max, 32))) {
+                            buf.writeLong(posA);
+                            buf.writeLong(posB);
+                            count++;
+                        }
                     }
                 }
                 return count;
