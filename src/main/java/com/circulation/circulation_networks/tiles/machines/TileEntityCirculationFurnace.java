@@ -1,5 +1,6 @@
 package com.circulation.circulation_networks.tiles.machines;
 
+import com.circulation.circulation_networks.api.ServerTickMachine;
 import com.circulation.circulation_networks.api.node.IMachineNode;
 import com.circulation.circulation_networks.container.ContainerCirculationFurnace;
 import com.circulation.circulation_networks.gui.GuiCirculationFurnace;
@@ -15,7 +16,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import org.jetbrains.annotations.NotNull;
 
-public final class TileEntityCirculationFurnace extends BaseInvMachineNodeTileEntity {
+public final class TileEntityCirculationFurnace extends BaseInvMachineNodeTileEntity implements ServerTickMachine {
 
     @Getter
     private int cookTime;
@@ -25,13 +26,12 @@ public final class TileEntityCirculationFurnace extends BaseInvMachineNodeTileEn
     private int delayTime;
 
     @Override
-    protected IMachineNode createNode() {
+    protected @NotNull IMachineNode createNode() {
         return new ConsumerNode(this, 5);
     }
 
     @Override
     public void serverUpdate() {
-        super.serverUpdate();
         if (totalCookTime <= 0) {
             if (delayTime > 0) {
                 --delayTime;
@@ -66,7 +66,6 @@ public final class TileEntityCirculationFurnace extends BaseInvMachineNodeTileEn
             stop();
         }
     }
-
 
     @Override
     public void delayedReadFromNBT(@NotNull NBTTagCompound compound) {

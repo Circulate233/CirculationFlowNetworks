@@ -1,6 +1,7 @@
 package com.circulation.circulation_networks.manager;
 
-import com.circulation.circulation_networks.api.IMachineNodeTileEntity;
+import com.circulation.circulation_networks.api.ClientTickMachine;
+import com.circulation.circulation_networks.api.ServerTickMachine;
 import com.circulation.circulation_networks.utils.TileEntityLifeCycleEvent;
 import it.unimi.dsi.fastutil.objects.ReferenceLinkedOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
@@ -11,33 +12,17 @@ public class MachineNodeTEManager {
 
     public static final MachineNodeTEManager INSTANCE = new MachineNodeTEManager();
 
-    private final ReferenceSet<IMachineNodeTileEntity> serverTe = new ReferenceLinkedOpenHashSet<>();
-    private final ReferenceSet<IMachineNodeTileEntity> clientTe = new ReferenceLinkedOpenHashSet<>();
+    private final ReferenceSet<ServerTickMachine> serverTe = new ReferenceLinkedOpenHashSet<>();
+    private final ReferenceSet<ClientTickMachine> clientTe = new ReferenceLinkedOpenHashSet<>();
 
     public void onTileEntityValidate(TileEntityLifeCycleEvent.Validate event) {
-        if (event.getTileEntity() instanceof IMachineNodeTileEntity te)
-            addTileEntity(te);
+        if (event.getTileEntity() instanceof ServerTickMachine te) serverTe.add(te);
+        if (event.getTileEntity() instanceof ClientTickMachine te) clientTe.add(te);
     }
 
     public void onTileEntityInvalidate(TileEntityLifeCycleEvent.Invalidate event) {
-        if (event.getTileEntity() instanceof IMachineNodeTileEntity te)
-            removeTileEntity(te);
-    }
-
-    public void addTileEntity(IMachineNodeTileEntity tileEntity) {
-        if (tileEntity.getNode() != null) {
-            serverTe.add(tileEntity);
-        } else {
-            clientTe.add(tileEntity);
-        }
-    }
-
-    public void removeTileEntity(IMachineNodeTileEntity tileEntity) {
-        if (tileEntity.getNode() != null) {
-            serverTe.remove(tileEntity);
-        } else {
-            clientTe.remove(tileEntity);
-        }
+        if (event.getTileEntity() instanceof ServerTickMachine te) serverTe.remove(te);
+        if (event.getTileEntity() instanceof ClientTickMachine te) clientTe.remove(te);
     }
 
     @SideOnly(Side.CLIENT)
@@ -55,5 +40,6 @@ public class MachineNodeTEManager {
 
     public void clear() {
         serverTe.clear();
+        clientTe.clear();
     }
 }

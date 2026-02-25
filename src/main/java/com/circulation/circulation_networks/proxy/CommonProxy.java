@@ -35,6 +35,7 @@ import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.CapabilityInject;
 import net.minecraftforge.common.capabilities.CapabilityManager;
 import net.minecraftforge.event.RegistryEvent;
+import net.minecraftforge.event.world.WorldEvent;
 import net.minecraftforge.fml.common.Loader;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.PlayerEvent;
@@ -108,6 +109,13 @@ public class CommonProxy implements IGuiHandler {
             EnergyMachineManager.INSTANCE.onServerTick();
         } else {
             MachineNodeTEManager.INSTANCE.onServerTick();
+        }
+    }
+
+    @SubscribeEvent
+    public void onWorldSave(WorldEvent.Save event) {
+        if (!event.getWorld().isRemote && event.getWorld().provider.getDimension() == 0) {
+            NetworkManager.INSTANCE.saveGrid();
         }
     }
 

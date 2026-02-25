@@ -2,6 +2,7 @@ package com.circulation.circulation_networks.api.node;
 
 import com.circulation.circulation_networks.api.IGrid;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
+import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
@@ -47,6 +48,8 @@ public interface INode {
     double distanceSq(Vec3d node);
 
     LinkType linkScopeCheck(INode node);
+
+    NBTTagCompound serialize();
 
     enum LinkType {
         DOUBLY,

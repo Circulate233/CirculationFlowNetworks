@@ -9,30 +9,38 @@ import com.circulation.circulation_networks.proxy.CommonProxy;
 import com.circulation.circulation_networks.utils.TileEntityLifeCycleEvent;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2ReferenceMap;
+import it.unimi.dsi.fastutil.longs.Long2ReferenceMaps;
+import it.unimi.dsi.fastutil.longs.Long2ReferenceOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ObjectSet;
 import it.unimi.dsi.fastutil.objects.ObjectSets;
-import it.unimi.dsi.fastutil.objects.Reference2ObjectLinkedOpenHashMap;
-import it.unimi.dsi.fastutil.objects.Reference2ObjectMap;
-import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSets;
 import lombok.Getter;
+import net.minecraft.nbt.CompressedStreamTools;
+import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.world.World;
+import net.minecraftforge.common.DimensionManager;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.util.ArrayDeque;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 @SuppressWarnings("unused")
 public final class NetworkManager {
@@ -42,45 +50,157 @@ public final class NetworkManager {
     @Getter
     private final ReferenceSet<INode> activeNodes = new ReferenceOpenHashSet<>();
     private final Int2ObjectMap<IGrid> grids = new Int2ObjectOpenHashMap<>();
-    private final Reference2ObjectMap<World, Object2ObjectMap<ChunkPos, ReferenceSet<INode>>> scopeNode = new Reference2ObjectOpenHashMap<>();
-    private final Reference2ObjectMap<World, Object2ObjectMap<INode, ObjectSet<ChunkPos>>> nodeScope = new Reference2ObjectOpenHashMap<>();
-    private final Reference2ObjectMap<World, Object2ObjectMap<ChunkPos, ReferenceSet<INode>>> nodeLocation = new Reference2ObjectLinkedOpenHashMap<>();
+    private static File saveFile;
+    private final Int2ObjectMap<Long2ReferenceMap<INode>> posNodes = new Int2ObjectOpenHashMap<>();
+    private final Int2ObjectMap<Object2ObjectMap<ChunkPos, ReferenceSet<INode>>> scopeNode = new Int2ObjectOpenHashMap<>();
+    private final Int2ObjectMap<Object2ObjectMap<INode, ObjectSet<ChunkPos>>> nodeScope = new Int2ObjectOpenHashMap<>();
+    private final Int2ObjectMap<Object2ObjectMap<ChunkPos, ReferenceSet<INode>>> nodeLocation = new Int2ObjectOpenHashMap<>();
+    private final ObjectSet<IGrid> markGird = new ObjectOpenHashSet<>();
+    private final Queue<IGrid> emptyGird = new ArrayDeque<>();
     private int nextGridId = 0;
 
-    /**
-     * @param world w
-     * @param pos   p
-     * @return 此位置的节点
-     */
-    public static @Nullable INode getNodeFromPos(World world, BlockPos pos) {
-        var te = world.getTileEntity(pos);
-        if (te != null) return te.getCapability(CommonProxy.nodeCapability, null);
-        return null;
+    {
+        posNodes.defaultReturnValue(Long2ReferenceMaps.emptyMap());
     }
 
-    private static void assignNodeToGrid(INode node, IGrid grid) {
-        grid.getNodes().add(node);
-        node.setGrid(grid);
+    public static File getSaveFile() {
+        if (saveFile == null) {
+            var path = DimensionManager.getWorld(0)
+                                       .getSaveHandler()
+                                       .getWorldDirectory()
+                                       .toPath()
+                                       .resolve("circulation_grids");
+            try {
+                Files.createDirectories(path);
+            } catch (IOException ignored) {
+            }
+            saveFile = path.toFile();
+        }
+        return saveFile;
+    }
+
+    private void registerNodeIndices(int dimId, INode node) {
+        BlockPos pos = node.getPos();
+
+        var pMap = posNodes.get(dimId);
+        if (pMap == posNodes.defaultReturnValue()) {
+            posNodes.put(dimId, pMap = new Long2ReferenceOpenHashMap<>());
+        }
+        pMap.put(pos.toLong(), node);
+
+        ChunkPos ownChunk = new ChunkPos(pos);
+        var locMap = nodeLocation.computeIfAbsent(dimId, k -> {
+            var ma = new Object2ObjectOpenHashMap<ChunkPos, ReferenceSet<INode>>();
+            ma.defaultReturnValue(ReferenceSets.emptySet());
+            return ma;
+        });
+        var locSet = locMap.get(ownChunk);
+        if (locSet == locMap.defaultReturnValue()) {
+            locMap.put(ownChunk, locSet = new ReferenceOpenHashSet<>());
+        }
+        locSet.add(node);
+
+        int range = (int) node.getLinkScope();
+        int minChunkX = (pos.getX() - range) >> 4, maxChunkX = (pos.getX() + range) >> 4;
+        int minChunkZ = (pos.getZ() - range) >> 4, maxChunkZ = (pos.getZ() + range) >> 4;
+        ObjectSet<ChunkPos> chunksCovered = new ObjectOpenHashSet<>();
+
+        var scopeMap = scopeNode.computeIfAbsent(dimId, l -> {
+            var ma = new Object2ObjectOpenHashMap<ChunkPos, ReferenceSet<INode>>();
+            ma.defaultReturnValue(ReferenceSets.emptySet());
+            return ma;
+        });
+        for (int cx = minChunkX; cx <= maxChunkX; ++cx) {
+            for (int cz = minChunkZ; cz <= maxChunkZ; ++cz) {
+                ChunkPos cp = new ChunkPos(cx, cz);
+                chunksCovered.add(cp);
+                var sSet = scopeMap.get(cp);
+                if (sSet == scopeMap.defaultReturnValue()) {
+                    scopeMap.put(cp, sSet = new ReferenceOpenHashSet<>());
+                }
+                sSet.add(node);
+            }
+        }
+        nodeScope.computeIfAbsent(dimId, l -> {
+            var ma = new Object2ObjectOpenHashMap<INode, ObjectSet<ChunkPos>>();
+            ma.defaultReturnValue(ObjectSets.emptySet());
+            return ma;
+        }).put(node, ObjectSets.unmodifiable(chunksCovered));
+    }
+
+    private void unregisterNodeIndices(int dimId, INode node) {
+        posNodes.get(dimId).remove(node.getPos().toLong());
+
+        ChunkPos ownChunk = new ChunkPos(node.getPos());
+        nodeLocation.get(dimId).get(ownChunk).remove(node);
+
+        var sm = scopeNode.get(dimId);
+        ObjectSet<ChunkPos> coveredChunks = nodeScope.get(dimId).remove(node);
+        if (coveredChunks != null && sm != null) {
+            for (var chunk : coveredChunks) {
+                var set = sm.get(chunk);
+                if (set == sm.defaultReturnValue()) continue;
+                if (set.size() == 1) sm.remove(chunk);
+                else set.remove(node);
+            }
+        }
+    }
+
+    public @Nullable INode getNodeFromPos(World world, BlockPos pos) {
+        return posNodes.get(world.provider.getDimension()).get(pos.toLong());
     }
 
     public void onTileEntityValidate(TileEntityLifeCycleEvent.Validate event) {
+        int dimId = event.getWorld().provider.getDimension();
         if (event.getWorld().isRemote) return;
         var tileEntity = event.getTileEntity();
         addNode(tileEntity.getCapability(CommonProxy.nodeCapability, null), tileEntity);
-    }
-
-    public void onTileEntityInvalidate(TileEntityLifeCycleEvent.Invalidate event) {
-        if (event.getWorld().isRemote) return;
-        var tileEntity = event.getTileEntity();
-        removeNode(tileEntity.getCapability(CommonProxy.nodeCapability, null));
     }
 
     public Collection<IGrid> getAllGrids() {
         return grids.values();
     }
 
+    public void onTileEntityInvalidate(TileEntityLifeCycleEvent.Invalidate event) {
+        if (event.getWorld().isRemote) return;
+        removeNode(event.getWorld().provider.getDimension(), event.getPos());
+    }
+
+    public @Nonnull ReferenceSet<INode> getNodesCoveringPosition(World world, BlockPos pos) {
+        return getNodesCoveringPosition(world, new ChunkPos(pos));
+    }
+
+    public @Nonnull ReferenceSet<INode> getNodesCoveringPosition(World world, ChunkPos pos) {
+        return scopeNode.computeIfAbsent(world.provider.getDimension(), l -> {
+            var ma = new Object2ObjectOpenHashMap<ChunkPos, ReferenceSet<INode>>();
+            ma.defaultReturnValue(ReferenceSets.emptySet());
+            return ma;
+        }).get(pos);
+    }
+
+    public @Nonnull ReferenceSet<INode> getNodesInChunk(World world, ChunkPos chunk) {
+        return nodeLocation.computeIfAbsent(world.provider.getDimension(), l -> {
+            var ma = new Object2ObjectOpenHashMap<ChunkPos, ReferenceSet<INode>>();
+            ma.defaultReturnValue(ReferenceSets.emptySet());
+            return ma;
+        }).get(chunk);
+    }
+
+    public @Nonnull ObjectSet<ChunkPos> getCoveredChunks(INode node) {
+        return nodeScope.get(node.getWorld().provider.getDimension()).get(node);
+    }
+
+    public void removeNode(int dim, BlockPos pos) {
+        var pMap = posNodes.get(dim);
+        if (pMap != null && pMap != posNodes.defaultReturnValue()) {
+            removeNode(pMap.get(pos.toLong()));
+        }
+    }
+
     public void removeNode(INode removedNode) {
         if (removedNode == null || removedNode.getWorld().isRemote || !activeNodes.remove(removedNode)) return;
+
+        int dimId = removedNode.getWorld().provider.getDimension();
 
         var players = NodeNetworkRendering.getPlayers(removedNode.getGrid());
         if (players != null && !players.isEmpty()) {
@@ -90,25 +210,10 @@ public final class NetworkManager {
             }
         }
 
-        var world = removedNode.getWorld();
-        ChunkPos ownChunk = new ChunkPos(removedNode.getPos());
-        nodeLocation.get(world).get(ownChunk).remove(removedNode);
-
-        ObjectSet<ChunkPos> coveredChunks = nodeScope.get(world).remove(removedNode);
-        if (coveredChunks != null) {
-            for (var chunk : coveredChunks) {
-                var set = scopeNode.get(world).get(chunk);
-                if (set == scopeNode.get(world).defaultReturnValue()) continue;
-                if (set.size() == 1) scopeNode.get(world).remove(chunk);
-                else set.remove(removedNode);
-            }
-        }
+        unregisterNodeIndices(dimId, removedNode);
 
         IGrid oldGrid = removedNode.getGrid();
 
-        for (INode neighbor : removedNode.getNeighbors()) {
-            neighbor.removeNeighbor(removedNode);
-        }
         if (oldGrid != null) {
             for (INode node : oldGrid.getNodes()) {
                 node.removeNeighbor(removedNode);
@@ -122,6 +227,7 @@ public final class NetworkManager {
             return;
         }
         oldGrid.getNodes().remove(removedNode);
+        markGird.add(oldGrid);
 
         if (oldGrid.getNodes().isEmpty()) {
             destroyGrid(oldGrid);
@@ -145,7 +251,6 @@ public final class NetworkManager {
                             queue.add(nb);
                         }
                     }
-
                     var iter = remaining.iterator();
                     while (iter.hasNext()) {
                         INode nb = iter.next();
@@ -156,7 +261,6 @@ public final class NetworkManager {
                         }
                     }
                 }
-
                 components.add(component);
             }
 
@@ -168,11 +272,19 @@ public final class NetworkManager {
                     oldGrid.getNodes().add(n);
                     n.setGrid(oldGrid);
                 }
+                markGird.add(oldGrid);
 
+                var watchingPlayers = NodeNetworkRendering.getPlayers(oldGrid);
                 for (int i = 1; i < components.size(); i++) {
                     IGrid splitGrid = allocGrid();
                     for (INode n : components.get(i)) {
                         assignNodeToGrid(n, splitGrid);
+                    }
+                    if (watchingPlayers != null) {
+                        for (var player : watchingPlayers) {
+                            CirculationFlowNetworks.NET_CHANNEL.sendTo(
+                                new NodeNetworkRendering(player, splitGrid), player);
+                        }
                     }
                 }
             }
@@ -182,117 +294,23 @@ public final class NetworkManager {
         ChargingManager.INSTANCE.removeNode(removedNode);
     }
 
-    public void onServerStop() {
-        scopeNode.clear();
-        nodeScope.clear();
-        nodeLocation.clear();
-        activeNodes.clear();
-        grids.clear();
-        nextGridId = 0;
-    }
-
-    /**
-     * @param world w
-     * @param pos   pos
-     * @return 可能链接到此位置的所有节点
-     */
-    public @Nonnull ReferenceSet<INode> getNodesCoveringPosition(World world, BlockPos pos) {
-        return getNodesCoveringPosition(world, new ChunkPos(pos));
-    }
-
-    /**
-     * @param world w
-     * @param pos   p
-     * @return 可能链接到此区块位置的所有节点
-     */
-    public @Nonnull ReferenceSet<INode> getNodesCoveringPosition(World world, ChunkPos pos) {
-        return scopeNode.computeIfAbsent(world, l -> {
-            var ma = new Object2ObjectOpenHashMap<ChunkPos, ReferenceSet<INode>>();
-            ma.defaultReturnValue(ReferenceSets.emptySet());
-            return ma;
-        }).get(pos);
-    }
-
-    /**
-     * @param world w
-     * @param chunk c
-     * @return 区块内的所有节点
-     */
-    public @Nonnull ReferenceSet<INode> getNodesInChunk(World world, ChunkPos chunk) {
-        return nodeLocation.computeIfAbsent(world, l -> {
-            var ma = new Object2ObjectOpenHashMap<ChunkPos, ReferenceSet<INode>>();
-            ma.defaultReturnValue(ReferenceSets.emptySet());
-            return ma;
-        }).get(chunk);
-    }
-
-    /**
-     * @param node n
-     * @return 被节点范围覆盖的区块
-     */
-    public @Nonnull ObjectSet<ChunkPos> getCoveredChunks(INode node) {
-        return nodeScope.get(node.getWorld()).get(node);
-    }
-
-    private IGrid allocGrid() {
-        IGrid grid = new Grid(nextGridId++);
-        grids.put(grid.getId(), grid);
-        EnergyMachineManager.INSTANCE.getInteraction().put(grid, new EnergyMachineManager.Interaction());
-        return grid;
-    }
-
     public void addNode(INode newNode, TileEntity te) {
         if (newNode == null || newNode.getWorld().isRemote || !newNode.isActive() || activeNodes.contains(newNode))
             return;
 
-        var world = newNode.getWorld();
+        int dimId = newNode.getWorld().provider.getDimension();
         activeNodes.add(newNode);
-        var pos = newNode.getPos();
-
-        ChunkPos ownChunk = new ChunkPos(pos);
-        var locMap = nodeLocation.computeIfAbsent(world, k -> {
-            var ma = new Object2ObjectOpenHashMap<ChunkPos, ReferenceSet<INode>>();
-            ma.defaultReturnValue(ReferenceSets.emptySet());
-            return ma;
-        });
-        var locSet = locMap.get(ownChunk);
-        if (locSet == locMap.defaultReturnValue()) {
-            locMap.put(ownChunk, locSet = new ReferenceOpenHashSet<>());
-        }
-        locSet.add(newNode);
-
-        int nodeX = pos.getX();
-        int nodeZ = pos.getZ();
-        int range = (int) newNode.getLinkScope();
-        int minChunkX = (nodeX - range) >> 4, maxChunkX = (nodeX + range) >> 4;
-        int minChunkZ = (nodeZ - range) >> 4, maxChunkZ = (nodeZ + range) >> 4;
-        ObjectSet<ChunkPos> chunksCovered = new ObjectOpenHashSet<>();
-        for (int cx = minChunkX; cx <= maxChunkX; ++cx)
-            for (int cz = minChunkZ; cz <= maxChunkZ; ++cz)
-                chunksCovered.add(new ChunkPos(cx, cz));
+        registerNodeIndices(dimId, newNode);
 
         ReferenceSet<INode> candidates = new ReferenceOpenHashSet<>();
-        for (var chunkPos : chunksCovered) {
-            var scopeMap = scopeNode.computeIfAbsent(world, l -> {
-                var ma = new Object2ObjectOpenHashMap<ChunkPos, ReferenceSet<INode>>();
-                ma.defaultReturnValue(ReferenceSets.emptySet());
-                return ma;
-            });
-            var set1 = scopeMap.get(chunkPos);
-            candidates.addAll(set1);
-            if (set1 == scopeMap.defaultReturnValue()) {
-                scopeMap.put(chunkPos, set1 = new ReferenceOpenHashSet<>());
-            }
-            set1.add(newNode);
+        var scopeMap = scopeNode.get(dimId);
+        for (var chunkPos : nodeScope.get(dimId).get(newNode)) {
+            candidates.addAll(scopeMap.get(chunkPos));
         }
-        nodeScope.computeIfAbsent(world, l -> {
-            var ma = new Object2ObjectOpenHashMap<INode, ObjectSet<ChunkPos>>();
-            ma.defaultReturnValue(ObjectSets.emptySet());
-            return ma;
-        }).put(newNode, ObjectSets.unmodifiable(chunksCovered));
+        candidates.remove(newNode);
 
         for (INode existing : candidates) {
-            if (existing == newNode || !existing.isActive()) continue;
+            if (!existing.isActive()) continue;
             var linkType = newNode.linkScopeCheck(existing);
             if (linkType == INode.LinkType.DISCONNECT) continue;
             switch (linkType) {
@@ -316,6 +334,7 @@ public final class NetworkManager {
                 }
                 src.getNodes().clear();
                 destroyGrid(src);
+                markGird.add(dst);
             }
         }
 
@@ -334,8 +353,96 @@ public final class NetworkManager {
         ChargingManager.INSTANCE.addNode(newNode);
     }
 
+
+    private void assignNodeToGrid(INode node, IGrid grid) {
+        markGird.add(grid);
+        grid.getNodes().add(node);
+        node.setGrid(grid);
+    }
+
+    private IGrid allocGrid() {
+        IGrid grid;
+        if (!emptyGird.isEmpty()) {
+            grid = emptyGird.poll();
+            grid.getNodes().clear();
+        } else {
+            grid = new Grid(nextGridId++);
+        }
+        grids.put(grid.getId(), grid);
+        EnergyMachineManager.INSTANCE.getInteraction().put(grid, new EnergyMachineManager.Interaction());
+        markGird.add(grid);
+        return grid;
+    }
+
     private void destroyGrid(IGrid grid) {
         grids.remove(grid.getId());
         EnergyMachineManager.INSTANCE.getInteraction().remove(grid);
+        markGird.add(grid);
+        emptyGird.add(grid);
+    }
+
+
+    public void onServerStop() {
+        scopeNode.clear();
+        nodeScope.clear();
+        nodeLocation.clear();
+        activeNodes.clear();
+        markGird.clear();
+        emptyGird.clear();
+        grids.clear();
+        posNodes.clear();
+        nextGridId = 0;
+        saveFile = null;
+    }
+
+    public void saveGrid() {
+        if (markGird.isEmpty()) return;
+        markGird.parallelStream().forEach(grid -> {
+            try {
+                CompressedStreamTools.safeWrite(grid.serialize(), new File(NetworkManager.getSaveFile(), grid.getId() + ".dat"));
+            } catch (IOException ignored) {
+            }
+        });
+        markGird.clear();
+    }
+
+    public void initGrid() {
+        var f = getSaveFile();
+        if (!f.exists() || !f.isDirectory()) return;
+
+        File[] files = f.listFiles(file -> file.isFile() && file.getName().endsWith(".dat"));
+        if (files == null || files.length == 0) return;
+
+        var nbts = new ConcurrentLinkedQueue<NBTTagCompound>();
+        Arrays.stream(files).parallel().forEach(file -> {
+            try {
+                var g = CompressedStreamTools.read(file);
+                if (g != null && DimensionManager.isDimensionRegistered(g.getInteger("dim"))) {
+                    nbts.add(g);
+                }
+            } catch (IOException ignored) {
+            }
+        });
+
+        int maxId = 0;
+        for (var nbt : nbts) {
+            var grid = Grid.deserialize(nbt);
+            int gridId = grid.getId();
+            grids.put(gridId, grid);
+            if (gridId > maxId) maxId = gridId;
+
+            EnergyMachineManager.INSTANCE.getInteraction().put(grid, new EnergyMachineManager.Interaction());
+
+            if (grid.getNodes().isEmpty()) {
+                emptyGird.add(grid);
+            } else {
+                int dimId = nbt.getInteger("dim");
+                for (INode node : grid.getNodes()) {
+                    activeNodes.add(node);
+                    registerNodeIndices(dimId, node);
+                }
+            }
+        }
+        nextGridId = maxId + 1;
     }
 }

@@ -9,10 +9,13 @@ import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSets;
 import lombok.Getter;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.NBTTagList;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
+import net.minecraftforge.common.DimensionManager;
 import org.jetbrains.annotations.NotNull;
 
 import java.lang.ref.WeakReference;
@@ -29,6 +32,27 @@ public abstract class Node implements INode {
     @Getter
     private boolean active;
     private IGrid grid;
+
+    public Node(NBTTagCompound nbt) {
+        world = new WeakReference<>(DimensionManager.getWorld(nbt.getInteger("dim")));
+        pos = BlockPos.fromLong(nbt.getLong("pos"));
+        vec3d = new Vec3d(pos.getX() + 0.5d, pos.getY() + 0.5d, pos.getZ() + 0.5d);
+    }
+
+    @Override
+    public NBTTagCompound serialize() {
+        var nbt = new NBTTagCompound();
+        nbt.setString("name", getClass().getName());
+        nbt.setLong("pos", pos.toLong());
+        nbt.setInteger("dim", getWorld().provider.getDimension());
+        var list = new NBTTagList();
+        neighbors.forEach(neighbor -> {
+            var n = neighbor.serialize();
+            list.appendTag(n);
+        });
+        nbt.setTag("neighbors", list);
+        return nbt;
+    }
 
     public Node(INodeTileEntity tileEntity) {
         world = new WeakReference<>(tileEntity.getNodeWorld());

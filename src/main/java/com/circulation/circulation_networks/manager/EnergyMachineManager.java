@@ -106,6 +106,7 @@ public final class EnergyMachineManager {
         var gridMap = new Reference2ObjectOpenHashMap<IGrid, EnumMap<IEnergyHandler.EnergyType, Set<IEnergyHandler>>>();
         for (var entry : machineGridMap.entrySet()) {
             var te = entry.getKey();
+            if (!te.getWorld().isBlockLoaded(te.getPos())) continue;
             var handler = IEnergyHandler.release(te);
 
             if (handler == null) {

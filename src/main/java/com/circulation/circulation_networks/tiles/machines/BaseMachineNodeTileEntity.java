@@ -83,7 +83,7 @@ public abstract class BaseMachineNodeTileEntity extends BaseNodeTileEntity imple
         return capability == CommonProxy.ceHandlerCapability && ceHandler != null ? CommonProxy.ceHandlerCapability.cast(ceHandler) : super.getCapability(capability, facing);
     }
 
-    protected abstract IMachineNode createNode();
+    protected abstract @NotNull IMachineNode createNode();
 
     protected void onValidate() {
         super.onValidate();

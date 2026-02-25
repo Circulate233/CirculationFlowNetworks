@@ -1,5 +1,6 @@
 package com.circulation.circulation_networks.registry;
 
+import com.circulation.circulation_networks.blocks.BlockPhaseInterrupter;
 import com.circulation.circulation_networks.blocks.machines.BlockCirculationFurnace;
 import com.circulation.circulation_networks.blocks.machines.BlockWindTurbine;
 import com.circulation.circulation_networks.blocks.nodes.BlockChargingTower;
@@ -18,6 +19,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 
+@SuppressWarnings("UnusedReturnValue")
 public final class RegistryBlocks {
 
     private static final List<Block> BLOCKS_TO_REGISTER = new LinkedList<>();
@@ -27,12 +29,14 @@ public final class RegistryBlocks {
     public static BlockChargingTower blockChargingTower;
     public static BlockWindTurbine blockWindTurbine;
     public static BlockCirculationFurnace blockCirculationFurnace;
+    public static BlockPhaseInterrupter blockPhaseInterrupter;
 
     public static void registerBlocks(RegistryEvent.Register<Block> event) {
         prepareItemBlockRegister(blockEnergyInductionTower = registerBlock(new BlockEnergyInductionTower()));
         prepareItemBlockRegister(blockChargingTower = registerBlock(new BlockChargingTower()));
         prepareItemBlockRegister(blockWindTurbine = registerBlock(new BlockWindTurbine()));
         prepareItemBlockRegister(blockCirculationFurnace = registerBlock(new BlockCirculationFurnace()));
+        prepareItemBlockRegister(blockPhaseInterrupter = registerBlock(new BlockPhaseInterrupter()));
 
         BLOCKS_TO_REGISTER.forEach(event.getRegistry()::register);
         BLOCKS_TO_REGISTER.clear();

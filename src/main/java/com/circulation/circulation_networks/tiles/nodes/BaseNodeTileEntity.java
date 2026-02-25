@@ -2,6 +2,7 @@ package com.circulation.circulation_networks.tiles.nodes;
 
 import com.circulation.circulation_networks.api.INodeTileEntity;
 import com.circulation.circulation_networks.api.node.INode;
+import com.circulation.circulation_networks.manager.NetworkManager;
 import com.circulation.circulation_networks.proxy.CommonProxy;
 import com.circulation.circulation_networks.tiles.BaseTileEntity;
 import net.minecraft.util.EnumFacing;
@@ -13,6 +14,8 @@ import net.minecraftforge.fml.relauncher.SideOnly;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import javax.annotation.Nonnull;
+
 public abstract class BaseNodeTileEntity extends BaseTileEntity implements INodeTileEntity {
 
     private INode node;
@@ -22,6 +25,7 @@ public abstract class BaseNodeTileEntity extends BaseTileEntity implements INode
         return node;
     }
 
+    @Nonnull
     protected abstract INode createNode();
 
     @Override
@@ -54,8 +58,15 @@ public abstract class BaseNodeTileEntity extends BaseTileEntity implements INode
     }
 
     protected void onValidate() {
-        if (node == null)
-            node = createNode();
+        if (node == null) {
+            var n = createNode();
+            if ((node = NetworkManager.INSTANCE.getNodeFromPos(world, pos)) == null) {
+                node = n;
+            } else if (node.getClass() != n.getClass()) {
+                NetworkManager.INSTANCE.removeNode(world.provider.getDimension(), pos);
+                node = n;
+            }
+        }
         node.setActive(true);
     }
 
