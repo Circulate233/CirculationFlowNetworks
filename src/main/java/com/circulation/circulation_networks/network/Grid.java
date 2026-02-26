@@ -37,6 +37,7 @@ public class Grid implements IGrid {
             var nodeNbt = (NBTTagCompound) nbtBase;
             var node = RegistryNodes.deserialize(nodeNbt);
             if (node != null) {
+                node.setGrid(grid);
                 node.setActive(true);
                 grid.nodes.add(node);
                 posMap.put(nodeNbt.getLong("pos"), node);

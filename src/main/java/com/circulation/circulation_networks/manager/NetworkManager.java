@@ -416,9 +416,6 @@ public final class NetworkManager {
 
         var nbts = new ConcurrentLinkedQueue<NBTTagCompound>();
 
-        @Desugar
-        record GridEntry(int dimId, Grid grid) {}
-
         var entries = new ConcurrentLinkedQueue<GridEntry>();
         Arrays.stream(files).parallel().forEach(file -> {
             try {
@@ -427,6 +424,7 @@ public final class NetworkManager {
                 int dimId = nbt.getInteger("dim");
                 if (!DimensionManager.isDimensionRegistered(dimId)) return;
                 var grid = Grid.deserialize(nbt);
+                if (grid == null) return;
                 entries.add(new GridEntry(dimId, grid));
             } catch (IOException ignored) {
             }
@@ -450,5 +448,9 @@ public final class NetworkManager {
             }
         }
         nextGridId = maxId + 1;
+    }
+
+    @Desugar
+    private record GridEntry(int dimId, IGrid grid) {
     }
 }
