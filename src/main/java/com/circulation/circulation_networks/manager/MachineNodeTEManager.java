@@ -16,13 +16,15 @@ public class MachineNodeTEManager {
     private final ReferenceSet<ClientTickMachine> clientTe = new ReferenceLinkedOpenHashSet<>();
 
     public void onTileEntityValidate(TileEntityLifeCycleEvent.Validate event) {
-        if (event.getTileEntity() instanceof ServerTickMachine te) serverTe.add(te);
-        if (event.getTileEntity() instanceof ClientTickMachine te) clientTe.add(te);
+        if (event.getWorld().isRemote) {
+            if (event.getTileEntity() instanceof ClientTickMachine te) clientTe.add(te);
+        } else if (event.getTileEntity() instanceof ServerTickMachine te) serverTe.add(te);
     }
 
     public void onTileEntityInvalidate(TileEntityLifeCycleEvent.Invalidate event) {
-        if (event.getTileEntity() instanceof ServerTickMachine te) serverTe.remove(te);
-        if (event.getTileEntity() instanceof ClientTickMachine te) clientTe.remove(te);
+        if (event.getWorld().isRemote) {
+            if (event.getTileEntity() instanceof ClientTickMachine te) clientTe.remove(te);
+        } else if (event.getTileEntity() instanceof ServerTickMachine te) serverTe.remove(te);
     }
 
     @SideOnly(Side.CLIENT)

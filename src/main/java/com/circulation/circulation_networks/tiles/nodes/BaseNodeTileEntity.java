@@ -63,7 +63,7 @@ public abstract class BaseNodeTileEntity extends BaseTileEntity implements INode
             if ((node = NetworkManager.INSTANCE.getNodeFromPos(world, pos)) == null) {
                 node = n;
             } else if (node.getClass() != n.getClass()) {
-                NetworkManager.INSTANCE.removeNode(world.provider.getDimension(), pos);
+                NetworkManager.INSTANCE.removeNode(node);
                 node = n;
             }
         }

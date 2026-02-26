@@ -33,7 +33,7 @@ public final class InductionNode extends Node implements IEnergySupplyNode {
 
     @Override
     public NBTTagCompound serialize() {
-        NBTTagCompound tag = new NBTTagCompound();
+        NBTTagCompound tag = super.serialize();
         tag.setDouble("energyScope", energyScope);
         tag.setDouble("linkScope", linkScope);
         return tag;

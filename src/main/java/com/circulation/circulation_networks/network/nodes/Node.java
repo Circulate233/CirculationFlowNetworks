@@ -11,6 +11,7 @@ import it.unimi.dsi.fastutil.objects.ReferenceSets;
 import lombok.Getter;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
+import net.minecraft.nbt.NBTTagLong;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
@@ -42,14 +43,11 @@ public abstract class Node implements INode {
     @Override
     public NBTTagCompound serialize() {
         var nbt = new NBTTagCompound();
-        nbt.setString("name", getClass().getName());
+        nbt.setString("name", this.getClass().getName());
         nbt.setLong("pos", pos.toLong());
         nbt.setInteger("dim", getWorld().provider.getDimension());
         var list = new NBTTagList();
-        neighbors.forEach(neighbor -> {
-            var n = neighbor.serialize();
-            list.appendTag(n);
-        });
+        neighbors.forEach(neighbor -> list.appendTag(new NBTTagLong(neighbor.getPos().toLong())));
         nbt.setTag("neighbors", list);
         return nbt;
     }

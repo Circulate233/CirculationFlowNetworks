@@ -7,6 +7,7 @@ import com.circulation.circulation_networks.network.Grid;
 import com.circulation.circulation_networks.packets.NodeNetworkRendering;
 import com.circulation.circulation_networks.proxy.CommonProxy;
 import com.circulation.circulation_networks.utils.TileEntityLifeCycleEvent;
+import com.github.bsideup.jabel.Desugar;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ReferenceMap;
@@ -414,32 +415,37 @@ public final class NetworkManager {
         if (files == null || files.length == 0) return;
 
         var nbts = new ConcurrentLinkedQueue<NBTTagCompound>();
+
+        @Desugar
+        record GridEntry(int dimId, Grid grid) {}
+
+        var entries = new ConcurrentLinkedQueue<GridEntry>();
         Arrays.stream(files).parallel().forEach(file -> {
             try {
-                var g = CompressedStreamTools.read(file);
-                if (g != null && DimensionManager.isDimensionRegistered(g.getInteger("dim"))) {
-                    nbts.add(g);
-                }
+                var nbt = CompressedStreamTools.read(file);
+                if (nbt == null) return;
+                int dimId = nbt.getInteger("dim");
+                if (!DimensionManager.isDimensionRegistered(dimId)) return;
+                var grid = Grid.deserialize(nbt);
+                entries.add(new GridEntry(dimId, grid));
             } catch (IOException ignored) {
             }
         });
 
         int maxId = 0;
-        for (var nbt : nbts) {
-            var grid = Grid.deserialize(nbt);
+        for (var entry : entries) {
+            var grid = entry.grid();
             int gridId = grid.getId();
-            grids.put(gridId, grid);
             if (gridId > maxId) maxId = gridId;
-
+            grids.put(gridId, grid);
             EnergyMachineManager.INSTANCE.getInteraction().put(grid, new EnergyMachineManager.Interaction());
 
             if (grid.getNodes().isEmpty()) {
                 emptyGird.add(grid);
             } else {
-                int dimId = nbt.getInteger("dim");
                 for (INode node : grid.getNodes()) {
                     activeNodes.add(node);
-                    registerNodeIndices(dimId, node);
+                    registerNodeIndices(entry.dimId(), node);
                 }
             }
         }
