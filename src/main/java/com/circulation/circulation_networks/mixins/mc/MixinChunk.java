@@ -1,6 +1,6 @@
 package com.circulation.circulation_networks.mixins.mc;
 
-import com.circulation.circulation_networks.utils.TileEntityLifeCycleEvent;
+import com.circulation.circulation_networks.events.TileEntityLifeCycleEvent;
 import com.llamalad7.mixinextras.sugar.Local;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;

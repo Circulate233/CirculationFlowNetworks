@@ -2,7 +2,8 @@ package com.circulation.circulation_networks.registry;
 
 import com.circulation.circulation_networks.api.IEnergyHandler;
 import com.circulation.circulation_networks.api.IEnergyHandlerManager;
-import com.circulation.circulation_networks.api.IMachineNodeTileEntity;
+import com.circulation.circulation_networks.api.node.IMachineNode;
+import com.circulation.circulation_networks.proxy.CommonProxy;
 import com.google.common.collect.ImmutableList;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.minecraft.item.ItemStack;
@@ -21,13 +22,13 @@ public final class RegistryEnergyHandler {
     /**
      * 只允许在postinit阶段前进行注册
      */
-    public static void registryEnergyHandler(IEnergyHandlerManager manager) {
+    public static void registerEnergyHandler(IEnergyHandlerManager manager) {
         list.add(manager);
         IEnergyHandler.POOL.put(manager.getEnergyHandlerClass(), new ArrayDeque<>());
     }
 
     public static boolean isBlack(TileEntity tileEntity) {
-        if (tileEntity instanceof IMachineNodeTileEntity) return true;
+        if (tileEntity.getCapability(CommonProxy.nodeCapability, null) instanceof IMachineNode) return true;
         for (Class<?> listClass : blackListClass) {
             if (listClass.isInstance(tileEntity)) return true;
         }

@@ -10,11 +10,11 @@ import net.minecraft.nbt.NBTTagCompound;
 
 public abstract class MachineNode extends Node implements IMachineNode {
 
+    protected final double energyScope;
+    protected final double linkScope;
     @Getter
     @Setter
     private long maxEnergy;
-    protected final double energyScope;
-    protected final double linkScope;
 
     public MachineNode(NBTTagCompound compound) {
         super(compound);

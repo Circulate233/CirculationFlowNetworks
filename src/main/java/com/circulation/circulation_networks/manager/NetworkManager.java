@@ -3,10 +3,12 @@ package com.circulation.circulation_networks.manager;
 import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.api.IGrid;
 import com.circulation.circulation_networks.api.node.INode;
+import com.circulation.circulation_networks.events.AddNodeEvent;
+import com.circulation.circulation_networks.events.RemoveNodeEvent;
+import com.circulation.circulation_networks.events.TileEntityLifeCycleEvent;
 import com.circulation.circulation_networks.network.Grid;
 import com.circulation.circulation_networks.packets.NodeNetworkRendering;
 import com.circulation.circulation_networks.proxy.CommonProxy;
-import com.circulation.circulation_networks.utils.TileEntityLifeCycleEvent;
 import com.github.bsideup.jabel.Desugar;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
@@ -30,6 +32,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.world.World;
 import net.minecraftforge.common.DimensionManager;
+import net.minecraftforge.common.MinecraftForge;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -47,11 +50,10 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 public final class NetworkManager {
 
     public static final NetworkManager INSTANCE = new NetworkManager();
-
+    private static File saveFile;
     @Getter
     private final ReferenceSet<INode> activeNodes = new ReferenceOpenHashSet<>();
     private final Int2ObjectMap<IGrid> grids = new Int2ObjectOpenHashMap<>();
-    private static File saveFile;
     private final Int2ObjectMap<Long2ReferenceMap<INode>> posNodes = new Int2ObjectOpenHashMap<>();
     private final Int2ObjectMap<Object2ObjectMap<ChunkPos, ReferenceSet<INode>>> scopeNode = new Int2ObjectOpenHashMap<>();
     private final Int2ObjectMap<Object2ObjectMap<INode, ObjectSet<ChunkPos>>> nodeScope = new Int2ObjectOpenHashMap<>();
@@ -201,6 +203,7 @@ public final class NetworkManager {
     public void removeNode(INode removedNode) {
         if (removedNode == null || removedNode.getWorld().isRemote || !activeNodes.remove(removedNode)) return;
 
+        MinecraftForge.EVENT_BUS.post(new RemoveNodeEvent.Pre(removedNode));
         int dimId = removedNode.getWorld().provider.getDimension();
 
         var players = NodeNetworkRendering.getPlayers(removedNode.getGrid());
@@ -293,11 +296,15 @@ public final class NetworkManager {
 
         EnergyMachineManager.INSTANCE.removeNode(removedNode);
         ChargingManager.INSTANCE.removeNode(removedNode);
+
+        MinecraftForge.EVENT_BUS.post(new RemoveNodeEvent.Post(removedNode));
     }
 
-    public void addNode(INode newNode, TileEntity te) {
+    public void addNode(INode newNode, TileEntity tileEntity) {
         if (newNode == null || newNode.getWorld().isRemote || !newNode.isActive() || activeNodes.contains(newNode))
             return;
+
+        if (MinecraftForge.EVENT_BUS.post(new AddNodeEvent.Pre(newNode, tileEntity))) return;
 
         int dimId = newNode.getWorld().provider.getDimension();
         activeNodes.add(newNode);
@@ -350,10 +357,11 @@ public final class NetworkManager {
                     new NodeNetworkRendering(player, newNode, NodeNetworkRendering.NODE_ADD), player);
             }
         }
-        EnergyMachineManager.INSTANCE.addNode(newNode, te);
+        EnergyMachineManager.INSTANCE.addNode(newNode);
         ChargingManager.INSTANCE.addNode(newNode);
-    }
 
+        MinecraftForge.EVENT_BUS.post(new AddNodeEvent.Post(newNode, tileEntity));
+    }
 
     private void assignNodeToGrid(INode node, IGrid grid) {
         markGird.add(grid);
@@ -448,9 +456,10 @@ public final class NetworkManager {
             }
         }
         nextGridId = maxId + 1;
+        EnergyMachineManager.INSTANCE.initGrid(entries);
     }
 
     @Desugar
-    private record GridEntry(int dimId, IGrid grid) {
+    record GridEntry(int dimId, IGrid grid) {
     }
 }

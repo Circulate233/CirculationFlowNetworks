@@ -40,6 +40,12 @@ public abstract class Node implements INode {
         vec3d = new Vec3d(pos.getX() + 0.5d, pos.getY() + 0.5d, pos.getZ() + 0.5d);
     }
 
+    public Node(INodeTileEntity tileEntity) {
+        world = new WeakReference<>(tileEntity.getNodeWorld());
+        pos = tileEntity.getNodePos();
+        vec3d = new Vec3d(pos.getX() + 0.5d, pos.getY() + 0.5d, pos.getZ() + 0.5d);
+    }
+
     @Override
     public NBTTagCompound serialize() {
         var nbt = new NBTTagCompound();
@@ -50,12 +56,6 @@ public abstract class Node implements INode {
         neighbors.forEach(neighbor -> list.appendTag(new NBTTagLong(neighbor.getPos().toLong())));
         nbt.setTag("neighbors", list);
         return nbt;
-    }
-
-    public Node(INodeTileEntity tileEntity) {
-        world = new WeakReference<>(tileEntity.getNodeWorld());
-        pos = tileEntity.getNodePos();
-        vec3d = new Vec3d(pos.getX() + 0.5d, pos.getY() + 0.5d, pos.getZ() + 0.5d);
     }
 
     public @NotNull World getWorld() {

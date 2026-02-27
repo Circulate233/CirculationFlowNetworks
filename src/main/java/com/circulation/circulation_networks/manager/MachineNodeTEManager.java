@@ -2,7 +2,7 @@ package com.circulation.circulation_networks.manager;
 
 import com.circulation.circulation_networks.api.ClientTickMachine;
 import com.circulation.circulation_networks.api.ServerTickMachine;
-import com.circulation.circulation_networks.utils.TileEntityLifeCycleEvent;
+import com.circulation.circulation_networks.events.TileEntityLifeCycleEvent;
 import it.unimi.dsi.fastutil.objects.ReferenceLinkedOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
 import net.minecraftforge.fml.relauncher.Side;

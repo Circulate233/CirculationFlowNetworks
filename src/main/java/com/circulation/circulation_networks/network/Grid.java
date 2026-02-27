@@ -23,11 +23,6 @@ public class Grid implements IGrid {
         this.id = id;
     }
 
-    @Override
-    public int hashCode() {
-        return id;
-    }
-
     public static Grid deserialize(NBTTagCompound nbt) {
         var grid = new Grid(nbt.getInteger("id"));
         var list = nbt.getTagList("nodes", 10);
@@ -57,6 +52,11 @@ public class Grid implements IGrid {
         }
 
         return grid;
+    }
+
+    @Override
+    public int hashCode() {
+        return id;
     }
 
     @Override

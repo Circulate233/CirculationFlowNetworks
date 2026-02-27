@@ -7,6 +7,7 @@ import com.circulation.circulation_networks.energy.manager.CEHandlerManager;
 import com.circulation.circulation_networks.energy.manager.EUHandlerManager;
 import com.circulation.circulation_networks.energy.manager.FEHandlerManager;
 import com.circulation.circulation_networks.energy.manager.MEKHandlerManager;
+import com.circulation.circulation_networks.events.TileEntityLifeCycleEvent;
 import com.circulation.circulation_networks.manager.EnergyMachineManager;
 import com.circulation.circulation_networks.manager.MachineNodeTEManager;
 import com.circulation.circulation_networks.manager.NetworkManager;
@@ -20,7 +21,6 @@ import com.circulation.circulation_networks.registry.RegistryEnergyHandler;
 import com.circulation.circulation_networks.registry.RegistryItems;
 import com.circulation.circulation_networks.tiles.BaseTileEntity;
 import com.circulation.circulation_networks.utils.Packet;
-import com.circulation.circulation_networks.utils.TileEntityLifeCycleEvent;
 import net.minecraft.block.Block;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -70,12 +70,12 @@ public class CommonProxy implements IGuiHandler {
     }
 
     public void init() {
-        RegistryEnergyHandler.registryEnergyHandler(new CEHandlerManager());
-        RegistryEnergyHandler.registryEnergyHandler(new FEHandlerManager());
+        RegistryEnergyHandler.registerEnergyHandler(new CEHandlerManager());
+        RegistryEnergyHandler.registerEnergyHandler(new FEHandlerManager());
         if (Loader.isModLoaded("mekanism"))
-            RegistryEnergyHandler.registryEnergyHandler(new MEKHandlerManager());
+            RegistryEnergyHandler.registerEnergyHandler(new MEKHandlerManager());
         if (Loader.isModLoaded("ic2")) {
-            RegistryEnergyHandler.registryEnergyHandler(EUHandlerManager.INSTANCE);
+            RegistryEnergyHandler.registerEnergyHandler(EUHandlerManager.INSTANCE);
             MinecraftForge.EVENT_BUS.register(EUHandlerManager.INSTANCE);
         }
         try {

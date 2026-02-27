@@ -1,4 +1,4 @@
-package com.circulation.circulation_networks.utils;
+package com.circulation.circulation_networks.events;
 
 import lombok.Getter;
 import net.minecraft.tileentity.TileEntity;

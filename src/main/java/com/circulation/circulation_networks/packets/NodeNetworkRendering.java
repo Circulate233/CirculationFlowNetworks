@@ -1,6 +1,7 @@
 package com.circulation.circulation_networks.packets;
 
 import com.circulation.circulation_networks.api.IGrid;
+import com.circulation.circulation_networks.api.node.IEnergySupplyNode;
 import com.circulation.circulation_networks.api.node.INode;
 import com.circulation.circulation_networks.handlers.NodeNetworkRenderingHandler;
 import com.circulation.circulation_networks.manager.EnergyMachineManager;
@@ -236,10 +237,10 @@ public final class NodeNetworkRendering implements Packet<NodeNetworkRendering> 
             });
         }
 
-        if (mode == NODE_REMOVE) {
+        if (mode == NODE_REMOVE && targetNode instanceof IEnergySupplyNode node) {
             writeLinks(buf, () -> {
                 int count = 0;
-                var set = EnergyMachineManager.INSTANCE.getTileEntities(targetNode);
+                var set = EnergyMachineManager.INSTANCE.getMachinesSuppliedBy(node);
                 for (var te : set) {
                     buf.writeLong(te.getPos().toLong());
                     buf.writeLong(targetNode.getPos().toLong());

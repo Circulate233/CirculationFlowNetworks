@@ -5,6 +5,8 @@ import com.circulation.circulation_networks.api.IEnergyHandler;
 import com.circulation.circulation_networks.api.IGrid;
 import com.circulation.circulation_networks.api.node.IChargingNode;
 import com.circulation.circulation_networks.api.node.INode;
+import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
@@ -12,14 +14,12 @@ import it.unimi.dsi.fastutil.objects.ObjectLists;
 import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ObjectSet;
 import it.unimi.dsi.fastutil.objects.ObjectSets;
-import it.unimi.dsi.fastutil.objects.Reference2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSets;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.math.ChunkPos;
-import net.minecraft.world.World;
 import net.minecraftforge.fml.common.Loader;
 import net.minecraftforge.fml.common.Optional;
 
@@ -36,8 +36,8 @@ public final class ChargingManager {
     public static final ChargingManager INSTANCE = new ChargingManager();
     private static final boolean loadBaubles = Loader.isModLoaded("baubles");
 
-    private final Reference2ObjectMap<World, Object2ObjectMap<ChunkPos, ReferenceSet<IChargingNode>>> scopeNode = new Reference2ObjectOpenHashMap<>();
-    private final Reference2ObjectMap<World, Object2ObjectMap<IChargingNode, ObjectSet<ChunkPos>>> nodeScope = new Reference2ObjectOpenHashMap<>();
+    private final Int2ObjectMap<Object2ObjectMap<ChunkPos, ReferenceSet<IChargingNode>>> scopeNode = new Int2ObjectOpenHashMap<>();
+    private final Int2ObjectMap<Object2ObjectMap<IChargingNode, ObjectSet<ChunkPos>>> nodeScope = new Int2ObjectOpenHashMap<>();
 
     @Optional.Method(modid = "baubles")
     private static void checkBaubles(Collection<IEnergyHandler> invs, EntityPlayer player) {
@@ -128,7 +128,7 @@ public final class ChargingManager {
                     chunksCovered.add(chunkPos);
 
                     var map = scopeNode.computeIfAbsent(
-                        node.getWorld(), k -> {
+                        node.getWorld().provider.getDimension(), k -> {
                             var m = new Object2ObjectOpenHashMap<ChunkPos, ReferenceSet<IChargingNode>>();
                             m.defaultReturnValue(ReferenceSets.emptySet());
                             return m;
@@ -143,7 +143,7 @@ public final class ChargingManager {
             }
 
             nodeScope.computeIfAbsent(
-                node.getWorld(), k -> {
+                node.getWorld().provider.getDimension(), k -> {
                     var m = new Object2ObjectOpenHashMap<IChargingNode, ObjectSet<ChunkPos>>();
                     m.defaultReturnValue(ObjectSets.emptySet());
                     return m;
