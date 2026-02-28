@@ -60,7 +60,7 @@ public final class ChargingManager {
         var players = server.getPlayerList().getPlayers();
         p:
         for (var player : players) {
-            var map = scopeNode.get(player.getEntityWorld());
+            var map = scopeNode.get(player.getEntityWorld().provider.getDimension());
             if (map != null) {
                 var pos = player.getPosition();
                 var set = map.get(new ChunkPos(pos));
@@ -155,14 +155,14 @@ public final class ChargingManager {
     public void removeNode(INode node) {
         if (node instanceof IChargingNode chargingNode) {
             var world = chargingNode.getWorld();
-            ObjectSet<ChunkPos> coveredChunks = nodeScope.get(world).remove(chargingNode);
+            ObjectSet<ChunkPos> coveredChunks = nodeScope.get(world.provider.getDimension()).remove(chargingNode);
             if (coveredChunks == null || coveredChunks.isEmpty()) return;
             for (var coveredChunk : coveredChunks) {
-                var set = scopeNode.get(world).get(coveredChunk);
+                var set = scopeNode.get(world.provider.getDimension()).get(coveredChunk);
                 if (set == null) {
                     continue;
                 }
-                if (set.size() == 1) scopeNode.get(world).remove(coveredChunk);
+                if (set.size() == 1) scopeNode.get(world.provider.getDimension()).remove(coveredChunk);
                 else set.remove(chargingNode);
             }
         }
