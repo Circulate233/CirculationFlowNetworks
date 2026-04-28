@@ -33,12 +33,12 @@ public abstract class MixinLevelChunk extends ChunkAccess {
     @Final
     private Level level;
 
-    @Shadow
-    public abstract Map<BlockPos, BlockEntity> getBlockEntities();
-
     public MixinLevelChunk(ChunkPos chunkPos, UpgradeData upgradeData, LevelHeightAccessor levelHeightAccessor, PalettedContainerFactory containerFactory, long inhabitedTime, LevelChunkSection @Nullable [] sections, @Nullable BlendingData blendingData) {
         super(chunkPos, upgradeData, levelHeightAccessor, containerFactory, inhabitedTime, sections, blendingData);
     }
+
+    @Shadow
+    public abstract Map<BlockPos, BlockEntity> getBlockEntities();
 
     @Inject(method = "addAndRegisterBlockEntity", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/Level;addFreshBlockEntities(Ljava/util/Collection;)V", shift = At.Shift.AFTER))
     public void addAndRegisterBlockEntity(BlockEntity blockEntity, CallbackInfo ci) {

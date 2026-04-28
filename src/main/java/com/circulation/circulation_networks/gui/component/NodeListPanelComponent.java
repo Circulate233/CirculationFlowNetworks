@@ -4,6 +4,7 @@ import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.api.hub.NodeSnapshotEntry;
 import com.circulation.circulation_networks.api.hub.NodeSnapshotList;
 import com.circulation.circulation_networks.client.compat.GuiGraphicsCompat;
+import com.circulation.circulation_networks.client.render.ClientAnimationTicker;
 import com.circulation.circulation_networks.container.ContainerHub;
 import com.circulation.circulation_networks.gui.CFNBaseGui;
 import com.circulation.circulation_networks.gui.component.base.Component;
@@ -81,7 +82,7 @@ public final class NodeListPanelComponent extends DraggableComponent implements 
     private static final int FALLBACK_ENTRY_COLOR = 0xCC36586D;
 
     private static final int ICON_HIT_SIZE = 14;
-    private static final long DOUBLE_CLICK_MS = 400L;
+    private static final long DOUBLE_CLICK_TICKS = 8L;
 
     private final ContainerHub container;
     private final SliderComponent slider;
@@ -94,7 +95,7 @@ public final class NodeListPanelComponent extends DraggableComponent implements 
     private boolean hasLastSliderValue;
 
     private int lastIconClickSlot = -1;
-    private long lastIconClickTime;
+    private long lastIconClickTick;
 
     public NodeListPanelComponent(int x, int y, CFNBaseGui<?> gui, ContainerHub container) {
         super(x, y, 141, 233, gui);
@@ -149,15 +150,15 @@ public final class NodeListPanelComponent extends DraggableComponent implements 
                 if (hitSlot < 0) {
                     return false;
                 }
-                long now = System.currentTimeMillis();
-                if (lastIconClickSlot == hitSlot && now - lastIconClickTime < DOUBLE_CLICK_MS) {
+                long now = ClientAnimationTicker.ticks();
+                if (lastIconClickSlot == hitSlot && now - lastIconClickTick < DOUBLE_CLICK_TICKS) {
                     lastIconClickSlot = -1;
-                    lastIconClickTime = 0;
+                    lastIconClickTick = 0L;
                     handleIconDoubleClick(hitSlot);
                     return true;
                 }
                 lastIconClickSlot = hitSlot;
-                lastIconClickTime = now;
+                lastIconClickTick = now;
                 return true;
             }
         });

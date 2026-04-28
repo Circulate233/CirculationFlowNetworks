@@ -1,12 +1,13 @@
 package com.circulation.circulation_networks.handlers;
 
+import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.api.API;
 import com.circulation.circulation_networks.client.compat.RenderSystemCompat;
+import com.circulation.circulation_networks.client.render.ClientAnimationTicker;
 import com.circulation.circulation_networks.items.CirculationConfiguratorModeModel.InspectionMode;
 import com.circulation.circulation_networks.items.CirculationConfiguratorModeModel.ToolFunction;
 import com.circulation.circulation_networks.items.CirculationConfiguratorState;
 import com.circulation.circulation_networks.math.Vec3d;
-import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.registry.CFNItems;
 import com.circulation.circulation_networks.utils.AnimationUtils;
 import com.circulation.circulation_networks.utils.BuckyBallGeometry;
@@ -14,8 +15,8 @@ import com.circulation.circulation_networks.utils.RenderingGeometryCore;
 import com.circulation.circulation_networks.utils.RenderingUtils;
 import com.circulation.circulation_networks.utils.WorldResolveCompat;
 import com.mojang.blaze3d.pipeline.BlendFunction;
-import com.mojang.blaze3d.pipeline.MainTarget;
 import com.mojang.blaze3d.pipeline.ColorTargetState;
+import com.mojang.blaze3d.pipeline.MainTarget;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -34,16 +35,16 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.neoforge.client.event.RegisterRenderPipelinesEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.RegisterRenderPipelinesEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fStack;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
 
-import java.util.OptionalInt;
 import java.util.Arrays;
+import java.util.OptionalInt;
 
 @SuppressWarnings("SameParameterValue")
 public class SpoceRenderingHandler {
@@ -53,14 +54,14 @@ public class SpoceRenderingHandler {
         Identifier.fromNamespaceAndPath(CirculationFlowNetworks.MOD_ID, "scope_intersection");
     private static final float[] UNIT_SPHERE_VERTICES = RenderingGeometryCore.buildUnitSphereVertices(32, 32);
     private static final RenderPipeline INTERSECTION_PIPELINE = RenderPipeline.builder(RenderPipelines.MATRICES_PROJECTION_SNIPPET)
-        .withLocation(INTERSECTION_PIPELINE_ID)
-        .withVertexShader(Identifier.fromNamespaceAndPath(CirculationFlowNetworks.MOD_ID, "core/sphere_depth"))
-        .withFragmentShader(Identifier.fromNamespaceAndPath(CirculationFlowNetworks.MOD_ID, "core/sphere_depth"))
-        .withSampler("DepthSampler")
-        .withColorTargetState(new ColorTargetState(BlendFunction.ADDITIVE))
-        .withCull(false)
-        .withVertexFormat(DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.TRIANGLES)
-        .build();
+                                                                              .withLocation(INTERSECTION_PIPELINE_ID)
+                                                                              .withVertexShader(Identifier.fromNamespaceAndPath(CirculationFlowNetworks.MOD_ID, "core/sphere_depth"))
+                                                                              .withFragmentShader(Identifier.fromNamespaceAndPath(CirculationFlowNetworks.MOD_ID, "core/sphere_depth"))
+                                                                              .withSampler("DepthSampler")
+                                                                              .withColorTargetState(new ColorTargetState(BlendFunction.ADDITIVE))
+                                                                              .withCull(false)
+                                                                              .withVertexFormat(DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.TRIANGLES)
+                                                                              .build();
 
     public static SpoceRenderingHandler INSTANCE;
 
@@ -174,12 +175,12 @@ public class SpoceRenderingHandler {
                 new Matrix4f()
             );
             try (var renderPass = RenderSystem.getDevice()
-                .createCommandEncoder()
-                .createRenderPass(
-                    () -> "CFN scope intersection",
-                    mainRenderTarget.getColorTextureView(),
-                    OptionalInt.empty()
-                )) {
+                                              .createCommandEncoder()
+                                              .createRenderPass(
+                                                  () -> "CFN scope intersection",
+                                                  mainRenderTarget.getColorTextureView(),
+                                                  OptionalInt.empty()
+                                              )) {
                 renderPass.setPipeline(INTERSECTION_PIPELINE);
                 RenderSystem.bindDefaultUniforms(renderPass);
                 renderPass.setUniform("DynamicTransforms", dynamicTransforms);
@@ -296,7 +297,6 @@ public class SpoceRenderingHandler {
         float ty = (float) (pos.getY() + 0.5D - cameraPos.y);
         float tz = (float) (pos.getZ() + 0.5D - cameraPos.z);
         float interpFactor = AnimationUtils.easeOutCubic(lastAnimProgress + (animProgress - lastAnimProgress) * partial);
-        Level level = mc.level;
 
         Matrix4fStack modelViewStack = RenderSystem.getModelViewStack();
         modelViewStack.pushMatrix();
@@ -305,7 +305,7 @@ public class SpoceRenderingHandler {
         RenderSystemCompat.applyModelViewMatrix();
         onPreRender();
 
-        float time = level.getGameTime() + partial;
+        float time = ClientAnimationTicker.ticks() + partial;
         float rotation = time * 0.8F;
 
         if (linkScope > 0.0F) {

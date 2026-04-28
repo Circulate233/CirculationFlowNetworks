@@ -5,6 +5,7 @@ import com.circulation.circulation_networks.api.API;
 import com.circulation.circulation_networks.api.EnergyAmount;
 import com.circulation.circulation_networks.blocks.MultiblockShellBlock;
 import com.circulation.circulation_networks.client.compat.RenderSystemCompat;
+import com.circulation.circulation_networks.client.render.ClientAnimationTicker;
 import com.circulation.circulation_networks.gui.GuiHub;
 import com.circulation.circulation_networks.gui.component.base.AtlasRegion;
 import com.circulation.circulation_networks.gui.component.base.AtlasRenderHelper;
@@ -56,7 +57,6 @@ public final class NodeHudRenderingHandler {
 
     private long lastTargetPosLong = Long.MIN_VALUE;
     private int requestCooldown;
-    private long clientTick;
 
     private NodeHudRenderingHandler() {
     }
@@ -107,7 +107,6 @@ public final class NodeHudRenderingHandler {
 
     @SubscribeEvent
     public void onClientTick(ClientTickEvent.Post event) {
-        clientTick++;
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null) {
             hasData = false;
@@ -186,6 +185,7 @@ public final class NodeHudRenderingHandler {
         }
 
         float partialTick = mc.getDeltaTracker().getGameTimeDeltaPartialTick(false);
+        long clientTick = ClientAnimationTicker.ticks();
 
         AtlasRegion crystalRegion = atlas.getRegion("node_hud_crystal");
         if (crystalRegion != null) {
@@ -204,18 +204,18 @@ public final class NodeHudRenderingHandler {
 
         var bufferSource = mc.renderBuffers().bufferSource();
         var textPose = new PoseStack();
-        drawScrollingText(font, displayName, 66, anchorX + 86, anchorY + 13, partialTick, textPose, bufferSource);
-        drawScrollingText(font, formattedInput, 62, anchorX + 90, anchorY + 26, partialTick, textPose, bufferSource);
-        drawScrollingText(font, formattedOutput, 62, anchorX + 90, anchorY + 40, partialTick, textPose, bufferSource);
-        drawScrollingText(font, formattedLatency, 62, anchorX + 90, anchorY + 54, partialTick, textPose, bufferSource);
-        drawScrollingText(font, formattedNodeCount, 62, anchorX + 90, anchorY + 68, partialTick, textPose, bufferSource);
+        drawScrollingText(font, displayName, 66, anchorX + 86, anchorY + 13, clientTick, partialTick, textPose, bufferSource);
+        drawScrollingText(font, formattedInput, 62, anchorX + 90, anchorY + 26, clientTick, partialTick, textPose, bufferSource);
+        drawScrollingText(font, formattedOutput, 62, anchorX + 90, anchorY + 40, clientTick, partialTick, textPose, bufferSource);
+        drawScrollingText(font, formattedLatency, 62, anchorX + 90, anchorY + 54, clientTick, partialTick, textPose, bufferSource);
+        drawScrollingText(font, formattedNodeCount, 62, anchorX + 90, anchorY + 68, clientTick, partialTick, textPose, bufferSource);
         font.drawInBatch(tooltipText, anchorX + 3, tooltipY + 2, 0xFFFFFFFF, false, textPose.last().pose(), bufferSource, Font.DisplayMode.SEE_THROUGH, 0, 15728880);
         bufferSource.endBatch();
 
         modelViewStack.popMatrix();
     }
 
-    private void drawScrollingText(Font font, String text, int maxWidth, float x, float y, float partialTick,
+    private void drawScrollingText(Font font, String text, int maxWidth, float x, float y, long clientTick, float partialTick,
                                    PoseStack textPose, MultiBufferSource.BufferSource bufferSource) {
         int textWidth = font.width(text);
         if (textWidth <= maxWidth) {

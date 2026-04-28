@@ -4,12 +4,10 @@ import java.util.EnumMap;
 
 public final class DatPersistenceScheduler {
 
+    public static final DatPersistenceScheduler INSTANCE = new DatPersistenceScheduler();
     private static final long SAVE_DELAY_TICKS = 20L;
     private static final long FORCE_SAVE_TICKS = 200L;
     private static final long RETRY_DELAY_TICKS = 20L;
-
-    public static final DatPersistenceScheduler INSTANCE = new DatPersistenceScheduler();
-
     private final EnumMap<Target, TargetState> targets = new EnumMap<>(Target.class);
     private long currentTick;
 

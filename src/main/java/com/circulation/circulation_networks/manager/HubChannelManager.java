@@ -18,9 +18,8 @@ import com.circulation.circulation_networks.network.hub.HubChannel;
 import com.circulation.circulation_networks.network.nodes.HubNode;
 import com.circulation.circulation_networks.utils.HubPlatformServices;
 import com.circulation.circulation_networks.utils.NbtCompat;
-import static com.circulation.circulation_networks.utils.WorldResolveCompat.isClientWorld;
-import it.unimi.dsi.fastutil.objects.Object2ReferenceMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.objects.Object2ReferenceMap;
 import it.unimi.dsi.fastutil.objects.Object2ReferenceOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectMap;
@@ -42,6 +41,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static com.circulation.circulation_networks.network.nodes.HubNode.EMPTY;
+import static com.circulation.circulation_networks.utils.WorldResolveCompat.isClientWorld;
 
 public final class HubChannelManager {
 

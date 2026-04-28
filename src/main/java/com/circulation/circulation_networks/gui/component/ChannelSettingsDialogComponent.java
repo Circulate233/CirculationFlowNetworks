@@ -5,6 +5,7 @@ import com.circulation.circulation_networks.api.hub.ChannelSnapshotEntry;
 import com.circulation.circulation_networks.api.hub.HubPermissionLevel;
 import com.circulation.circulation_networks.api.hub.PermissionMode;
 import com.circulation.circulation_networks.client.compat.GuiGraphicsCompat;
+import com.circulation.circulation_networks.client.render.ClientAnimationTicker;
 import com.circulation.circulation_networks.container.ContainerHub;
 import com.circulation.circulation_networks.gui.CFNBaseGui;
 import com.circulation.circulation_networks.gui.component.base.ComponentAtlas;
@@ -34,7 +35,7 @@ public final class ChannelSettingsDialogComponent extends DraggableComponent {
     private static final int MODE_WIDTH = 33;
     private static final int MODE_HEIGHT = 18;
     private static final int MODE_GAP = 2;
-    private static final long DELETE_SHIFT_COOLDOWN_MS = 150L;
+    private static final long DELETE_SHIFT_COOLDOWN_TICKS = 3L;
     private static final int DELETE_SHIFT_REQUIREMENT = 5;
 
     private final ContainerHub container;
@@ -46,7 +47,7 @@ public final class ChannelSettingsDialogComponent extends DraggableComponent {
 
     private DialogMode mode = DialogMode.SETTINGS;
     private PermissionMode selectedPermissionMode = PermissionMode.PRIVATE;
-    private long lastShiftPressAt;
+    private long lastShiftPressTick = -DELETE_SHIFT_COOLDOWN_TICKS;
     private int deleteShiftProgress;
 
     public ChannelSettingsDialogComponent(int x, int y, CFNBaseGui<?> gui, ContainerHub container) {
@@ -91,9 +92,9 @@ public final class ChannelSettingsDialogComponent extends DraggableComponent {
     @Override
     protected boolean onKeyTyped(char typedChar, int keyCode) {
         if (mode == DialogMode.SETTINGS && (keyCode == GLFW.GLFW_KEY_LEFT_SHIFT || keyCode == GLFW.GLFW_KEY_RIGHT_SHIFT)) {
-            long now = System.currentTimeMillis();
-            if (now - lastShiftPressAt >= DELETE_SHIFT_COOLDOWN_MS) {
-                lastShiftPressAt = now;
+            long now = ClientAnimationTicker.ticks();
+            if (now - lastShiftPressTick >= DELETE_SHIFT_COOLDOWN_TICKS) {
+                lastShiftPressTick = now;
                 deleteShiftProgress = Math.min(DELETE_SHIFT_REQUIREMENT, deleteShiftProgress + 1);
                 syncUiState();
             }
@@ -105,7 +106,7 @@ public final class ChannelSettingsDialogComponent extends DraggableComponent {
     public void openCreate() {
         mode = DialogMode.CREATE;
         deleteShiftProgress = 0;
-        lastShiftPressAt = 0L;
+        lastShiftPressTick = -DELETE_SHIFT_COOLDOWN_TICKS;
         selectedPermissionMode = PermissionMode.PRIVATE;
         ((SettingsNameField) nameField).bind(getDefaultChannelName());
         nameField.setFocused(false);
@@ -119,7 +120,7 @@ public final class ChannelSettingsDialogComponent extends DraggableComponent {
     public void openEdit() {
         mode = DialogMode.SETTINGS;
         deleteShiftProgress = 0;
-        lastShiftPressAt = 0L;
+        lastShiftPressTick = -DELETE_SHIFT_COOLDOWN_TICKS;
         selectedPermissionMode = getCurrentPermissionMode();
         ((SettingsNameField) nameField).bind(container.channelName == null ? "" : container.channelName);
         nameField.setFocused(false);

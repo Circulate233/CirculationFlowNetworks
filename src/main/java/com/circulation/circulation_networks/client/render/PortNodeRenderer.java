@@ -52,10 +52,10 @@ public final class PortNodeRenderer implements BlockEntityRenderer<BlockEntityPo
             return;
         }
 
-        long worldTime = te.getLevel().getGameTime();
-        float topAngle = NodeRotationAnimation.relayBottomSpiralAngle(worldTime, renderState.partialTick);
-        float crystalAngle = NodeRotationAnimation.relayCrystalAngle(worldTime, renderState.partialTick);
-        float bottomAngle = NodeRotationAnimation.relayTopSpiralAngle(worldTime, renderState.partialTick);
+        long clientTicks = ClientAnimationTicker.ticks();
+        float topAngle = NodeRotationAnimation.relayBottomSpiralAngle(clientTicks, renderState.partialTick);
+        float crystalAngle = NodeRotationAnimation.relayCrystalAngle(clientTicks, renderState.partialTick);
+        float bottomAngle = NodeRotationAnimation.relayTopSpiralAngle(clientTicks, renderState.partialTick);
 
         try (RotatingModelVBORenderer.RenderSession ignored = RotatingModelVBORenderer.beginRenderSession(submitNodeCollector)) {
             BlockState state = te.getBlockState();
@@ -64,7 +64,7 @@ public final class PortNodeRenderer implements BlockEntityRenderer<BlockEntityPo
             RotatingModelVBORenderer.renderFullBrightYAxis(poseStack, state, PORT_IN_EMISSIVE,
                 topAngle, CENTER, CENTER, CENTER);
             poseStack.pushPose();
-            poseStack.translate(0.0F, NodeRotationAnimation.bobOffset(worldTime, renderState.partialTick), 0.0F);
+            poseStack.translate(0.0F, NodeRotationAnimation.bobOffset(clientTicks, renderState.partialTick), 0.0F);
             RotatingModelVBORenderer.renderFullBrightYAxis(poseStack, state, NODE_CRYSTAL,
                 crystalAngle, CENTER, CENTER, CENTER);
             poseStack.popPose();

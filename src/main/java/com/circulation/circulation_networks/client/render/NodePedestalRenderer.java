@@ -54,7 +54,7 @@ public final class NodePedestalRenderer implements BlockEntityRenderer<BlockEnti
             return;
         }
 
-        long worldTime = te.getLevel().getGameTime();
+        long clientTicks = ClientAnimationTicker.ticks();
 
         try (RotatingModelVBORenderer.RenderSession ignored = RotatingModelVBORenderer.beginRenderSession(submitNodeCollector)) {
             BlockState state = te.getBlockState();
@@ -64,16 +64,16 @@ public final class NodePedestalRenderer implements BlockEntityRenderer<BlockEnti
                 0.0F, CENTER, CENTER, CENTER);
 
             poseStack.pushPose();
-            poseStack.translate(0.0F, NodeRotationAnimation.bobOffset(worldTime, renderState.partialTick), 0.0F);
+            poseStack.translate(0.0F, NodeRotationAnimation.bobOffset(clientTicks, renderState.partialTick), 0.0F);
 
             RotatingModelVBORenderer.renderFullBright(poseStack, state, PEDESTAL_FRAME_CLOCKWISE,
-                NodeRotationAnimation.pedestalClockwiseFrameAngle(worldTime, renderState.partialTick),
+                NodeRotationAnimation.pedestalClockwiseFrameAngle(clientTicks, renderState.partialTick),
                 FRAME_PIVOT_X, FRAME_PIVOT_Y, FRAME_PIVOT_Z,
                 NodeRotationAnimation.tiltedAxisXForZRotation(-22.5F),
                 NodeRotationAnimation.tiltedAxisY(),
                 NodeRotationAnimation.tiltedAxisZ());
             RotatingModelVBORenderer.renderFullBright(poseStack, state, PEDESTAL_FRAME_COUNTER_CLOCKWISE,
-                NodeRotationAnimation.pedestalCounterClockwiseFrameAngle(worldTime, renderState.partialTick),
+                NodeRotationAnimation.pedestalCounterClockwiseFrameAngle(clientTicks, renderState.partialTick),
                 FRAME_PIVOT_X, FRAME_PIVOT_Y, FRAME_PIVOT_Z,
                 NodeRotationAnimation.tiltedAxisXForZRotation(22.5F),
                 NodeRotationAnimation.tiltedAxisY(),

@@ -1,15 +1,16 @@
 package com.circulation.circulation_networks.handlers;
 
+import com.circulation.circulation_networks.client.render.ClientAnimationTicker;
 import com.mojang.blaze3d.pipeline.BlendFunction;
 import com.mojang.blaze3d.pipeline.ColorTargetState;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.rendertype.RenderType;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.rendertype.RenderSetup;
+import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.core.BlockPos;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
@@ -29,10 +30,10 @@ public final class NodeHighlightRenderingHandler {
     private static final float BOX_ALPHA = 0.85F;
     private static final double EXPAND = 0.002D;
     private static final RenderPipeline HIGHLIGHT_LINES_PIPELINE = RenderPipelines.LINES.toBuilder()
-                                                                                   .withLocation("pipeline/cfn_node_highlight_lines")
-                                                                                   .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
-                                                                                   .withDepthStencilState(Optional.empty())
-                                                                                   .build();
+                                                                                        .withLocation("pipeline/cfn_node_highlight_lines")
+                                                                                        .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
+                                                                                        .withDepthStencilState(Optional.empty())
+                                                                                        .build();
     private static final RenderType HIGHLIGHT_RENDER_TYPE = RenderType.create(
         "cfn_node_highlight_lines",
         RenderSetup.builder(HIGHLIGHT_LINES_PIPELINE).createRenderSetup()
@@ -40,7 +41,6 @@ public final class NodeHighlightRenderingHandler {
     private BlockPos targetPos;
     private String targetDimId;
     private long startTick;
-    private long clientTick;
 
     private NodeHighlightRenderingHandler() {
     }
@@ -58,7 +58,7 @@ public final class NodeHighlightRenderingHandler {
     public void highlight(BlockPos pos, String dimId) {
         this.targetPos = pos;
         this.targetDimId = dimId;
-        this.startTick = clientTick;
+        this.startTick = ClientAnimationTicker.ticks();
     }
 
     public void clear() {
@@ -68,7 +68,7 @@ public final class NodeHighlightRenderingHandler {
 
     @SubscribeEvent
     public void onClientTick(ClientTickEvent.Pre event) {
-        clientTick++;
+        long clientTick = ClientAnimationTicker.ticks();
         if (targetPos != null && clientTick - startTick > HIGHLIGHT_DURATION_TICKS) {
             targetPos = null;
             targetDimId = null;
@@ -84,6 +84,7 @@ public final class NodeHighlightRenderingHandler {
         if (!com.circulation.circulation_networks.utils.WorldResolveCompat.getDimensionId(mc.level).equals(targetDimId)) {
             return;
         }
+        long clientTick = ClientAnimationTicker.ticks();
         long elapsed = clientTick - startTick;
         if (elapsed > HIGHLIGHT_DURATION_TICKS) {
             return;

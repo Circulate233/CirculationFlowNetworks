@@ -19,6 +19,14 @@ public final class NodeRescanHandler {
     private NodeRescanHandler() {
     }
 
+    private static BlockPos resolveTargetPos(Level world, BlockPos pos) {
+        var blockEntity = world.getBlockEntity(pos);
+        if (blockEntity instanceof BlockEntityMultiblockShell shell && shell.canRedirect()) {
+            return shell.getOriginPos();
+        }
+        return pos;
+    }
+
     @SubscribeEvent
     public void onRightClickBlock(PlayerInteractEvent.RightClickBlock event) {
         if (event.getHand() != InteractionHand.MAIN_HAND) {
@@ -43,13 +51,5 @@ public final class NodeRescanHandler {
         EnergyMachineManager.INSTANCE.rescanMachinesAroundNode(energySupplyNode);
         event.setCancellationResult(InteractionResult.SUCCESS);
         event.setCanceled(true);
-    }
-
-    private static BlockPos resolveTargetPos(Level world, BlockPos pos) {
-        var blockEntity = world.getBlockEntity(pos);
-        if (blockEntity instanceof BlockEntityMultiblockShell shell && shell.canRedirect()) {
-            return shell.getOriginPos();
-        }
-        return pos;
     }
 }

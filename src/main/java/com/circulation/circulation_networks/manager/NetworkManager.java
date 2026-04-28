@@ -11,11 +11,10 @@ import com.circulation.circulation_networks.network.Grid;
 import com.circulation.circulation_networks.packets.NodeNetworkRendering;
 import com.circulation.circulation_networks.utils.BlockPosCompat;
 import com.circulation.circulation_networks.utils.CompressedNbtIoCompat;
-import com.circulation.circulation_networks.utils.NodeEventHooks;
 import com.circulation.circulation_networks.utils.Functions;
 import com.circulation.circulation_networks.utils.NbtCompat;
+import com.circulation.circulation_networks.utils.NodeEventHooks;
 import com.circulation.circulation_networks.utils.WorldResolveCompat;
-import static com.circulation.circulation_networks.utils.WorldResolveCompat.isClientWorld;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMaps;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
@@ -58,6 +57,8 @@ import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import static com.circulation.circulation_networks.utils.WorldResolveCompat.isClientWorld;
 
 @SuppressWarnings("unused")
 public final class NetworkManager {

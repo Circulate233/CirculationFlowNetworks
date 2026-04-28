@@ -13,7 +13,7 @@ import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.NotNull;
 import org.joml.Vector3f;
 import org.joml.Vector3fc;
-import org.jspecify.annotations.Nullable;
+import org.jspecify.annotations.NonNull;
 
 import java.util.function.Consumer;
 
@@ -65,22 +65,17 @@ public final class AnimatedNodeSpecialRenderer implements NoDataSpecialModelRend
 
     private static AnimationTick resolveAnimationTick() {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level != null) {
-            return new AnimationTick(
-                minecraft.level.getGameTime(),
-                minecraft.getDeltaTracker().getGameTimeDeltaPartialTick(false)
-            );
-        }
-        double tickTime = System.currentTimeMillis() / 50.0D;
-        long wholeTicks = (long) tickTime;
-        return new AnimationTick(wholeTicks, (float) (tickTime - wholeTicks));
+        return new AnimationTick(
+            ClientAnimationTicker.ticks(),
+            minecraft.getDeltaTracker().getGameTimeDeltaPartialTick(false)
+        );
     }
 
     @Override
     public void submit(@NotNull PoseStack poseStack, @NotNull SubmitNodeCollector submitNodeCollector, int lightCoords, int overlayCoords, boolean hasFoil, int outlineColor) {
         AnimationTick tick = resolveAnimationTick();
         try (RotatingModelVBORenderer.RenderSession ignored = RotatingModelVBORenderer.beginRenderSession(submitNodeCollector)) {
-            kind.render(poseStack, lightCoords, tick.worldTime(), tick.partialTicks());
+            kind.render(poseStack, lightCoords, tick.clientTicks(), tick.partialTicks());
         }
     }
 
@@ -94,20 +89,20 @@ public final class AnimatedNodeSpecialRenderer implements NoDataSpecialModelRend
     public enum Kind {
         RELAY("relay") {
             @Override
-            void render(PoseStack poseStack, int lightCoords, long worldTime, float partialTicks) {
+            void render(PoseStack poseStack, int lightCoords, long clientTicks, float partialTicks) {
                 if (!CFNConfig.NODE.rendering.animatedSpecialModels) {
                     RotatingModelVBORenderer.renderLitYAxis(poseStack, lightCoords, RELAY_STATIC, 0.0F, CENTER, CENTER, CENTER);
                     return;
                 }
 
-                float topAngle = NodeRotationAnimation.relayTopSpiralAngle(worldTime, partialTicks);
-                float crystalAngle = NodeRotationAnimation.relayCrystalAngle(worldTime, partialTicks);
-                float bottomAngle = NodeRotationAnimation.relayBottomSpiralAngle(worldTime, partialTicks);
+                float topAngle = NodeRotationAnimation.relayTopSpiralAngle(clientTicks, partialTicks);
+                float crystalAngle = NodeRotationAnimation.relayCrystalAngle(clientTicks, partialTicks);
+                float bottomAngle = NodeRotationAnimation.relayBottomSpiralAngle(clientTicks, partialTicks);
 
                 RotatingModelVBORenderer.renderLitYAxis(poseStack, lightCoords, RELAY_TOP_SPIRAL_BASE, topAngle, CENTER, CENTER, CENTER);
                 RotatingModelVBORenderer.renderFullBrightYAxis(poseStack, RELAY_TOP_SPIRAL_EMISSIVE, topAngle, CENTER, CENTER, CENTER);
                 poseStack.pushPose();
-                poseStack.translate(0.0F, NodeRotationAnimation.bobOffset(worldTime, partialTicks), 0.0F);
+                poseStack.translate(0.0F, NodeRotationAnimation.bobOffset(clientTicks, partialTicks), 0.0F);
                 RotatingModelVBORenderer.renderFullBrightYAxis(poseStack, NODE_CRYSTAL, crystalAngle, CENTER, CENTER, CENTER);
                 poseStack.popPose();
                 RotatingModelVBORenderer.renderLitYAxis(poseStack, lightCoords, RELAY_BOTTOM_SPIRAL_BASE, bottomAngle, CENTER, CENTER, CENTER);
@@ -116,15 +111,15 @@ public final class AnimatedNodeSpecialRenderer implements NoDataSpecialModelRend
         },
         CHARGING("charging") {
             @Override
-            void render(PoseStack poseStack, int lightCoords, long worldTime, float partialTicks) {
+            void render(PoseStack poseStack, int lightCoords, long clientTicks, float partialTicks) {
                 if (!CFNConfig.NODE.rendering.animatedSpecialModels) {
                     RotatingModelVBORenderer.renderLitYAxis(poseStack, lightCoords, CHARGING_STATIC, 0.0F, CENTER, CENTER, CENTER);
                     return;
                 }
 
-                float topAngle = NodeRotationAnimation.relayBottomSpiralAngle(worldTime, partialTicks);
-                float crystalAngle = NodeRotationAnimation.relayCrystalAngle(worldTime, partialTicks);
-                float bottomAngle = NodeRotationAnimation.relayBottomSpiralAngle(worldTime, partialTicks);
+                float topAngle = NodeRotationAnimation.relayBottomSpiralAngle(clientTicks, partialTicks);
+                float crystalAngle = NodeRotationAnimation.relayCrystalAngle(clientTicks, partialTicks);
+                float bottomAngle = NodeRotationAnimation.relayBottomSpiralAngle(clientTicks, partialTicks);
 
                 RotatingModelVBORenderer.renderLitYAxis(poseStack, lightCoords, CHARGING_IN_BASE, topAngle, CENTER, CENTER, CENTER);
                 RotatingModelVBORenderer.renderFullBrightYAxis(poseStack, CHARGING_IN_EMISSIVE, topAngle, CENTER, CENTER, CENTER);
@@ -135,15 +130,15 @@ public final class AnimatedNodeSpecialRenderer implements NoDataSpecialModelRend
         },
         PORT("port") {
             @Override
-            void render(PoseStack poseStack, int lightCoords, long worldTime, float partialTicks) {
+            void render(PoseStack poseStack, int lightCoords, long clientTicks, float partialTicks) {
                 if (!CFNConfig.NODE.rendering.animatedSpecialModels) {
                     RotatingModelVBORenderer.renderLitYAxis(poseStack, lightCoords, PORT_STATIC, 0.0F, CENTER, CENTER, CENTER);
                     return;
                 }
 
-                float topAngle = NodeRotationAnimation.relayBottomSpiralAngle(worldTime, partialTicks);
-                float crystalAngle = NodeRotationAnimation.relayCrystalAngle(worldTime, partialTicks);
-                float bottomAngle = NodeRotationAnimation.relayTopSpiralAngle(worldTime, partialTicks);
+                float topAngle = NodeRotationAnimation.relayBottomSpiralAngle(clientTicks, partialTicks);
+                float crystalAngle = NodeRotationAnimation.relayCrystalAngle(clientTicks, partialTicks);
+                float bottomAngle = NodeRotationAnimation.relayTopSpiralAngle(clientTicks, partialTicks);
 
                 RotatingModelVBORenderer.renderLitYAxis(poseStack, lightCoords, PORT_IN_BASE, topAngle, CENTER, CENTER, CENTER);
                 RotatingModelVBORenderer.renderFullBrightYAxis(poseStack, PORT_IN_EMISSIVE, topAngle, CENTER, CENTER, CENTER);
@@ -154,7 +149,7 @@ public final class AnimatedNodeSpecialRenderer implements NoDataSpecialModelRend
         },
         PEDESTAL("pedestal") {
             @Override
-            void render(PoseStack poseStack, int lightCoords, long worldTime, float partialTicks) {
+            void render(PoseStack poseStack, int lightCoords, long clientTicks, float partialTicks) {
                 if (!CFNConfig.NODE.rendering.animatedSpecialModels) {
                     RotatingModelVBORenderer.renderLitYAxis(poseStack, lightCoords, PEDESTAL_STATIC, 0.0F, CENTER, CENTER, CENTER);
                     return;
@@ -165,7 +160,7 @@ public final class AnimatedNodeSpecialRenderer implements NoDataSpecialModelRend
                 RotatingModelVBORenderer.renderFullBright(
                     poseStack,
                     PEDESTAL_FRAME_CLOCKWISE,
-                    NodeRotationAnimation.pedestalClockwiseFrameAngle(worldTime, partialTicks),
+                    NodeRotationAnimation.pedestalClockwiseFrameAngle(clientTicks, partialTicks),
                     FRAME_PIVOT_X,
                     FRAME_PIVOT_Y,
                     FRAME_PIVOT_Z,
@@ -176,7 +171,7 @@ public final class AnimatedNodeSpecialRenderer implements NoDataSpecialModelRend
                 RotatingModelVBORenderer.renderFullBright(
                     poseStack,
                     PEDESTAL_FRAME_COUNTER_CLOCKWISE,
-                    NodeRotationAnimation.pedestalCounterClockwiseFrameAngle(worldTime, partialTicks),
+                    NodeRotationAnimation.pedestalCounterClockwiseFrameAngle(clientTicks, partialTicks),
                     FRAME_PIVOT_X,
                     FRAME_PIVOT_Y,
                     FRAME_PIVOT_Z,
@@ -208,10 +203,10 @@ public final class AnimatedNodeSpecialRenderer implements NoDataSpecialModelRend
             return serializedName;
         }
 
-        abstract void render(PoseStack poseStack, int lightCoords, long worldTime, float partialTicks);
+        abstract void render(PoseStack poseStack, int lightCoords, long clientTicks, float partialTicks);
     }
 
-    private record AnimationTick(long worldTime, float partialTicks) {
+    private record AnimationTick(long clientTicks, float partialTicks) {
     }
 
     public record Unbaked(Kind kind) implements NoDataSpecialModelRenderer.Unbaked {
@@ -226,7 +221,7 @@ public final class AnimatedNodeSpecialRenderer implements NoDataSpecialModelRend
         }
 
         @Override
-        public @Nullable SpecialModelRenderer<Void> bake(@NotNull SpecialModelRenderer.BakingContext context) {
+        public @NonNull SpecialModelRenderer<Void> bake(@NotNull SpecialModelRenderer.BakingContext context) {
             return new AnimatedNodeSpecialRenderer(kind);
         }
     }
