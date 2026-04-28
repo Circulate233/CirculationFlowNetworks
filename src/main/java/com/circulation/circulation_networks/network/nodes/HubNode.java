@@ -15,7 +15,7 @@ import com.circulation.circulation_networks.registry.NodeTypes;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceMap;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
-import static com.circulation.circulation_networks.utils.WorldSideCompat.isServerWorld;
+import static com.circulation.circulation_networks.utils.SideCompat.isServerWorld;
 //~ mc_imports
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;

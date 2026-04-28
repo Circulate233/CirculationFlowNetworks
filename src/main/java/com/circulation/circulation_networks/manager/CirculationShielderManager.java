@@ -6,10 +6,11 @@ import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSets;
-import static com.circulation.circulation_networks.utils.WorldSideCompat.isClientWorld;
 //~ mc_imports
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+
+import static com.circulation.circulation_networks.utils.SideCompat.isClientWorld;
 
 public final class CirculationShielderManager {
 

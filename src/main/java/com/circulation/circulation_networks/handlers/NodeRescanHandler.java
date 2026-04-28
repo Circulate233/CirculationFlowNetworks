@@ -3,7 +3,7 @@ package com.circulation.circulation_networks.handlers;
 import com.circulation.circulation_networks.api.API;
 import com.circulation.circulation_networks.api.node.IEnergySupplyNode;
 import com.circulation.circulation_networks.manager.EnergyMachineManager;
-import static com.circulation.circulation_networks.utils.WorldSideCompat.isClientWorld;
+import static com.circulation.circulation_networks.utils.SideCompat.isClientWorld;
 //? if <1.20 {
 import com.circulation.circulation_networks.tiles.TileEntityMultiblockShell;
 //?} else {

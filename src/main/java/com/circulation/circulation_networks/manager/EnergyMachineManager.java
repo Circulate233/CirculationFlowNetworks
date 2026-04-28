@@ -15,7 +15,6 @@ import com.circulation.circulation_networks.packets.EnergyWarningRendering;
 import com.circulation.circulation_networks.network.nodes.HubNode;
 import com.circulation.circulation_networks.registry.RegistryEnergyHandler;
 import com.circulation.circulation_networks.utils.ChunkCoordUtils;
-import static com.circulation.circulation_networks.utils.WorldSideCompat.isClientWorld;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongMap;
@@ -56,6 +55,7 @@ import java.util.Objects;
 import java.util.Set;
 
 import net.minecraft.server.MinecraftServer;
+import static com.circulation.circulation_networks.utils.SideCompat.isClientWorld;
 
 public final class EnergyMachineManager {
 

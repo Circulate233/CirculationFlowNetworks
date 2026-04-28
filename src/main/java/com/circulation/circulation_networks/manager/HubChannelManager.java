@@ -50,7 +50,7 @@ import java.util.Locale;
 import java.util.UUID;
 
 import static com.circulation.circulation_networks.network.nodes.HubNode.EMPTY;
-import static com.circulation.circulation_networks.utils.WorldSideCompat.isClientWorld;
+import static com.circulation.circulation_networks.utils.SideCompat.isClientWorld;
 
 public final class HubChannelManager {
 

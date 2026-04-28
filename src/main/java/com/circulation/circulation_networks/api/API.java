@@ -11,7 +11,7 @@ import com.circulation.circulation_networks.manager.NetworkManager;
 import com.circulation.circulation_networks.registry.RegistryEnergyHandler;
 import com.circulation.circulation_networks.registry.NodeTypes;
 import com.circulation.circulation_networks.registry.PocketNodeItems;
-import static com.circulation.circulation_networks.utils.WorldSideCompat.isClientWorld;
+import static com.circulation.circulation_networks.utils.SideCompat.isClientWorld;
 //~ mc_imports
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;

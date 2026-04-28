@@ -1,6 +1,7 @@
 package com.circulation.circulation_networks.manager;
 
 import java.util.EnumMap;
+import java.util.function.BooleanSupplier;
 
 public final class DatPersistenceScheduler {
 
@@ -64,32 +65,20 @@ public final class DatPersistenceScheduler {
     }
 
     public enum Target {
-        NETWORK_GRID {
-            @Override
-            boolean save() {
-                return NetworkManager.INSTANCE.saveGrid();
-            }
-        },
-        POCKET_NODE {
-            @Override
-            boolean save() {
-                return PocketNodeManager.INSTANCE.save();
-            }
-        },
-        HUB_CHANNEL {
-            @Override
-            boolean save() {
-                return HubChannelManager.INSTANCE.save();
-            }
-        },
-        ENERGY_TYPE_OVERRIDE {
-            @Override
-            boolean save() {
-                return EnergyTypeOverrideManager.save();
-            }
-        };
+        NETWORK_GRID(NetworkManager.INSTANCE::saveGrid),
+        POCKET_NODE(PocketNodeManager.INSTANCE::save),
+        HUB_CHANNEL(HubChannelManager.INSTANCE::save),
+        ENERGY_TYPE_OVERRIDE(EnergyTypeOverrideManager::save);
 
-        abstract boolean save();
+        Target(BooleanSupplier save) {
+            this.save = save;
+        }
+
+        private final BooleanSupplier save;
+
+        boolean save() {
+            return save.getAsBoolean();
+        }
     }
 
     private static final class TargetState {

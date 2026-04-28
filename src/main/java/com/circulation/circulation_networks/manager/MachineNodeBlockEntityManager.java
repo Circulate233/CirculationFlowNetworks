@@ -5,7 +5,7 @@ import com.circulation.circulation_networks.api.ServerTickMachine;
 import com.circulation.circulation_networks.events.BlockEntityLifeCycleEvent;
 import it.unimi.dsi.fastutil.objects.ReferenceLinkedOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
-import static com.circulation.circulation_networks.utils.WorldSideCompat.isClientWorld;
+import static com.circulation.circulation_networks.utils.SideCompat.isClientWorld;
 
 public class MachineNodeBlockEntityManager {
 
