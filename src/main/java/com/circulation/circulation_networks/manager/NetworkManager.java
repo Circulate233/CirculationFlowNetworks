@@ -10,6 +10,7 @@ import com.circulation.circulation_networks.events.BlockEntityLifeCycleEvent;
 import com.circulation.circulation_networks.network.Grid;
 import com.circulation.circulation_networks.utils.ChunkCoordUtils;
 import com.circulation.circulation_networks.utils.NodeEventHooks;
+import static com.circulation.circulation_networks.utils.WorldSideCompat.isClientWorld;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 
@@ -105,7 +106,11 @@ public final class NetworkManager {
     }
 
     public static boolean isServerAvailable() {
-        return saveFile != null;
+        //? if <1.20 {
+        return CirculationFlowNetworks.server != null;
+        //?} else {
+        /*return getCurrentServer() != null;
+        *///?}
     }
 
     static void runFileIoAsync(Runnable task) {
@@ -246,10 +251,6 @@ public final class NetworkManager {
         return DimensionManager.getWorld(dimId);
     }
 
-    private static boolean isClientWorld(World world) {
-        return world.isRemote;
-    }
-
     private static List<net.minecraft.entity.player.EntityPlayer> getPlayers(World world) {
         return world.playerEntities;
     }
@@ -304,10 +305,6 @@ public final class NetworkManager {
             }
         }
         return null;
-    }
-
-    private static boolean isClientWorld(Level world) {
-        return world.isClientSide;
     }
 
     private static List<? extends Player> getPlayers(Level world) {

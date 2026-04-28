@@ -50,6 +50,7 @@ import java.util.Locale;
 import java.util.UUID;
 
 import static com.circulation.circulation_networks.network.nodes.HubNode.EMPTY;
+import static com.circulation.circulation_networks.utils.WorldSideCompat.isClientWorld;
 
 public final class HubChannelManager {
 
@@ -68,16 +69,17 @@ public final class HubChannelManager {
     }
 
     //~ if >=1.20 'net.minecraft.world.World' -> 'net.minecraft.world.level.Level' {
-    //~ if >=1.20 '.isRemote' -> '.isClientSide' {
-    private static boolean isClientWorld(net.minecraft.world.World world) {
-        return world.isRemote;
-    }
-
     public void bindHub(IHubNode hub) {
+        if (hub == null || !NetworkManager.isServerAvailable()) {
+            return;
+        }
         register(hub, hub.getChannelId(), hub.getChannelName(), hub.getPermissionMode());
     }
 
     public void register(IHubNode hub, UUID channelId, String name, PermissionMode permissionMode) {
+        if (hub == null || !NetworkManager.isServerAvailable()) {
+            return;
+        }
         ensureLoaded();
         if (channelId == null || name == null) {
             return;
@@ -97,7 +99,6 @@ public final class HubChannelManager {
         HubChannel channel = channels.get(channelId);
         if (channel == null) {
             channel = new HubChannel(channelId, name, hub.getOwner(), permissionMode, hub.getExplicitPermissions());
-            // 新建频道时同步本地充能配置
             if (hub.getPlayerPreferences() != null) {
                 for (var entry : hub.getPlayerPreferences().entrySet()) {
                     channel.setChargingPreference(entry.getKey(), entry.getValue());
@@ -115,6 +116,9 @@ public final class HubChannelManager {
     }
 
     public void unregister(IHubNode hub) {
+        if (hub == null || !NetworkManager.isServerAvailable()) {
+            return;
+        }
         ensureLoaded();
         UUID oldChannelId = hubChannels.remove(hub);
         if (oldChannelId == EMPTY) {
@@ -133,6 +137,9 @@ public final class HubChannelManager {
     }
 
     public void updateChannelFromHub(IHubNode hub) {
+        if (hub == null || !NetworkManager.isServerAvailable()) {
+            return;
+        }
         ensureLoaded();
         UUID boundChannelId = hubChannels.get(hub);
         if (boundChannelId == EMPTY || !boundChannelId.equals(hub.getChannelId())) {
@@ -889,6 +896,5 @@ public final class HubChannelManager {
                                        Map<UUID, HubPermissionLevel> explicitPermissions,
                                        Map<UUID, ChargingPreference> chargingPreferences) {
     }
-    //~}
     //~}
 }

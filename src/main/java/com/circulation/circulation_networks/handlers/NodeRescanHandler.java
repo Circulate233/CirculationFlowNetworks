@@ -3,6 +3,7 @@ package com.circulation.circulation_networks.handlers;
 import com.circulation.circulation_networks.api.API;
 import com.circulation.circulation_networks.api.node.IEnergySupplyNode;
 import com.circulation.circulation_networks.manager.EnergyMachineManager;
+import static com.circulation.circulation_networks.utils.WorldSideCompat.isClientWorld;
 //? if <1.20 {
 import com.circulation.circulation_networks.tiles.TileEntityMultiblockShell;
 //?} else {
@@ -98,10 +99,6 @@ public final class NodeRescanHandler {
         return player.getHeldItemMainhand().isEmpty();
     }
 
-    private static boolean isClientWorld(World world) {
-        return world.isRemote;
-    }
-
     private static void markHandled(PlayerInteractEvent.RightClickBlock event) {
         event.setCancellationResult(EnumActionResult.SUCCESS);
         event.setCanceled(true);
@@ -137,10 +134,6 @@ public final class NodeRescanHandler {
 
     private static boolean isMainHandEmpty(Player player) {
         return player.getMainHandItem().isEmpty();
-    }
-
-    private static boolean isClientWorld(Level world) {
-        return world.isClientSide;
     }
 
     private static void markHandled(PlayerInteractEvent.RightClickBlock event) {

@@ -15,6 +15,7 @@ import com.circulation.circulation_networks.packets.EnergyWarningRendering;
 import com.circulation.circulation_networks.network.nodes.HubNode;
 import com.circulation.circulation_networks.registry.RegistryEnergyHandler;
 import com.circulation.circulation_networks.utils.ChunkCoordUtils;
+import static com.circulation.circulation_networks.utils.WorldSideCompat.isClientWorld;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongMap;
@@ -172,10 +173,6 @@ public final class EnergyMachineManager {
         return CirculationFlowNetworks.server;
     }
 
-    private static boolean isClientWorld(World world) {
-        return world.isRemote;
-    }
-
     private static int getDimensionId(World world) {
         return world.provider.getDimension();
     }
@@ -196,10 +193,6 @@ public final class EnergyMachineManager {
         return net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
     }
 
-    private static boolean isClientWorld(Level world) {
-        return world.isClientSide;
-    }
-
     private static int getDimensionId(Level world) {
         return world.dimension().location().hashCode();
     }
@@ -217,10 +210,6 @@ public final class EnergyMachineManager {
     *///?} else {
     /*private static MinecraftServer getServer() {
         return net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
-    }
-
-    private static boolean isClientWorld(Level world) {
-        return world.isClientSide;
     }
 
     private static int getDimensionId(Level world) {

@@ -6,6 +6,7 @@ import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSets;
+import static com.circulation.circulation_networks.utils.WorldSideCompat.isClientWorld;
 //~ mc_imports
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
@@ -21,12 +22,7 @@ public final class CirculationShielderManager {
     }
 
     //~ if >=1.20 '(World ' -> '(Level ' {
-    //~ if >=1.20 '.isRemote' -> '.isClientSide' {
     //~ if >=1.20 '.provider.getDimension()' -> '.dimension().location().hashCode()' {
-    private static boolean isClientWorld(World world) {
-        return world.isRemote;
-    }
-
     private static int getDimensionId(World world) {
         return world.provider.getDimension();
     }
@@ -74,7 +70,6 @@ public final class CirculationShielderManager {
 
         return false;
     }
-    //~}
     //~}
     //~}
 }

@@ -5,6 +5,7 @@ import com.circulation.circulation_networks.api.ServerTickMachine;
 import com.circulation.circulation_networks.events.BlockEntityLifeCycleEvent;
 import it.unimi.dsi.fastutil.objects.ReferenceLinkedOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
+import static com.circulation.circulation_networks.utils.WorldSideCompat.isClientWorld;
 
 public class MachineNodeBlockEntityManager {
 
@@ -14,11 +15,6 @@ public class MachineNodeBlockEntityManager {
     private final ReferenceSet<ClientTickMachine> clientTe = new ReferenceLinkedOpenHashSet<>();
 
     //~ if >=1.20 'net.minecraft.world.World' -> 'net.minecraft.world.level.Level' {
-    //~ if >=1.20 '.isRemote' -> '.isClientSide' {
-    private static boolean isClientWorld(net.minecraft.world.World world) {
-        return world.isRemote;
-    }
-
     public void onBlockEntityValidate(BlockEntityLifeCycleEvent.Validate event) {
         if (isClientWorld(event.getWorld())) {
             if (event.getBlockEntity() instanceof ClientTickMachine te) registerClientMachine(te);
@@ -75,6 +71,5 @@ public class MachineNodeBlockEntityManager {
         serverTe.clear();
         clientTe.clear();
     }
-    //~}
     //~}
 }

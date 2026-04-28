@@ -15,6 +15,7 @@ import com.circulation.circulation_networks.registry.NodeTypes;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceMap;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
+import static com.circulation.circulation_networks.utils.WorldSideCompat.isServerWorld;
 //~ mc_imports
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
@@ -292,11 +293,7 @@ public final class HubNode extends Node implements IHubNode {
 
     private boolean shouldSyncChannelManager() {
         try {
-            //? if <1.20 {
-            return !getWorld().isRemote;
-            //?} else {
-            /*return !getWorld().isClientSide;
-             *///?}
+            return isServerWorld(getWorld());
         } catch (IllegalStateException ignored) {
             return false;
         }

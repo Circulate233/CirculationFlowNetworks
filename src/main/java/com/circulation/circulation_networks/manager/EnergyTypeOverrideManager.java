@@ -8,6 +8,7 @@ import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import static com.circulation.circulation_networks.utils.WorldSideCompat.isClientWorld;
 //? if <1.20 {
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.nbt.CompressedStreamTools;
@@ -88,12 +89,7 @@ public final class EnergyTypeOverrideManager {
     *///?}
 
     //~ if >=1.20 'net.minecraft.world.World' -> 'net.minecraft.world.level.Level' {
-    //~ if >=1.20 '.isRemote' -> '.isClientSide' {
     //~ if >=1.20 '.provider.getDimension()' -> '.dimension().location().hashCode()' {
-    private static boolean isClientWorld(net.minecraft.world.World world) {
-        return world.isRemote;
-    }
-
     private static int getDimensionId(net.minecraft.world.World world) {
         return world.provider.getDimension();
     }
@@ -152,7 +148,6 @@ public final class EnergyTypeOverrideManager {
         }
         clearOverride(dim, pos);
     }
-    //~}
     //~}
     //~}
 

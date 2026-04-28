@@ -14,6 +14,7 @@ public class SyncData {
     private String stringVersion = null;
     private byte[] bytesVersion = null;
     private byte[] bytesSourceVersion = null;
+
     public SyncData(Object container, Field field, GuiSync annotation, SyncUpdateCallback updateCallback) {
         this.source = container;
         this.field = field;

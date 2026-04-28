@@ -13,6 +13,7 @@ import com.circulation.circulation_networks.pocket.PocketNodeRecord;
 import com.circulation.circulation_networks.registry.NodeTypes;
 import com.circulation.circulation_networks.registry.PocketNodeItems;
 import com.circulation.circulation_networks.utils.ChunkCoordUtils;
+import static com.circulation.circulation_networks.utils.WorldSideCompat.isClientWorld;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
@@ -183,10 +184,6 @@ public final class PocketNodeManager {
         return world.provider.getDimension();
     }
 
-    private static boolean isClientWorld(World world) {
-        return world.isRemote;
-    }
-
     private static boolean isHostChunkLoaded(World world, BlockPos pos) {
         return ChunkCoordUtils.isChunkLoaded(world, pos);
     }
@@ -251,10 +248,6 @@ public final class PocketNodeManager {
 
     private static int getDimensionId(Level world) {
         return world.dimension().location().hashCode();
-    }
-
-    private static boolean isClientWorld(Level world) {
-        return world.isClientSide;
     }
 
     private static boolean isHostChunkLoaded(Level world, BlockPos pos) {

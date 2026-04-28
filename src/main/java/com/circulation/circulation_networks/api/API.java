@@ -11,6 +11,7 @@ import com.circulation.circulation_networks.manager.NetworkManager;
 import com.circulation.circulation_networks.registry.RegistryEnergyHandler;
 import com.circulation.circulation_networks.registry.NodeTypes;
 import com.circulation.circulation_networks.registry.PocketNodeItems;
+import static com.circulation.circulation_networks.utils.WorldSideCompat.isClientWorld;
 //~ mc_imports
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -63,11 +64,6 @@ public final class API {
         return NetworkManager.INSTANCE.getNodeFromPos(world, pos);
     }
 
-    //~ if >=1.20 '.isRemote' -> '.isClientSide' {
-    private static boolean isClientWorld(@NotNull World world) {
-        return world.isRemote;
-    }
-
     @Nullable
     private static INode getClientNodeAt(@NotNull World world, @NotNull BlockPos pos) {
         //~ if >=1.20 'world.getTileEntity(pos)' -> 'world.getBlockEntity(pos)' {
@@ -78,7 +74,6 @@ public final class API {
         }
         return PocketNodeRenderingHandler.INSTANCE.getNode(world, pos);
     }
-    //~}
 
     /**
      * 返回当前所有处于活跃状态的节点。
