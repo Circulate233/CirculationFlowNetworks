@@ -21,8 +21,8 @@ public abstract class BaseNodeBlock extends BaseBlock {
         super(name);
     }
 
-    protected BaseNodeBlock(String modid,String name) {
-        super(modid,name);
+    protected BaseNodeBlock(String modid, String name) {
+        super(modid, name);
     }
 
     @Override

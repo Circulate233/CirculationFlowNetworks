@@ -34,7 +34,7 @@ public final class ChargingNodeRotatingRenderer extends TileEntitySpecialRendere
         RotatingModelRenderHelper.RenderBatch batch = RotatingModelRenderHelper.beginBatch(te, x, y, z, destroyStage);
         if (batch == null) return;
         try {
-            long worldTime = te.getWorld().getTotalWorldTime();
+            long worldTime = ClientAnimationTicker.ticks();
             float topAngle = NodeRotationAnimation.relayBottomSpiralAngle(worldTime, partialTicks);
             float crystalAngle = NodeRotationAnimation.relayCrystalAngle(worldTime, partialTicks);
             float bottomAngle = NodeRotationAnimation.relayBottomSpiralAngle(worldTime, partialTicks);

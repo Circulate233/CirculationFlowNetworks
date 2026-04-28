@@ -1,10 +1,10 @@
 package com.circulation.circulation_networks.energy.manager;
 
-import crazypants.enderio.base.power.IPowerStorage;
-import crazypants.enderio.base.power.forge.tile.ILegacyPoweredTile;
 import com.circulation.circulation_networks.api.IEnergyHandler;
 import com.circulation.circulation_networks.api.IEnergyHandlerManager;
 import com.circulation.circulation_networks.energy.handler.EIOHandler;
+import crazypants.enderio.base.power.IPowerStorage;
+import crazypants.enderio.base.power.forge.tile.ILegacyPoweredTile;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 

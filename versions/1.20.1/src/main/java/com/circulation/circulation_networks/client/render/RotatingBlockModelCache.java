@@ -12,6 +12,7 @@ import net.minecraftforge.client.event.ModelEvent;
 
 import java.util.ArrayList;
 import java.util.List;
+
 @OnlyIn(Dist.CLIENT)
 public final class RotatingBlockModelCache {
 

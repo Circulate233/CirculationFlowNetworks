@@ -34,7 +34,7 @@ public final class RelayNodeRotatingRenderer extends TileEntitySpecialRenderer<T
         RotatingModelRenderHelper.RenderBatch batch = RotatingModelRenderHelper.beginBatch(te, x, y, z, destroyStage);
         if (batch == null) return;
         try {
-            long worldTime = te.getWorld().getTotalWorldTime();
+            long worldTime = ClientAnimationTicker.ticks();
             float topAngle = NodeRotationAnimation.relayTopSpiralAngle(worldTime, partialTicks);
             float crystalAngle = NodeRotationAnimation.relayCrystalAngle(worldTime, partialTicks);
             float bottomAngle = NodeRotationAnimation.relayBottomSpiralAngle(worldTime, partialTicks);

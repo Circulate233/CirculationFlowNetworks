@@ -283,7 +283,7 @@ public final class HubRenderer implements BlockEntityRenderer<HubBlockEntity> {
             return;
         }
 
-        long worldTime = hub.getLevel().getGameTime();
+        long worldTime = ClientAnimationTicker.ticks();
         boolean breaking = RotatingModelVBORenderer.getDestroyStage(hub.getBlockPos()) >= 0;
         BlockState state = hub.getBlockState();
 

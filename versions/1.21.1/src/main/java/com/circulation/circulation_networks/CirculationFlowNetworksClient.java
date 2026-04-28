@@ -2,6 +2,7 @@ package com.circulation.circulation_networks;
 
 import com.circulation.circulation_networks.blocks.MultiblockShellBlock;
 import com.circulation.circulation_networks.client.render.ChargingNodeRenderer;
+import com.circulation.circulation_networks.client.render.ClientAnimationTicker;
 import com.circulation.circulation_networks.client.render.HubRenderer;
 import com.circulation.circulation_networks.client.render.NodePedestalRenderer;
 import com.circulation.circulation_networks.client.render.PocketNodeItemStackRenderer;
@@ -70,6 +71,10 @@ final class CirculationFlowNetworksClient {
         });
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Pre e) -> {
             if (SpoceRenderingHandler.INSTANCE != null) SpoceRenderingHandler.INSTANCE.onClientTick(e);
+        });
+        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post e) -> {
+            ClientAnimationTicker.tick();
+            MachineNodeBlockEntityManager.INSTANCE.onClientTick();
         });
         NeoForge.EVENT_BUS.register(NodeNetworkRenderingHandler.INSTANCE);
         NeoForge.EVENT_BUS.register(EnergyWarningRenderingHandler.INSTANCE);
@@ -211,6 +216,7 @@ final class CirculationFlowNetworksClient {
             NodeHighlightRenderingHandler.INSTANCE.clear();
             CirculationShielderRenderingHandler.INSTANCE.clear();
             RotatingModelVBORenderer.clearAll();
+            ClientAnimationTicker.reset();
             if (SpoceRenderingHandler.INSTANCE != null) {
                 SpoceRenderingHandler.INSTANCE.clear();
             }

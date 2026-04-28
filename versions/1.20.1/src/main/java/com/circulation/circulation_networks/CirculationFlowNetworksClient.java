@@ -1,6 +1,7 @@
 package com.circulation.circulation_networks;
 
 import com.circulation.circulation_networks.client.render.ChargingNodeRenderer;
+import com.circulation.circulation_networks.client.render.ClientAnimationTicker;
 import com.circulation.circulation_networks.client.render.HubRenderer;
 import com.circulation.circulation_networks.client.render.NodePedestalRenderer;
 import com.circulation.circulation_networks.client.render.PocketNodeItemStackRenderer;
@@ -36,6 +37,7 @@ import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 import net.minecraftforge.client.event.EntityRenderersEvent;
 import net.minecraftforge.client.event.ModelEvent;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import org.lwjgl.opengl.GL11;
@@ -67,6 +69,7 @@ final class CirculationFlowNetworksClient {
         MinecraftForge.EVENT_BUS.register(ItemToolHandler.INSTANCE);
         MinecraftForge.EVENT_BUS.register(CirculationShielderRenderingHandler.INSTANCE);
         MinecraftForge.EVENT_BUS.addListener(CirculationFlowNetworksClient::onBlockEntityInvalidate);
+        MinecraftForge.EVENT_BUS.addListener(CirculationFlowNetworksClient::onClientTick);
         MinecraftForge.EVENT_BUS.addListener(CirculationFlowNetworksClient::onClientLoggingOut);
 
         modEventBus.addListener(RotatingBlockModelCache::onRegisterAdditionalModels);
@@ -170,10 +173,18 @@ final class CirculationFlowNetworksClient {
             NodeHighlightRenderingHandler.INSTANCE.clear();
             CirculationShielderRenderingHandler.INSTANCE.clear();
             RotatingModelVBORenderer.clearAll();
+            ClientAnimationTicker.reset();
             if (SpoceRenderingHandler.INSTANCE != null) {
                 SpoceRenderingHandler.INSTANCE.clear();
             }
         });
+    }
+
+    private static void onClientTick(TickEvent.ClientTickEvent event) {
+        if (event.phase == TickEvent.Phase.END) {
+            ClientAnimationTicker.tick();
+            MachineNodeBlockEntityManager.INSTANCE.onClientTick();
+        }
     }
 
     private static void onBlockEntityInvalidate(BlockEntityLifeCycleEvent.Invalidate event) {

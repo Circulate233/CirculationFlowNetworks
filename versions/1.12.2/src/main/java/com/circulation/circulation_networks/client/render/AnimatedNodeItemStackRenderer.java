@@ -4,7 +4,6 @@ import com.circulation.circulation_networks.CFNConfig;
 import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.registry.RegistryBlocks;
 import com.github.bsideup.jabel.Desugar;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.tileentity.TileEntityItemStackRenderer;
 import net.minecraft.init.Items;
@@ -149,14 +148,7 @@ public final class AnimatedNodeItemStackRenderer extends TileEntityItemStackRend
     }
 
     private static AnimationTick resolveAnimationTick(float partialTicks) {
-        Minecraft minecraft = Minecraft.getMinecraft();
-        if (minecraft.world != null) {
-            return new AnimationTick(minecraft.world.getTotalWorldTime(), partialTicks);
-        }
-
-        double tickTime = System.currentTimeMillis() / 50.0D;
-        long wholeTicks = (long) tickTime;
-        return new AnimationTick(wholeTicks, (float) (tickTime - wholeTicks));
+        return new AnimationTick(ClientAnimationTicker.ticks(), partialTicks);
     }
 
     private static ResourceLocation model(String path) {

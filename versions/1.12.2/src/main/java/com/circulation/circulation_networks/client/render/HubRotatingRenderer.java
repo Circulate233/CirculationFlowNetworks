@@ -187,7 +187,7 @@ public final class HubRotatingRenderer extends TileEntitySpecialRenderer<TileEnt
         }
 
         try {
-            long worldTime = hub.getWorld().getTotalWorldTime();
+            long worldTime = ClientAnimationTicker.ticks();
             renderBase(batch, worldTime, partialTicks);
             renderChannel(hub, batch, worldTime, partialTicks);
             renderPlugins(hub, batch, worldTime, partialTicks);

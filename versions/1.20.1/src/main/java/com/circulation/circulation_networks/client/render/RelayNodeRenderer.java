@@ -31,7 +31,7 @@ public final class RelayNodeRenderer implements BlockEntityRenderer<RelayNodeBlo
             return;
         }
 
-        long worldTime = te.getLevel().getGameTime();
+        long worldTime = ClientAnimationTicker.ticks();
         float topAngle = NodeRotationAnimation.relayTopSpiralAngle(worldTime, partialTick);
         float crystalAngle = NodeRotationAnimation.relayCrystalAngle(worldTime, partialTick);
         float bottomAngle = NodeRotationAnimation.relayBottomSpiralAngle(worldTime, partialTick);

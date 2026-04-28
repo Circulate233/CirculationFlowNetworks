@@ -31,7 +31,7 @@ public final class PortNodeRenderer implements BlockEntityRenderer<PortNodeBlock
             return;
         }
 
-        long worldTime = te.getLevel().getGameTime();
+        long worldTime = ClientAnimationTicker.ticks();
         float topAngle = NodeRotationAnimation.relayBottomSpiralAngle(worldTime, partialTick);
         float crystalAngle = NodeRotationAnimation.relayCrystalAngle(worldTime, partialTick);
         float bottomAngle = NodeRotationAnimation.relayTopSpiralAngle(worldTime, partialTick);

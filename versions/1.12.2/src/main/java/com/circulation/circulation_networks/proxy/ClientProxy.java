@@ -3,6 +3,7 @@ package com.circulation.circulation_networks.proxy;
 import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.client.render.AnimatedNodeItemStackRenderer;
 import com.circulation.circulation_networks.client.render.ChargingNodeRotatingRenderer;
+import com.circulation.circulation_networks.client.render.ClientAnimationTicker;
 import com.circulation.circulation_networks.client.render.HubRotatingRenderer;
 import com.circulation.circulation_networks.client.render.NodePedestalRotatingRenderer;
 import com.circulation.circulation_networks.client.render.PocketNodeItemStackRenderer;
@@ -180,6 +181,7 @@ public final class ClientProxy extends CommonProxy {
             PocketNodeRenderingHandler.INSTANCE.clear();
             NodeHighlightRenderingHandler.INSTANCE.clear();
             SpoceRenderingHandler.INSTANCE.clear();
+            ClientAnimationTicker.reset();
         });
     }
 
@@ -194,6 +196,7 @@ public final class ClientProxy extends CommonProxy {
     @SubscribeEvent
     public void onClientTick(TickEvent.ClientTickEvent event) {
         if (event.phase != TickEvent.Phase.START) {
+            ClientAnimationTicker.tick();
             MachineNodeBlockEntityManager.INSTANCE.onClientTick();
         }
     }

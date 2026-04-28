@@ -1,12 +1,12 @@
 package com.circulation.circulation_networks.energy.handler;
 
-import crazypants.enderio.base.power.IPowerStorage;
-import crazypants.enderio.base.power.forge.tile.ILegacyPoweredTile;
-import crazypants.enderio.powertools.machine.capbank.network.ICapBankNetwork;
 import com.circulation.circulation_networks.api.EnergyAmount;
 import com.circulation.circulation_networks.api.EnergyAmounts;
 import com.circulation.circulation_networks.api.IEnergyHandler;
 import com.circulation.circulation_networks.network.nodes.HubNode;
+import crazypants.enderio.base.power.IPowerStorage;
+import crazypants.enderio.base.power.forge.tile.ILegacyPoweredTile;
+import crazypants.enderio.powertools.machine.capbank.network.ICapBankNetwork;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;

@@ -196,12 +196,7 @@ public final class AnimatedNodeItemStackRenderer extends BlockEntityWithoutLevel
 
     private static AnimationTick resolveAnimationTick() {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level != null) {
-            return new AnimationTick(minecraft.level.getGameTime(), minecraft.getFrameTime());
-        }
-        double tickTime = System.currentTimeMillis() / 50.0D;
-        long wholeTicks = (long) tickTime;
-        return new AnimationTick(wholeTicks, (float) (tickTime - wholeTicks));
+        return new AnimationTick(ClientAnimationTicker.ticks(), minecraft.getFrameTime());
     }
 
     @Override

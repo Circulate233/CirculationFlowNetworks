@@ -34,7 +34,7 @@ public final class NodePedestalRenderer implements BlockEntityRenderer<NodePedes
             return;
         }
 
-        long worldTime = te.getLevel().getGameTime();
+        long worldTime = ClientAnimationTicker.ticks();
 
         if (RotatingModelVBORenderer.getDestroyStage(te.getBlockPos()) >= 0) {
             BlockState state = te.getBlockState();

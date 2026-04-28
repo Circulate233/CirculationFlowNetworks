@@ -30,7 +30,6 @@ import static com.circulation.circulation_networks.client.render.RotatingBlockMo
 import static com.circulation.circulation_networks.client.render.RotatingBlockModelCache.CHARGING_STATIC;
 import static com.circulation.circulation_networks.client.render.RotatingBlockModelCache.NODE_CRYSTAL;
 import static com.circulation.circulation_networks.client.render.RotatingBlockModelCache.PEDESTAL_BASE;
-import static com.circulation.circulation_networks.client.render.RotatingBlockModelCache.PEDESTAL_BASE_EMISSIVE;
 import static com.circulation.circulation_networks.client.render.RotatingBlockModelCache.PEDESTAL_FRAME_CLOCKWISE;
 import static com.circulation.circulation_networks.client.render.RotatingBlockModelCache.PEDESTAL_FRAME_COUNTER_CLOCKWISE;
 import static com.circulation.circulation_networks.client.render.RotatingBlockModelCache.PEDESTAL_STATIC;
@@ -77,11 +76,11 @@ public final class AnimatedNodeItemStackRenderer extends BlockEntityWithoutLevel
         float crystalAngle = NodeRotationAnimation.relayCrystalAngle(worldTime, partialTicks);
         float bottomAngle = NodeRotationAnimation.relayTopSpiralAngle(worldTime, partialTicks);
 
-        renderAroundYAxis(poseStack, bufferSource, RELAY_TOP_SPIRAL_BASE, topAngle, CENTER, CENTER, CENTER, packedLight, packedOverlay);
-        renderAroundYAxisFullBright(poseStack, bufferSource, RELAY_TOP_SPIRAL_EMISSIVE, topAngle, CENTER, CENTER, CENTER, packedOverlay);
-        renderAroundYAxisFullBright(poseStack, bufferSource, NODE_CRYSTAL, crystalAngle, CENTER, CENTER, CENTER, packedOverlay);
-        renderAroundYAxis(poseStack, bufferSource, RELAY_BOTTOM_SPIRAL_BASE, bottomAngle, CENTER, CENTER, CENTER, packedLight, packedOverlay);
-        renderAroundYAxisFullBright(poseStack, bufferSource, RELAY_BOTTOM_SPIRAL_EMISSIVE, bottomAngle, CENTER, CENTER, CENTER, packedOverlay);
+        renderAroundYAxis(poseStack, bufferSource, RELAY_TOP_SPIRAL_BASE, topAngle, packedLight, packedOverlay);
+        renderAroundYAxisFullBright(poseStack, bufferSource, RELAY_TOP_SPIRAL_EMISSIVE, topAngle, packedOverlay);
+        renderAroundYAxisFullBright(poseStack, bufferSource, NODE_CRYSTAL, crystalAngle, packedOverlay);
+        renderAroundYAxis(poseStack, bufferSource, RELAY_BOTTOM_SPIRAL_BASE, bottomAngle, packedLight, packedOverlay);
+        renderAroundYAxisFullBright(poseStack, bufferSource, RELAY_BOTTOM_SPIRAL_EMISSIVE, bottomAngle, packedOverlay);
     }
 
     private static void renderChargingNode(PoseStack poseStack, MultiBufferSource bufferSource,
@@ -95,11 +94,11 @@ public final class AnimatedNodeItemStackRenderer extends BlockEntityWithoutLevel
         float crystalAngle = NodeRotationAnimation.relayCrystalAngle(worldTime, partialTicks);
         float bottomAngle = NodeRotationAnimation.relayBottomSpiralAngle(worldTime, partialTicks);
 
-        renderAroundYAxis(poseStack, bufferSource, CHARGING_IN_BASE, topAngle, CENTER, CENTER, CENTER, packedLight, packedOverlay);
-        renderAroundYAxisFullBright(poseStack, bufferSource, CHARGING_IN_EMISSIVE, topAngle, CENTER, CENTER, CENTER, packedOverlay);
-        renderAroundYAxisFullBright(poseStack, bufferSource, NODE_CRYSTAL, crystalAngle, CENTER, CENTER, CENTER, packedOverlay);
-        renderAroundYAxis(poseStack, bufferSource, CHARGING_RING_BASE, bottomAngle, CENTER, CENTER, CENTER, packedLight, packedOverlay);
-        renderAroundYAxisFullBright(poseStack, bufferSource, CHARGING_RING_EMISSIVE, bottomAngle, CENTER, CENTER, CENTER, packedOverlay);
+        renderAroundYAxis(poseStack, bufferSource, CHARGING_IN_BASE, topAngle, packedLight, packedOverlay);
+        renderAroundYAxisFullBright(poseStack, bufferSource, CHARGING_IN_EMISSIVE, topAngle, packedOverlay);
+        renderAroundYAxisFullBright(poseStack, bufferSource, NODE_CRYSTAL, crystalAngle, packedOverlay);
+        renderAroundYAxis(poseStack, bufferSource, CHARGING_RING_BASE, bottomAngle, packedLight, packedOverlay);
+        renderAroundYAxisFullBright(poseStack, bufferSource, CHARGING_RING_EMISSIVE, bottomAngle, packedOverlay);
     }
 
     private static void renderPortNode(PoseStack poseStack, MultiBufferSource bufferSource,
@@ -113,11 +112,11 @@ public final class AnimatedNodeItemStackRenderer extends BlockEntityWithoutLevel
         float crystalAngle = NodeRotationAnimation.relayCrystalAngle(worldTime, partialTicks);
         float bottomAngle = NodeRotationAnimation.relayTopSpiralAngle(worldTime, partialTicks);
 
-        renderAroundYAxis(poseStack, bufferSource, PORT_IN_BASE, topAngle, CENTER, CENTER, CENTER, packedLight, packedOverlay);
-        renderAroundYAxisFullBright(poseStack, bufferSource, PORT_IN_EMISSIVE, topAngle, CENTER, CENTER, CENTER, packedOverlay);
-        renderAroundYAxisFullBright(poseStack, bufferSource, NODE_CRYSTAL, crystalAngle, CENTER, CENTER, CENTER, packedOverlay);
-        renderAroundYAxis(poseStack, bufferSource, PORT_OUT_BASE, bottomAngle, CENTER, CENTER, CENTER, packedLight, packedOverlay);
-        renderAroundYAxisFullBright(poseStack, bufferSource, PORT_OUT_EMISSIVE, bottomAngle, CENTER, CENTER, CENTER, packedOverlay);
+        renderAroundYAxis(poseStack, bufferSource, PORT_IN_BASE, topAngle, packedLight, packedOverlay);
+        renderAroundYAxisFullBright(poseStack, bufferSource, PORT_IN_EMISSIVE, topAngle, packedOverlay);
+        renderAroundYAxisFullBright(poseStack, bufferSource, NODE_CRYSTAL, crystalAngle, packedOverlay);
+        renderAroundYAxis(poseStack, bufferSource, PORT_OUT_BASE, bottomAngle, packedLight, packedOverlay);
+        renderAroundYAxisFullBright(poseStack, bufferSource, PORT_OUT_EMISSIVE, bottomAngle, packedOverlay);
     }
 
     private static void renderNodePedestal(PoseStack poseStack, MultiBufferSource bufferSource,
@@ -128,7 +127,7 @@ public final class AnimatedNodeItemStackRenderer extends BlockEntityWithoutLevel
         }
 
         renderModel(poseStack, bufferSource, PEDESTAL_BASE, packedLight, packedOverlay);
-        renderModelFullBright(poseStack, bufferSource, PEDESTAL_BASE_EMISSIVE, packedOverlay);
+        renderModelFullBright(poseStack, bufferSource, packedOverlay);
         renderAroundAxis(poseStack, bufferSource, PEDESTAL_FRAME_CLOCKWISE,
             NodeRotationAnimation.pedestalClockwiseFrameAngle(worldTime, partialTicks),
             FRAME_PIVOT_X, FRAME_PIVOT_Y, FRAME_PIVOT_Z,
@@ -154,25 +153,22 @@ public final class AnimatedNodeItemStackRenderer extends BlockEntityWithoutLevel
         );
     }
 
-    private static void renderModelFullBright(PoseStack poseStack, MultiBufferSource bufferSource,
-                                              ResourceLocation modelLocation, int packedOverlay) {
-        renderModel(poseStack, bufferSource, modelLocation, LightTexture.FULL_BRIGHT, packedOverlay);
+    private static void renderModelFullBright(PoseStack poseStack, MultiBufferSource bufferSource, int packedOverlay) {
+        renderModel(poseStack, bufferSource, RotatingBlockModelCache.PEDESTAL_BASE_EMISSIVE, LightTexture.FULL_BRIGHT, packedOverlay);
     }
 
     private static void renderAroundYAxis(PoseStack poseStack, MultiBufferSource bufferSource,
                                           ResourceLocation modelLocation, float angle,
-                                          float pivotX, float pivotY, float pivotZ,
                                           int packedLight, int packedOverlay) {
         renderAroundAxis(poseStack, bufferSource, modelLocation, angle,
-            pivotX, pivotY, pivotZ, 0.0F, 1.0F, 0.0F, packedLight, packedOverlay);
+            AnimatedNodeItemStackRenderer.CENTER, AnimatedNodeItemStackRenderer.CENTER, AnimatedNodeItemStackRenderer.CENTER, 0.0F, 1.0F, 0.0F, packedLight, packedOverlay);
     }
 
     private static void renderAroundYAxisFullBright(PoseStack poseStack, MultiBufferSource bufferSource,
                                                     ResourceLocation modelLocation, float angle,
-                                                    float pivotX, float pivotY, float pivotZ,
                                                     int packedOverlay) {
         renderAroundAxis(poseStack, bufferSource, modelLocation, angle,
-            pivotX, pivotY, pivotZ, 0.0F, 1.0F, 0.0F, LightTexture.FULL_BRIGHT, packedOverlay);
+            AnimatedNodeItemStackRenderer.CENTER, AnimatedNodeItemStackRenderer.CENTER, AnimatedNodeItemStackRenderer.CENTER, 0.0F, 1.0F, 0.0F, LightTexture.FULL_BRIGHT, packedOverlay);
     }
 
     private static void renderAroundAxis(PoseStack poseStack, MultiBufferSource bufferSource,
@@ -198,13 +194,8 @@ public final class AnimatedNodeItemStackRenderer extends BlockEntityWithoutLevel
 
     private static AnimationTick resolveAnimationTick() {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level != null) {
-            return new AnimationTick(minecraft.level.getGameTime(),
-                minecraft.getTimer().getGameTimeDeltaPartialTick(false));
-        }
-        double tickTime = System.currentTimeMillis() / 50.0D;
-        long wholeTicks = (long) tickTime;
-        return new AnimationTick(wholeTicks, (float) (tickTime - wholeTicks));
+        return new AnimationTick(ClientAnimationTicker.ticks(),
+            minecraft.getTimer().getGameTimeDeltaPartialTick(false));
     }
 
     @Override

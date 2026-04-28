@@ -40,7 +40,7 @@ public final class NodePedestalRotatingRenderer extends TileEntitySpecialRendere
         RotatingModelRenderHelper.RenderBatch batch = RotatingModelRenderHelper.beginBatch(te, x, y, z, destroyStage);
         if (batch == null) return;
         try {
-            long worldTime = te.getWorld().getTotalWorldTime();
+            long worldTime = ClientAnimationTicker.ticks();
             batch.renderAroundAxis(BASE, 0.0F, CENTER, CENTER, CENTER, 0.0F, 1.0F, 0.0F, false, false);
             batch.renderAroundYAxisFullBright(BASE_EMISSIVE, 0.0F, CENTER, CENTER, CENTER);
             GlStateManager.pushMatrix();
