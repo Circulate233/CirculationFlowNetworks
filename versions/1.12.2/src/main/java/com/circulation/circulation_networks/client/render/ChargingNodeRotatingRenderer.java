@@ -34,14 +34,14 @@ public final class ChargingNodeRotatingRenderer extends TileEntitySpecialRendere
         RotatingModelRenderHelper.RenderBatch batch = RotatingModelRenderHelper.beginBatch(te, x, y, z, destroyStage);
         if (batch == null) return;
         try {
-            long worldTime = ClientAnimationTicker.ticks();
-            float topAngle = NodeRotationAnimation.relayBottomSpiralAngle(worldTime, partialTicks);
-            float crystalAngle = NodeRotationAnimation.relayCrystalAngle(worldTime, partialTicks);
-            float bottomAngle = NodeRotationAnimation.relayBottomSpiralAngle(worldTime, partialTicks);
+            long clientTicks = ClientAnimationTicker.ticks();
+            float topAngle = NodeRotationAnimation.relayBottomSpiralAngle(clientTicks, partialTicks);
+            float crystalAngle = NodeRotationAnimation.relayCrystalAngle(clientTicks, partialTicks);
+            float bottomAngle = NodeRotationAnimation.relayBottomSpiralAngle(clientTicks, partialTicks);
             batch.renderAroundAxis(IN_BASE, topAngle, CENTER, CENTER, CENTER, 0.0F, 1.0F, 0.0F, false, false);
             batch.renderAroundYAxisFullBright(IN_EMISSIVE, topAngle, CENTER, CENTER, CENTER);
             GlStateManager.pushMatrix();
-            GlStateManager.translate(0.0F, NodeRotationAnimation.bobOffset(worldTime, partialTicks), 0.0F);
+            GlStateManager.translate(0.0F, NodeRotationAnimation.bobOffset(clientTicks, partialTicks), 0.0F);
             batch.renderAroundYAxisFullBright(CRYSTAL, crystalAngle, CENTER, CENTER, CENTER);
             GlStateManager.popMatrix();
             batch.renderAroundAxis(RING_BASE, bottomAngle, CENTER, CENTER, CENTER, 0.0F, 1.0F, 0.0F, false, false);

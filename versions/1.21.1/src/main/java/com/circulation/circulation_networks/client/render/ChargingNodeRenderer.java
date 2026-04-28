@@ -31,10 +31,10 @@ public final class ChargingNodeRenderer implements BlockEntityRenderer<ChargingN
             return;
         }
 
-        long worldTime = ClientAnimationTicker.ticks();
-        float topAngle = NodeRotationAnimation.relayBottomSpiralAngle(worldTime, partialTick);
-        float crystalAngle = NodeRotationAnimation.relayCrystalAngle(worldTime, partialTick);
-        float bottomAngle = NodeRotationAnimation.relayBottomSpiralAngle(worldTime, partialTick);
+        long clientTicks = ClientAnimationTicker.ticks();
+        float topAngle = NodeRotationAnimation.relayBottomSpiralAngle(clientTicks, partialTick);
+        float crystalAngle = NodeRotationAnimation.relayCrystalAngle(clientTicks, partialTick);
+        float bottomAngle = NodeRotationAnimation.relayBottomSpiralAngle(clientTicks, partialTick);
 
         if (RotatingModelVBORenderer.getDestroyStage(te.getBlockPos()) >= 0) {
             BlockState state = te.getBlockState();
@@ -43,7 +43,7 @@ public final class ChargingNodeRenderer implements BlockEntityRenderer<ChargingN
             RotatingModelVBORenderer.renderFullBrightYAxisThroughBufferSource(poseStack, bufferSource, state, CHARGING_IN_EMISSIVE,
                 topAngle, CENTER, CENTER, CENTER);
             poseStack.pushPose();
-            poseStack.translate(0.0F, NodeRotationAnimation.bobOffset(worldTime, partialTick), 0.0F);
+            poseStack.translate(0.0F, NodeRotationAnimation.bobOffset(clientTicks, partialTick), 0.0F);
             RotatingModelVBORenderer.renderFullBrightYAxisThroughBufferSource(poseStack, bufferSource, state, NODE_CRYSTAL,
                 crystalAngle, CENTER, CENTER, CENTER);
             poseStack.popPose();
@@ -58,7 +58,7 @@ public final class ChargingNodeRenderer implements BlockEntityRenderer<ChargingN
                 RotatingModelVBORenderer.renderFullBrightYAxis(poseStack, te.getBlockState(), CHARGING_IN_EMISSIVE,
                     topAngle, CENTER, CENTER, CENTER);
                 poseStack.pushPose();
-                poseStack.translate(0.0F, NodeRotationAnimation.bobOffset(worldTime, partialTick), 0.0F);
+                poseStack.translate(0.0F, NodeRotationAnimation.bobOffset(clientTicks, partialTick), 0.0F);
                 RotatingModelVBORenderer.renderFullBrightYAxis(poseStack, te.getBlockState(), NODE_CRYSTAL,
                     crystalAngle, CENTER, CENTER, CENTER);
                 poseStack.popPose();

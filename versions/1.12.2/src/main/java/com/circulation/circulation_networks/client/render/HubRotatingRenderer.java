@@ -47,10 +47,10 @@ public final class HubRotatingRenderer extends TileEntitySpecialRenderer<TileEnt
         HUB_DEFAULT_PLUGIN_3
     };
 
-    private static void renderBase(RotatingModelRenderHelper.RenderBatch batch, long worldTime, float partialTicks) {
-        float upperAngle = NodeRotationAnimation.hubUpperRingAngle(worldTime, partialTicks);
-        float lowerAngle = NodeRotationAnimation.hubLowerRingAngle(worldTime, partialTicks);
-        float crystalAngle = NodeRotationAnimation.hubCrystalAngle(worldTime, partialTicks);
+    private static void renderBase(RotatingModelRenderHelper.RenderBatch batch, long clientTicks, float partialTicks) {
+        float upperAngle = NodeRotationAnimation.hubUpperRingAngle(clientTicks, partialTicks);
+        float lowerAngle = NodeRotationAnimation.hubLowerRingAngle(clientTicks, partialTicks);
+        float crystalAngle = NodeRotationAnimation.hubCrystalAngle(clientTicks, partialTicks);
         BlockPos ambientLightSamplePos = ambientLightSamplePos(batch);
         BlockPos ringLightSamplePos = translatedLightSamplePos(batch, HubRenderLayout.ringYOffset());
         BlockPos crystalLightSamplePos = translatedLightSamplePos(batch, HubRenderLayout.crystalYOffset());
@@ -82,12 +82,12 @@ public final class HubRotatingRenderer extends TileEntitySpecialRenderer<TileEnt
         renderHubRingAtYOffset(batch, yOffset, model, angle, ambient, batch.getTileEntity().getPos());
     }
 
-    private static void renderChannel(TileEntityHub hub, RotatingModelRenderHelper.RenderBatch batch, long worldTime, float partialTicks) {
+    private static void renderChannel(TileEntityHub hub, RotatingModelRenderHelper.RenderBatch batch, long clientTicks, float partialTicks) {
         if (!hasChannelPlugin(hub.getPlugins().getStackInSlot(0))) {
             return;
         }
 
-        float crystalAngle = NodeRotationAnimation.hubCrystalAngle(worldTime, partialTicks);
+        float crystalAngle = NodeRotationAnimation.hubCrystalAngle(clientTicks, partialTicks);
         BlockPos ambientLightSamplePos = ambientLightSamplePos(batch);
         BlockPos channelLightSamplePos = translatedLightSamplePos(batch, HubRenderLayout.channelYOffset());
         BlockPos beamDownLightSamplePos = translatedLightSamplePos(batch, HubRenderLayout.channelBeamDownYOffset());
@@ -100,13 +100,13 @@ public final class HubRotatingRenderer extends TileEntitySpecialRenderer<TileEnt
         renderChannelAtYOffset(batch, HubRenderLayout.channelBeamMidYOffset(), HUB_CHANNEL_BEACON_MID_OUTSIDE, crystalAngle, false, beamMidLightSamplePos);
         renderChannelAtYOffset(batch, HubRenderLayout.channelBeamDownYOffset(), HUB_CHANNEL_BEACON_DOWN_INSIDE, 0.0F, false, beamDownLightSamplePos);
         renderChannelAtYOffset(batch, HubRenderLayout.channelBeamDownYOffset(), HUB_CHANNEL_BEACON_DOWN_OUTSIDE, crystalAngle, false, beamDownLightSamplePos);
-        renderChannelAtYOffset(batch, HubRenderLayout.channelYOffset(), HUB_CHANNEL_HOLA_TOP, NodeRotationAnimation.hubChannelTopAngle(worldTime, partialTicks), false, channelLightSamplePos);
-        renderChannelAtYOffset(batch, HubRenderLayout.channelYOffset(), HUB_CHANNEL_HOLA_MIDDLE, NodeRotationAnimation.hubChannelMiddleAngle(worldTime, partialTicks), false, channelLightSamplePos);
-        renderChannelAtYOffset(batch, HubRenderLayout.channelYOffset(), HUB_CHANNEL_HOLA_BOTTOM, NodeRotationAnimation.hubChannelBottomAngle(worldTime, partialTicks), false, channelLightSamplePos);
+        renderChannelAtYOffset(batch, HubRenderLayout.channelYOffset(), HUB_CHANNEL_HOLA_TOP, NodeRotationAnimation.hubChannelTopAngle(clientTicks, partialTicks), false, channelLightSamplePos);
+        renderChannelAtYOffset(batch, HubRenderLayout.channelYOffset(), HUB_CHANNEL_HOLA_MIDDLE, NodeRotationAnimation.hubChannelMiddleAngle(clientTicks, partialTicks), false, channelLightSamplePos);
+        renderChannelAtYOffset(batch, HubRenderLayout.channelYOffset(), HUB_CHANNEL_HOLA_BOTTOM, NodeRotationAnimation.hubChannelBottomAngle(clientTicks, partialTicks), false, channelLightSamplePos);
         renderChannelAtYOffset(batch, HubRenderLayout.channelYOffset(), HUB_CHANNEL_RING_AERIALS_BASE,
-            NodeRotationAnimation.hubChannelAerialAngle(worldTime, partialTicks), true, ambientLightSamplePos);
+            NodeRotationAnimation.hubChannelAerialAngle(clientTicks, partialTicks), true, ambientLightSamplePos);
         renderChannelAtYOffset(batch, HubRenderLayout.channelYOffset(), HUB_CHANNEL_RING_AERIALS_EMISSIVE,
-            NodeRotationAnimation.hubChannelAerialAngle(worldTime, partialTicks), false, channelLightSamplePos);
+            NodeRotationAnimation.hubChannelAerialAngle(clientTicks, partialTicks), false, channelLightSamplePos);
     }
 
     private static void renderChannelAtYOffset(RotatingModelRenderHelper.RenderBatch batch, double yOffset, ResourceLocation model, float angle, boolean ambient, BlockPos lightSamplePos) {
@@ -124,15 +124,15 @@ public final class HubRotatingRenderer extends TileEntitySpecialRenderer<TileEnt
         renderChannelAtYOffset(batch, yOffset, model, angle, ambient, batch.getTileEntity().getPos());
     }
 
-    private static void renderPlugins(TileEntityHub hub, RotatingModelRenderHelper.RenderBatch batch, long worldTime, float partialTicks) {
+    private static void renderPlugins(TileEntityHub hub, RotatingModelRenderHelper.RenderBatch batch, long clientTicks, float partialTicks) {
         for (int slot = 1; slot <= 4; slot++) {
             ItemStack stack = hub.getPlugins().getStackInSlot(slot);
             var offset = HubRenderLayout.cornerOffsetForSlot(slot);
             BlockPos renderPos = hub.getPos().add(offset.x(), offset.y(), offset.z());
             int rotationPeriodTicks = resolvePluginRotationPeriodTicks(stack);
             float angle = HubRenderLayout.isClockwiseCornerSlot(slot)
-                ? NodeRotationAnimation.hubClockwisePluginAngle(worldTime, partialTicks, rotationPeriodTicks)
-                : NodeRotationAnimation.hubCounterClockwisePluginAngle(worldTime, partialTicks, rotationPeriodTicks);
+                ? NodeRotationAnimation.hubClockwisePluginAngle(clientTicks, partialTicks, rotationPeriodTicks)
+                : NodeRotationAnimation.hubCounterClockwisePluginAngle(clientTicks, partialTicks, rotationPeriodTicks);
 
             GlStateManager.pushMatrix();
             GlStateManager.translate(offset.x(), offset.y(), offset.z());
@@ -187,10 +187,10 @@ public final class HubRotatingRenderer extends TileEntitySpecialRenderer<TileEnt
         }
 
         try {
-            long worldTime = ClientAnimationTicker.ticks();
-            renderBase(batch, worldTime, partialTicks);
-            renderChannel(hub, batch, worldTime, partialTicks);
-            renderPlugins(hub, batch, worldTime, partialTicks);
+            long clientTicks = ClientAnimationTicker.ticks();
+            renderBase(batch, clientTicks, partialTicks);
+            renderChannel(hub, batch, clientTicks, partialTicks);
+            renderPlugins(hub, batch, clientTicks, partialTicks);
         } finally {
             batch.end();
         }

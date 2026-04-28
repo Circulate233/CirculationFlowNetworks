@@ -66,15 +66,15 @@ public final class AnimatedNodeItemStackRenderer extends BlockEntityWithoutLevel
     }
 
     private static void renderRelayNode(PoseStack poseStack, MultiBufferSource bufferSource,
-                                        long worldTime, float partialTicks, int packedLight, int packedOverlay) {
+                                        long clientTicks, float partialTicks, int packedLight, int packedOverlay) {
         if (!CFNConfig.NODE.rendering.animatedSpecialModels) {
             renderModel(poseStack, bufferSource, RELAY_STATIC, packedLight, packedOverlay);
             return;
         }
 
-        float topAngle = NodeRotationAnimation.relayBottomSpiralAngle(worldTime, partialTicks);
-        float crystalAngle = NodeRotationAnimation.relayCrystalAngle(worldTime, partialTicks);
-        float bottomAngle = NodeRotationAnimation.relayTopSpiralAngle(worldTime, partialTicks);
+        float topAngle = NodeRotationAnimation.relayBottomSpiralAngle(clientTicks, partialTicks);
+        float crystalAngle = NodeRotationAnimation.relayCrystalAngle(clientTicks, partialTicks);
+        float bottomAngle = NodeRotationAnimation.relayTopSpiralAngle(clientTicks, partialTicks);
 
         renderAroundYAxis(poseStack, bufferSource, RELAY_TOP_SPIRAL_BASE, topAngle, packedLight, packedOverlay);
         renderAroundYAxisFullBright(poseStack, bufferSource, RELAY_TOP_SPIRAL_EMISSIVE, topAngle, packedOverlay);
@@ -84,15 +84,15 @@ public final class AnimatedNodeItemStackRenderer extends BlockEntityWithoutLevel
     }
 
     private static void renderChargingNode(PoseStack poseStack, MultiBufferSource bufferSource,
-                                           long worldTime, float partialTicks, int packedLight, int packedOverlay) {
+                                           long clientTicks, float partialTicks, int packedLight, int packedOverlay) {
         if (!CFNConfig.NODE.rendering.animatedSpecialModels) {
             renderModel(poseStack, bufferSource, CHARGING_STATIC, packedLight, packedOverlay);
             return;
         }
 
-        float topAngle = NodeRotationAnimation.relayBottomSpiralAngle(worldTime, partialTicks);
-        float crystalAngle = NodeRotationAnimation.relayCrystalAngle(worldTime, partialTicks);
-        float bottomAngle = NodeRotationAnimation.relayBottomSpiralAngle(worldTime, partialTicks);
+        float topAngle = NodeRotationAnimation.relayBottomSpiralAngle(clientTicks, partialTicks);
+        float crystalAngle = NodeRotationAnimation.relayCrystalAngle(clientTicks, partialTicks);
+        float bottomAngle = NodeRotationAnimation.relayBottomSpiralAngle(clientTicks, partialTicks);
 
         renderAroundYAxis(poseStack, bufferSource, CHARGING_IN_BASE, topAngle, packedLight, packedOverlay);
         renderAroundYAxisFullBright(poseStack, bufferSource, CHARGING_IN_EMISSIVE, topAngle, packedOverlay);
@@ -102,15 +102,15 @@ public final class AnimatedNodeItemStackRenderer extends BlockEntityWithoutLevel
     }
 
     private static void renderPortNode(PoseStack poseStack, MultiBufferSource bufferSource,
-                                       long worldTime, float partialTicks, int packedLight, int packedOverlay) {
+                                       long clientTicks, float partialTicks, int packedLight, int packedOverlay) {
         if (!CFNConfig.NODE.rendering.animatedSpecialModels) {
             renderModel(poseStack, bufferSource, PORT_STATIC, packedLight, packedOverlay);
             return;
         }
 
-        float topAngle = NodeRotationAnimation.relayBottomSpiralAngle(worldTime, partialTicks);
-        float crystalAngle = NodeRotationAnimation.relayCrystalAngle(worldTime, partialTicks);
-        float bottomAngle = NodeRotationAnimation.relayTopSpiralAngle(worldTime, partialTicks);
+        float topAngle = NodeRotationAnimation.relayBottomSpiralAngle(clientTicks, partialTicks);
+        float crystalAngle = NodeRotationAnimation.relayCrystalAngle(clientTicks, partialTicks);
+        float bottomAngle = NodeRotationAnimation.relayTopSpiralAngle(clientTicks, partialTicks);
 
         renderAroundYAxis(poseStack, bufferSource, PORT_IN_BASE, topAngle, packedLight, packedOverlay);
         renderAroundYAxisFullBright(poseStack, bufferSource, PORT_IN_EMISSIVE, topAngle, packedOverlay);
@@ -120,7 +120,7 @@ public final class AnimatedNodeItemStackRenderer extends BlockEntityWithoutLevel
     }
 
     private static void renderNodePedestal(PoseStack poseStack, MultiBufferSource bufferSource,
-                                           long worldTime, float partialTicks, int packedLight, int packedOverlay) {
+                                           long clientTicks, float partialTicks, int packedLight, int packedOverlay) {
         if (!CFNConfig.NODE.rendering.animatedSpecialModels) {
             renderModel(poseStack, bufferSource, PEDESTAL_STATIC, packedLight, packedOverlay);
             return;
@@ -129,14 +129,14 @@ public final class AnimatedNodeItemStackRenderer extends BlockEntityWithoutLevel
         renderModel(poseStack, bufferSource, PEDESTAL_BASE, packedLight, packedOverlay);
         renderModelFullBright(poseStack, bufferSource, packedOverlay);
         renderAroundAxis(poseStack, bufferSource, PEDESTAL_FRAME_CLOCKWISE,
-            NodeRotationAnimation.pedestalClockwiseFrameAngle(worldTime, partialTicks),
+            NodeRotationAnimation.pedestalClockwiseFrameAngle(clientTicks, partialTicks),
             FRAME_PIVOT_X, FRAME_PIVOT_Y, FRAME_PIVOT_Z,
             NodeRotationAnimation.tiltedAxisXForZRotation(-22.5F),
             NodeRotationAnimation.tiltedAxisY(),
             NodeRotationAnimation.tiltedAxisZ(),
             LightTexture.FULL_BRIGHT, packedOverlay);
         renderAroundAxis(poseStack, bufferSource, PEDESTAL_FRAME_COUNTER_CLOCKWISE,
-            NodeRotationAnimation.pedestalCounterClockwiseFrameAngle(worldTime, partialTicks),
+            NodeRotationAnimation.pedestalCounterClockwiseFrameAngle(clientTicks, partialTicks),
             FRAME_PIVOT_X, FRAME_PIVOT_Y, FRAME_PIVOT_Z,
             NodeRotationAnimation.tiltedAxisXForZRotation(22.5F),
             NodeRotationAnimation.tiltedAxisY(),
@@ -208,16 +208,16 @@ public final class AnimatedNodeItemStackRenderer extends BlockEntityWithoutLevel
         AnimationTick tick = resolveAnimationTick();
 
         if (block == CFNBlocks.blockRelayNode) {
-            renderRelayNode(poseStack, bufferSource, tick.worldTime, tick.partialTicks, packedLight, packedOverlay);
+            renderRelayNode(poseStack, bufferSource, tick.clientTicks, tick.partialTicks, packedLight, packedOverlay);
         } else if (block == CFNBlocks.blockChargingNode) {
-            renderChargingNode(poseStack, bufferSource, tick.worldTime, tick.partialTicks, packedLight, packedOverlay);
+            renderChargingNode(poseStack, bufferSource, tick.clientTicks, tick.partialTicks, packedLight, packedOverlay);
         } else if (block == CFNBlocks.blockPortNode) {
-            renderPortNode(poseStack, bufferSource, tick.worldTime, tick.partialTicks, packedLight, packedOverlay);
+            renderPortNode(poseStack, bufferSource, tick.clientTicks, tick.partialTicks, packedLight, packedOverlay);
         } else if (block == CFNBlocks.blockNodePedestal) {
-            renderNodePedestal(poseStack, bufferSource, tick.worldTime, tick.partialTicks, packedLight, packedOverlay);
+            renderNodePedestal(poseStack, bufferSource, tick.clientTicks, tick.partialTicks, packedLight, packedOverlay);
         }
     }
 
-    private record AnimationTick(long worldTime, float partialTicks) {
+    private record AnimationTick(long clientTicks, float partialTicks) {
     }
 }

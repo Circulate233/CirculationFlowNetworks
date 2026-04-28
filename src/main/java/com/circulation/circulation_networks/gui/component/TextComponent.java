@@ -1,5 +1,6 @@
 package com.circulation.circulation_networks.gui.component;
 
+import com.circulation.circulation_networks.client.render.ClientAnimationTicker;
 import com.circulation.circulation_networks.gui.CFNBaseGui;
 import com.circulation.circulation_networks.gui.component.base.Component;
 import com.circulation.circulation_networks.utils.ScrollingTextHelper;
@@ -51,7 +52,7 @@ public class TextComponent extends Component {
         int textWidth = mc.fontRenderer.getStringWidth(text);
         setSize(maxWidth > 0 ? Math.min(textWidth, maxWidth) : textWidth, FONT_HEIGHT);
         if (maxWidth > 0 && textWidth > maxWidth) {
-            long tick = mc.world != null ? mc.world.getTotalWorldTime() : 0;
+            long tick = ClientAnimationTicker.ticks();
             float offset = ScrollingTextHelper.getScrollOffset(textWidth, maxWidth, tick, partialTicks);
             int absX = getAbsoluteX();
             int absY = getAbsoluteY();
@@ -71,7 +72,7 @@ public class TextComponent extends Component {
         var guiGraphics = getCurrentGuiGraphics();
         if (guiGraphics == null) return;
         if (maxWidth > 0 && textWidth > maxWidth) {
-            long tick = mc.level != null ? mc.level.getGameTime() : 0;
+            long tick = ClientAnimationTicker.ticks();
             float offset = ScrollingTextHelper.getScrollOffset(textWidth, maxWidth, tick, partialTicks);
             int absX = getAbsoluteX();
             int absY = getAbsoluteY();

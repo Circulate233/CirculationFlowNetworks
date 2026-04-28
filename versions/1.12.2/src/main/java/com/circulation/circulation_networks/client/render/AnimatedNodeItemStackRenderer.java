@@ -66,46 +66,46 @@ public final class AnimatedNodeItemStackRenderer extends TileEntityItemStackRend
         }
     }
 
-    private static void renderRelayNode(ItemStack stack, long worldTime, float partialTicks) {
+    private static void renderRelayNode(ItemStack stack, long clientTicks, float partialTicks) {
         if (!CFNConfig.NODE.rendering.animatedSpecialModels) {
             RotatingItemModelRenderHelper.renderModel(stack, RELAY_STATIC);
             return;
         }
 
-        RotatingItemModelRenderHelper.renderAroundYAxis(stack, RELAY_TOP_SPIRAL_BASE, NodeRotationAnimation.relayTopSpiralAngle(worldTime, partialTicks), CENTER, CENTER, CENTER);
-        RotatingItemModelRenderHelper.renderAroundYAxisFullBright(stack, RELAY_TOP_SPIRAL_EMISSIVE, NodeRotationAnimation.relayTopSpiralAngle(worldTime, partialTicks), CENTER, CENTER, CENTER);
-        RotatingItemModelRenderHelper.renderAroundYAxisFullBright(stack, NODE_CRYSTAL, NodeRotationAnimation.relayCrystalAngle(worldTime, partialTicks), CENTER, CENTER, CENTER);
-        RotatingItemModelRenderHelper.renderAroundYAxis(stack, RELAY_BOTTOM_SPIRAL_BASE, NodeRotationAnimation.relayBottomSpiralAngle(worldTime, partialTicks), CENTER, CENTER, CENTER);
-        RotatingItemModelRenderHelper.renderAroundYAxisFullBright(stack, RELAY_BOTTOM_SPIRAL_EMISSIVE, NodeRotationAnimation.relayBottomSpiralAngle(worldTime, partialTicks), CENTER, CENTER, CENTER);
+        RotatingItemModelRenderHelper.renderAroundYAxis(stack, RELAY_TOP_SPIRAL_BASE, NodeRotationAnimation.relayTopSpiralAngle(clientTicks, partialTicks), CENTER, CENTER, CENTER);
+        RotatingItemModelRenderHelper.renderAroundYAxisFullBright(stack, RELAY_TOP_SPIRAL_EMISSIVE, NodeRotationAnimation.relayTopSpiralAngle(clientTicks, partialTicks), CENTER, CENTER, CENTER);
+        RotatingItemModelRenderHelper.renderAroundYAxisFullBright(stack, NODE_CRYSTAL, NodeRotationAnimation.relayCrystalAngle(clientTicks, partialTicks), CENTER, CENTER, CENTER);
+        RotatingItemModelRenderHelper.renderAroundYAxis(stack, RELAY_BOTTOM_SPIRAL_BASE, NodeRotationAnimation.relayBottomSpiralAngle(clientTicks, partialTicks), CENTER, CENTER, CENTER);
+        RotatingItemModelRenderHelper.renderAroundYAxisFullBright(stack, RELAY_BOTTOM_SPIRAL_EMISSIVE, NodeRotationAnimation.relayBottomSpiralAngle(clientTicks, partialTicks), CENTER, CENTER, CENTER);
     }
 
-    private static void renderChargingNode(ItemStack stack, long worldTime, float partialTicks) {
+    private static void renderChargingNode(ItemStack stack, long clientTicks, float partialTicks) {
         if (!CFNConfig.NODE.rendering.animatedSpecialModels) {
             RotatingItemModelRenderHelper.renderModel(stack, CHARGING_STATIC);
             return;
         }
 
-        RotatingItemModelRenderHelper.renderAroundYAxis(stack, CHARGING_IN_BASE, NodeRotationAnimation.relayBottomSpiralAngle(worldTime, partialTicks), CENTER, CENTER, CENTER);
-        RotatingItemModelRenderHelper.renderAroundYAxisFullBright(stack, CHARGING_IN_EMISSIVE, NodeRotationAnimation.relayBottomSpiralAngle(worldTime, partialTicks), CENTER, CENTER, CENTER);
-        RotatingItemModelRenderHelper.renderAroundYAxisFullBright(stack, NODE_CRYSTAL, NodeRotationAnimation.relayCrystalAngle(worldTime, partialTicks), CENTER, CENTER, CENTER);
-        RotatingItemModelRenderHelper.renderAroundYAxis(stack, CHARGING_RING_BASE, NodeRotationAnimation.relayBottomSpiralAngle(worldTime, partialTicks), CENTER, CENTER, CENTER);
-        RotatingItemModelRenderHelper.renderAroundYAxisFullBright(stack, CHARGING_RING_EMISSIVE, NodeRotationAnimation.relayBottomSpiralAngle(worldTime, partialTicks), CENTER, CENTER, CENTER);
+        RotatingItemModelRenderHelper.renderAroundYAxis(stack, CHARGING_IN_BASE, NodeRotationAnimation.relayBottomSpiralAngle(clientTicks, partialTicks), CENTER, CENTER, CENTER);
+        RotatingItemModelRenderHelper.renderAroundYAxisFullBright(stack, CHARGING_IN_EMISSIVE, NodeRotationAnimation.relayBottomSpiralAngle(clientTicks, partialTicks), CENTER, CENTER, CENTER);
+        RotatingItemModelRenderHelper.renderAroundYAxisFullBright(stack, NODE_CRYSTAL, NodeRotationAnimation.relayCrystalAngle(clientTicks, partialTicks), CENTER, CENTER, CENTER);
+        RotatingItemModelRenderHelper.renderAroundYAxis(stack, CHARGING_RING_BASE, NodeRotationAnimation.relayBottomSpiralAngle(clientTicks, partialTicks), CENTER, CENTER, CENTER);
+        RotatingItemModelRenderHelper.renderAroundYAxisFullBright(stack, CHARGING_RING_EMISSIVE, NodeRotationAnimation.relayBottomSpiralAngle(clientTicks, partialTicks), CENTER, CENTER, CENTER);
     }
 
-    private static void renderPortNode(ItemStack stack, long worldTime, float partialTicks) {
+    private static void renderPortNode(ItemStack stack, long clientTicks, float partialTicks) {
         if (!CFNConfig.NODE.rendering.animatedSpecialModels) {
             RotatingItemModelRenderHelper.renderModel(stack, PORT_STATIC);
             return;
         }
 
-        RotatingItemModelRenderHelper.renderAroundYAxis(stack, PORT_IN_BASE, NodeRotationAnimation.relayBottomSpiralAngle(worldTime, partialTicks), CENTER, CENTER, CENTER);
-        RotatingItemModelRenderHelper.renderAroundYAxisFullBright(stack, PORT_IN_EMISSIVE, NodeRotationAnimation.relayBottomSpiralAngle(worldTime, partialTicks), CENTER, CENTER, CENTER);
-        RotatingItemModelRenderHelper.renderAroundYAxisFullBright(stack, NODE_CRYSTAL, NodeRotationAnimation.relayCrystalAngle(worldTime, partialTicks), CENTER, CENTER, CENTER);
-        RotatingItemModelRenderHelper.renderAroundYAxis(stack, PORT_OUT_BASE, NodeRotationAnimation.relayTopSpiralAngle(worldTime, partialTicks), CENTER, CENTER, CENTER);
-        RotatingItemModelRenderHelper.renderAroundYAxisFullBright(stack, PORT_OUT_EMISSIVE, NodeRotationAnimation.relayTopSpiralAngle(worldTime, partialTicks), CENTER, CENTER, CENTER);
+        RotatingItemModelRenderHelper.renderAroundYAxis(stack, PORT_IN_BASE, NodeRotationAnimation.relayBottomSpiralAngle(clientTicks, partialTicks), CENTER, CENTER, CENTER);
+        RotatingItemModelRenderHelper.renderAroundYAxisFullBright(stack, PORT_IN_EMISSIVE, NodeRotationAnimation.relayBottomSpiralAngle(clientTicks, partialTicks), CENTER, CENTER, CENTER);
+        RotatingItemModelRenderHelper.renderAroundYAxisFullBright(stack, NODE_CRYSTAL, NodeRotationAnimation.relayCrystalAngle(clientTicks, partialTicks), CENTER, CENTER, CENTER);
+        RotatingItemModelRenderHelper.renderAroundYAxis(stack, PORT_OUT_BASE, NodeRotationAnimation.relayTopSpiralAngle(clientTicks, partialTicks), CENTER, CENTER, CENTER);
+        RotatingItemModelRenderHelper.renderAroundYAxisFullBright(stack, PORT_OUT_EMISSIVE, NodeRotationAnimation.relayTopSpiralAngle(clientTicks, partialTicks), CENTER, CENTER, CENTER);
     }
 
-    private static void renderNodePedestal(ItemStack stack, long worldTime, float partialTicks) {
+    private static void renderNodePedestal(ItemStack stack, long clientTicks, float partialTicks) {
         if (!CFNConfig.NODE.rendering.animatedSpecialModels) {
             RotatingItemModelRenderHelper.renderModelCutout(stack, PEDESTAL_STATIC);
             return;
@@ -119,7 +119,7 @@ public final class AnimatedNodeItemStackRenderer extends TileEntityItemStackRend
             RotatingItemModelRenderHelper.renderAroundAxis(
                 stack,
                 PEDESTAL_FRAME_CLOCKWISE,
-                NodeRotationAnimation.pedestalClockwiseFrameAngle(worldTime, partialTicks),
+                NodeRotationAnimation.pedestalClockwiseFrameAngle(clientTicks, partialTicks),
                 CLOCKWISE_PIVOT_X,
                 CLOCKWISE_PIVOT_Y,
                 CLOCKWISE_PIVOT_Z,
@@ -132,7 +132,7 @@ public final class AnimatedNodeItemStackRenderer extends TileEntityItemStackRend
             RotatingItemModelRenderHelper.renderAroundAxis(
                 stack,
                 PEDESTAL_FRAME_COUNTER_CLOCKWISE,
-                NodeRotationAnimation.pedestalCounterClockwiseFrameAngle(worldTime, partialTicks),
+                NodeRotationAnimation.pedestalCounterClockwiseFrameAngle(clientTicks, partialTicks),
                 COUNTER_CLOCKWISE_PIVOT_X,
                 COUNTER_CLOCKWISE_PIVOT_Y,
                 COUNTER_CLOCKWISE_PIVOT_Z,
@@ -165,26 +165,26 @@ public final class AnimatedNodeItemStackRenderer extends TileEntityItemStackRend
         Item item = stack.getItem();
 
         if (item == Item.getItemFromBlock(RegistryBlocks.blockRelayNode)) {
-            renderRelayNode(stack, tick.worldTime, tick.partialTicks);
+            renderRelayNode(stack, tick.clientTicks, tick.partialTicks);
             return;
         }
 
         if (item == Item.getItemFromBlock(RegistryBlocks.blockChargingNode)) {
-            renderChargingNode(stack, tick.worldTime, tick.partialTicks);
+            renderChargingNode(stack, tick.clientTicks, tick.partialTicks);
             return;
         }
 
         if (item == Item.getItemFromBlock(RegistryBlocks.blockPortNode)) {
-            renderPortNode(stack, tick.worldTime, tick.partialTicks);
+            renderPortNode(stack, tick.clientTicks, tick.partialTicks);
             return;
         }
 
         if (item == Item.getItemFromBlock(RegistryBlocks.blockNodePedestal)) {
-            renderNodePedestal(stack, tick.worldTime, tick.partialTicks);
+            renderNodePedestal(stack, tick.clientTicks, tick.partialTicks);
         }
     }
 
     @Desugar
-    private record AnimationTick(long worldTime, float partialTicks) {
+    private record AnimationTick(long clientTicks, float partialTicks) {
     }
 }

@@ -54,10 +54,10 @@ public final class HubRenderer implements BlockEntityRenderer<HubBlockEntity> {
     public HubRenderer(BlockEntityRendererProvider.Context context) {
     }
 
-    private static void renderBaseThroughBufferSource(HubBlockEntity hub, PoseStack poseStack, MultiBufferSource bufferSource, BlockState state, long worldTime, float partialTick) {
-        float upperAngle = NodeRotationAnimation.hubUpperRingAngle(worldTime, partialTick);
-        float lowerAngle = NodeRotationAnimation.hubLowerRingAngle(worldTime, partialTick);
-        float crystalAngle = NodeRotationAnimation.hubCrystalAngle(worldTime, partialTick);
+    private static void renderBaseThroughBufferSource(HubBlockEntity hub, PoseStack poseStack, MultiBufferSource bufferSource, BlockState state, long clientTicks, float partialTick) {
+        float upperAngle = NodeRotationAnimation.hubUpperRingAngle(clientTicks, partialTick);
+        float lowerAngle = NodeRotationAnimation.hubLowerRingAngle(clientTicks, partialTick);
+        float crystalAngle = NodeRotationAnimation.hubCrystalAngle(clientTicks, partialTick);
         BlockPos ambientLightSamplePos = ambientLightSamplePos(hub);
 
         RotatingModelVBORenderer.renderAmbientLitThroughBufferSourceAt(poseStack, bufferSource, hub.getLevel(), ambientLightSamplePos, state, HUB_BASE,
@@ -77,10 +77,10 @@ public final class HubRenderer implements BlockEntityRenderer<HubBlockEntity> {
         poseStack.popPose();
     }
 
-    private static void renderBaseCached(HubBlockEntity hub, PoseStack poseStack, BlockState state, long worldTime, float partialTick) {
-        float upperAngle = NodeRotationAnimation.hubUpperRingAngle(worldTime, partialTick);
-        float lowerAngle = NodeRotationAnimation.hubLowerRingAngle(worldTime, partialTick);
-        float crystalAngle = NodeRotationAnimation.hubCrystalAngle(worldTime, partialTick);
+    private static void renderBaseCached(HubBlockEntity hub, PoseStack poseStack, BlockState state, long clientTicks, float partialTick) {
+        float upperAngle = NodeRotationAnimation.hubUpperRingAngle(clientTicks, partialTick);
+        float lowerAngle = NodeRotationAnimation.hubLowerRingAngle(clientTicks, partialTick);
+        float crystalAngle = NodeRotationAnimation.hubCrystalAngle(clientTicks, partialTick);
         BlockPos ambientLightSamplePos = ambientLightSamplePos(hub);
 
         RotatingModelVBORenderer.renderAmbientLit(poseStack, hub.getLevel(), hub.getBlockPos(), ambientLightSamplePos, state, HUB_BASE,
@@ -100,12 +100,12 @@ public final class HubRenderer implements BlockEntityRenderer<HubBlockEntity> {
         poseStack.popPose();
     }
 
-    private static void renderChannelThroughBufferSource(HubBlockEntity hub, PoseStack poseStack, MultiBufferSource bufferSource, BlockState state, long worldTime, float partialTick) {
+    private static void renderChannelThroughBufferSource(HubBlockEntity hub, PoseStack poseStack, MultiBufferSource bufferSource, BlockState state, long clientTicks, float partialTick) {
         if (!hasChannelPlugin(hub.getPlugins().getStackInSlot(0))) {
             return;
         }
 
-        float crystalAngle = NodeRotationAnimation.hubCrystalAngle(worldTime, partialTick);
+        float crystalAngle = NodeRotationAnimation.hubCrystalAngle(clientTicks, partialTick);
         BlockPos ambientLightSamplePos = ambientLightSamplePos(hub);
         renderFullBrightStaticThroughBufferSource(poseStack, bufferSource, state, HUB_CHANNEL_BEACON_TOP_INSIDE, HubRenderLayout.channelBeamTopYOffset());
         renderFullBrightRotatingThroughBufferSource(poseStack, bufferSource, state, HUB_CHANNEL_BEACON_TOP_OUTSIDE, crystalAngle, HubRenderLayout.channelBeamTopYOffset());
@@ -114,24 +114,24 @@ public final class HubRenderer implements BlockEntityRenderer<HubBlockEntity> {
         renderFullBrightStaticThroughBufferSource(poseStack, bufferSource, state, HUB_CHANNEL_BEACON_DOWN_INSIDE, HubRenderLayout.channelBeamDownYOffset());
         renderFullBrightRotatingThroughBufferSource(poseStack, bufferSource, state, HUB_CHANNEL_BEACON_DOWN_OUTSIDE, crystalAngle, HubRenderLayout.channelBeamDownYOffset());
         renderFullBrightRotatingThroughBufferSource(poseStack, bufferSource, state, HUB_CHANNEL_HOLA_TOP,
-            NodeRotationAnimation.hubChannelTopAngle(worldTime, partialTick), HubRenderLayout.channelYOffset());
+            NodeRotationAnimation.hubChannelTopAngle(clientTicks, partialTick), HubRenderLayout.channelYOffset());
         renderFullBrightRotatingThroughBufferSource(poseStack, bufferSource, state, HUB_CHANNEL_HOLA_MIDDLE,
-            NodeRotationAnimation.hubChannelMiddleAngle(worldTime, partialTick), HubRenderLayout.channelYOffset());
+            NodeRotationAnimation.hubChannelMiddleAngle(clientTicks, partialTick), HubRenderLayout.channelYOffset());
         renderFullBrightRotatingThroughBufferSource(poseStack, bufferSource, state, HUB_CHANNEL_HOLA_BOTTOM,
-            NodeRotationAnimation.hubChannelBottomAngle(worldTime, partialTick), HubRenderLayout.channelYOffset());
+            NodeRotationAnimation.hubChannelBottomAngle(clientTicks, partialTick), HubRenderLayout.channelYOffset());
         renderAmbientRotatingThroughBufferSource(hub, poseStack, bufferSource, state, HUB_CHANNEL_RING_AERIALS_BASE,
-            NodeRotationAnimation.hubChannelAerialAngle(worldTime, partialTick), HubRenderLayout.channelYOffset(),
+            NodeRotationAnimation.hubChannelAerialAngle(clientTicks, partialTick), HubRenderLayout.channelYOffset(),
             ambientLightSamplePos);
         renderFullBrightRotatingThroughBufferSource(poseStack, bufferSource, state, HUB_CHANNEL_RING_AERIALS_EMISSIVE,
-            NodeRotationAnimation.hubChannelAerialAngle(worldTime, partialTick), HubRenderLayout.channelYOffset());
+            NodeRotationAnimation.hubChannelAerialAngle(clientTicks, partialTick), HubRenderLayout.channelYOffset());
     }
 
-    private static void renderChannelCached(HubBlockEntity hub, PoseStack poseStack, BlockState state, long worldTime, float partialTick) {
+    private static void renderChannelCached(HubBlockEntity hub, PoseStack poseStack, BlockState state, long clientTicks, float partialTick) {
         if (!hasChannelPlugin(hub.getPlugins().getStackInSlot(0))) {
             return;
         }
 
-        float crystalAngle = NodeRotationAnimation.hubCrystalAngle(worldTime, partialTick);
+        float crystalAngle = NodeRotationAnimation.hubCrystalAngle(clientTicks, partialTick);
         BlockPos ambientLightSamplePos = ambientLightSamplePos(hub);
         renderFullBrightStaticCached(poseStack, state, HUB_CHANNEL_BEACON_TOP_INSIDE, HubRenderLayout.channelBeamTopYOffset());
         renderFullBrightRotatingCached(poseStack, state, HUB_CHANNEL_BEACON_TOP_OUTSIDE, crystalAngle, HubRenderLayout.channelBeamTopYOffset());
@@ -140,38 +140,38 @@ public final class HubRenderer implements BlockEntityRenderer<HubBlockEntity> {
         renderFullBrightStaticCached(poseStack, state, HUB_CHANNEL_BEACON_DOWN_INSIDE, HubRenderLayout.channelBeamDownYOffset());
         renderFullBrightRotatingCached(poseStack, state, HUB_CHANNEL_BEACON_DOWN_OUTSIDE, crystalAngle, HubRenderLayout.channelBeamDownYOffset());
         renderFullBrightRotatingCached(poseStack, state, HUB_CHANNEL_HOLA_TOP,
-            NodeRotationAnimation.hubChannelTopAngle(worldTime, partialTick), HubRenderLayout.channelYOffset());
+            NodeRotationAnimation.hubChannelTopAngle(clientTicks, partialTick), HubRenderLayout.channelYOffset());
         renderFullBrightRotatingCached(poseStack, state, HUB_CHANNEL_HOLA_MIDDLE,
-            NodeRotationAnimation.hubChannelMiddleAngle(worldTime, partialTick), HubRenderLayout.channelYOffset());
+            NodeRotationAnimation.hubChannelMiddleAngle(clientTicks, partialTick), HubRenderLayout.channelYOffset());
         renderFullBrightRotatingCached(poseStack, state, HUB_CHANNEL_HOLA_BOTTOM,
-            NodeRotationAnimation.hubChannelBottomAngle(worldTime, partialTick), HubRenderLayout.channelYOffset());
+            NodeRotationAnimation.hubChannelBottomAngle(clientTicks, partialTick), HubRenderLayout.channelYOffset());
         renderAmbientRotatingCached(hub, poseStack, state, HUB_CHANNEL_RING_AERIALS_BASE,
-            NodeRotationAnimation.hubChannelAerialAngle(worldTime, partialTick), HubRenderLayout.channelYOffset(),
+            NodeRotationAnimation.hubChannelAerialAngle(clientTicks, partialTick), HubRenderLayout.channelYOffset(),
             ambientLightSamplePos);
         renderFullBrightRotatingCached(poseStack, state, HUB_CHANNEL_RING_AERIALS_EMISSIVE,
-            NodeRotationAnimation.hubChannelAerialAngle(worldTime, partialTick), HubRenderLayout.channelYOffset());
+            NodeRotationAnimation.hubChannelAerialAngle(clientTicks, partialTick), HubRenderLayout.channelYOffset());
     }
 
-    private static void renderPluginsThroughBufferSource(HubBlockEntity hub, PoseStack poseStack, MultiBufferSource bufferSource, BlockState state, long worldTime, float partialTick) {
+    private static void renderPluginsThroughBufferSource(HubBlockEntity hub, PoseStack poseStack, MultiBufferSource bufferSource, BlockState state, long clientTicks, float partialTick) {
         for (int slot = 1; slot <= 4; slot++) {
-            renderPluginThroughBufferSource(hub, poseStack, bufferSource, state, worldTime, partialTick, slot);
+            renderPluginThroughBufferSource(hub, poseStack, bufferSource, state, clientTicks, partialTick, slot);
         }
     }
 
-    private static void renderPluginsCached(HubBlockEntity hub, PoseStack poseStack, BlockState state, long worldTime, float partialTick) {
+    private static void renderPluginsCached(HubBlockEntity hub, PoseStack poseStack, BlockState state, long clientTicks, float partialTick) {
         for (int slot = 1; slot <= 4; slot++) {
-            renderPluginCached(hub, poseStack, state, worldTime, partialTick, slot);
+            renderPluginCached(hub, poseStack, state, clientTicks, partialTick, slot);
         }
     }
 
-    private static void renderPluginThroughBufferSource(HubBlockEntity hub, PoseStack poseStack, MultiBufferSource bufferSource, BlockState state, long worldTime, float partialTick, int slot) {
+    private static void renderPluginThroughBufferSource(HubBlockEntity hub, PoseStack poseStack, MultiBufferSource bufferSource, BlockState state, long clientTicks, float partialTick, int slot) {
         ItemStack stack = hub.getPlugins().getStackInSlot(slot);
         var offset = HubRenderLayout.cornerOffsetForSlot(slot);
         BlockPos renderPos = hub.getBlockPos().offset(offset.x(), offset.y(), offset.z());
         int rotationPeriodTicks = resolvePluginRotationPeriodTicks(stack);
         float angle = HubRenderLayout.isClockwiseCornerSlot(slot)
-            ? NodeRotationAnimation.hubClockwisePluginAngle(worldTime, partialTick, rotationPeriodTicks)
-            : NodeRotationAnimation.hubCounterClockwisePluginAngle(worldTime, partialTick, rotationPeriodTicks);
+            ? NodeRotationAnimation.hubClockwisePluginAngle(clientTicks, partialTick, rotationPeriodTicks)
+            : NodeRotationAnimation.hubCounterClockwisePluginAngle(clientTicks, partialTick, rotationPeriodTicks);
 
         poseStack.pushPose();
         poseStack.translate(offset.x(), offset.y(), offset.z());
@@ -180,14 +180,14 @@ public final class HubRenderer implements BlockEntityRenderer<HubBlockEntity> {
         poseStack.popPose();
     }
 
-    private static void renderPluginCached(HubBlockEntity hub, PoseStack poseStack, BlockState state, long worldTime, float partialTick, int slot) {
+    private static void renderPluginCached(HubBlockEntity hub, PoseStack poseStack, BlockState state, long clientTicks, float partialTick, int slot) {
         ItemStack stack = hub.getPlugins().getStackInSlot(slot);
         var offset = HubRenderLayout.cornerOffsetForSlot(slot);
         BlockPos renderPos = hub.getBlockPos().offset(offset.x(), offset.y(), offset.z());
         int rotationPeriodTicks = resolvePluginRotationPeriodTicks(stack);
         float angle = HubRenderLayout.isClockwiseCornerSlot(slot)
-            ? NodeRotationAnimation.hubClockwisePluginAngle(worldTime, partialTick, rotationPeriodTicks)
-            : NodeRotationAnimation.hubCounterClockwisePluginAngle(worldTime, partialTick, rotationPeriodTicks);
+            ? NodeRotationAnimation.hubClockwisePluginAngle(clientTicks, partialTick, rotationPeriodTicks)
+            : NodeRotationAnimation.hubCounterClockwisePluginAngle(clientTicks, partialTick, rotationPeriodTicks);
 
         poseStack.pushPose();
         poseStack.translate(offset.x(), offset.y(), offset.z());
@@ -282,21 +282,21 @@ public final class HubRenderer implements BlockEntityRenderer<HubBlockEntity> {
             return;
         }
 
-        long worldTime = ClientAnimationTicker.ticks();
+        long clientTicks = ClientAnimationTicker.ticks();
         boolean breaking = RotatingModelVBORenderer.getDestroyStage(hub.getBlockPos()) >= 0;
         BlockState state = hub.getBlockState();
 
         if (breaking) {
-            renderBaseThroughBufferSource(hub, poseStack, bufferSource, state, worldTime, partialTick);
-            renderChannelThroughBufferSource(hub, poseStack, bufferSource, state, worldTime, partialTick);
-            renderPluginsThroughBufferSource(hub, poseStack, bufferSource, state, worldTime, partialTick);
+            renderBaseThroughBufferSource(hub, poseStack, bufferSource, state, clientTicks, partialTick);
+            renderChannelThroughBufferSource(hub, poseStack, bufferSource, state, clientTicks, partialTick);
+            renderPluginsThroughBufferSource(hub, poseStack, bufferSource, state, clientTicks, partialTick);
             return;
         }
 
         try (RotatingModelVBORenderer.RenderSession ignored = RotatingModelVBORenderer.beginRenderSession()) {
-            renderBaseCached(hub, poseStack, state, worldTime, partialTick);
-            renderChannelCached(hub, poseStack, state, worldTime, partialTick);
-            renderPluginsCached(hub, poseStack, state, worldTime, partialTick);
+            renderBaseCached(hub, poseStack, state, clientTicks, partialTick);
+            renderChannelCached(hub, poseStack, state, clientTicks, partialTick);
+            renderPluginsCached(hub, poseStack, state, clientTicks, partialTick);
         }
     }
 

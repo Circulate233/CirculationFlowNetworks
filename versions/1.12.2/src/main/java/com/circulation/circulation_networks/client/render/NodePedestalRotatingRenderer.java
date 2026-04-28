@@ -40,14 +40,14 @@ public final class NodePedestalRotatingRenderer extends TileEntitySpecialRendere
         RotatingModelRenderHelper.RenderBatch batch = RotatingModelRenderHelper.beginBatch(te, x, y, z, destroyStage);
         if (batch == null) return;
         try {
-            long worldTime = ClientAnimationTicker.ticks();
+            long clientTicks = ClientAnimationTicker.ticks();
             batch.renderAroundAxis(BASE, 0.0F, CENTER, CENTER, CENTER, 0.0F, 1.0F, 0.0F, false, false);
             batch.renderAroundYAxisFullBright(BASE_EMISSIVE, 0.0F, CENTER, CENTER, CENTER);
             GlStateManager.pushMatrix();
-            GlStateManager.translate(0.0F, NodeRotationAnimation.bobOffset(worldTime, partialTicks), 0.0F);
+            GlStateManager.translate(0.0F, NodeRotationAnimation.bobOffset(clientTicks, partialTicks), 0.0F);
             batch.renderAroundAxis(
                 CLOCKWISE_FRAME,
-                NodeRotationAnimation.pedestalClockwiseFrameAngle(worldTime, partialTicks),
+                NodeRotationAnimation.pedestalClockwiseFrameAngle(clientTicks, partialTicks),
                 CLOCKWISE_PIVOT_X,
                 CLOCKWISE_PIVOT_Y,
                 CLOCKWISE_PIVOT_Z,
@@ -59,7 +59,7 @@ public final class NodePedestalRotatingRenderer extends TileEntitySpecialRendere
             );
             batch.renderAroundAxis(
                 COUNTER_CLOCKWISE_FRAME,
-                NodeRotationAnimation.pedestalCounterClockwiseFrameAngle(worldTime, partialTicks),
+                NodeRotationAnimation.pedestalCounterClockwiseFrameAngle(clientTicks, partialTicks),
                 COUNTER_CLOCKWISE_PIVOT_X,
                 COUNTER_CLOCKWISE_PIVOT_Y,
                 COUNTER_CLOCKWISE_PIVOT_Z,

@@ -1,6 +1,7 @@
 package com.circulation.circulation_networks.handlers;
 
 import com.circulation.circulation_networks.api.API;
+import com.circulation.circulation_networks.client.render.ClientAnimationTicker;
 import com.circulation.circulation_networks.items.CirculationConfiguratorModeModel.InspectionMode;
 import com.circulation.circulation_networks.items.CirculationConfiguratorModeModel.ToolFunction;
 import com.circulation.circulation_networks.items.CirculationConfiguratorState;
@@ -322,7 +323,7 @@ public class SpoceRenderingHandler {
             return;
         }
 
-        float time = world.getGameTime() + partial;
+        float time = ClientAnimationTicker.ticks() + partial;
         float rotation = time * 0.8f;
 
         if (linkScope > 0) {

@@ -1,5 +1,6 @@
 package com.circulation.circulation_networks.handlers;
 
+import com.circulation.circulation_networks.client.render.ClientAnimationTicker;
 import com.circulation.circulation_networks.gui.component.base.AtlasRegion;
 import com.circulation.circulation_networks.gui.component.base.ComponentAtlas;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
@@ -62,7 +63,6 @@ public final class EnergyWarningRenderingHandler {
     private static final double ICON_HEIGHT = 1.25D;
     private static final String WARNING_SPRITE = "warning";
     private final Int2ObjectMap<Long2LongMap> warnings = new Int2ObjectOpenHashMap<>();
-    private long clientTick;
 
     private EnergyWarningRenderingHandler() {
     }
@@ -82,6 +82,7 @@ public final class EnergyWarningRenderingHandler {
             dimWarnings = new Long2LongOpenHashMap();
             warnings.put(dimId, dimWarnings);
         }
+        long clientTick = ClientAnimationTicker.ticks();
         for (long posLong : positions) {
             dimWarnings.put(posLong, clientTick);
         }
@@ -89,7 +90,6 @@ public final class EnergyWarningRenderingHandler {
 
     public void clear() {
         warnings.clear();
-        clientTick = 0L;
     }
 
     @SubscribeEvent
@@ -98,7 +98,6 @@ public final class EnergyWarningRenderingHandler {
     //~}
         //? if <1.21
         if (event.phase != TickEvent.Phase.START) return;
-        clientTick++;
         cleanupExpired();
     }
 
@@ -121,6 +120,7 @@ public final class EnergyWarningRenderingHandler {
         if (warningRegion == null) {
             return;
         }
+        long clientTick = ClientAnimationTicker.ticks();
 
         for (var entry : dimWarnings.long2LongEntrySet()) {
             if (clientTick - entry.getLongValue() > WARNING_TTL_TICKS) {
@@ -156,6 +156,7 @@ public final class EnergyWarningRenderingHandler {
         if (warningRegion == null) {
             return;
         }
+        long clientTick = ClientAnimationTicker.ticks();
 
         //? if <1.21 {
         PoseStack mvStack = RenderSystem.getModelViewStack();
@@ -192,6 +193,7 @@ public final class EnergyWarningRenderingHandler {
     *///?}
 
     private void cleanupExpired() {
+        long clientTick = ClientAnimationTicker.ticks();
         for (var dimIterator = warnings.int2ObjectEntrySet().iterator(); dimIterator.hasNext(); ) {
             var dimEntry = dimIterator.next();
             Long2LongMap dimWarnings = dimEntry.getValue();

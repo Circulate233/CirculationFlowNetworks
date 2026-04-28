@@ -4,6 +4,7 @@ import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.api.API;
 import com.circulation.circulation_networks.api.EnergyAmount;
 import com.circulation.circulation_networks.blocks.MultiblockShellBlock;
+import com.circulation.circulation_networks.client.render.ClientAnimationTicker;
 import com.circulation.circulation_networks.gui.GuiHub;
 import com.circulation.circulation_networks.gui.component.base.AtlasRegion;
 import com.circulation.circulation_networks.gui.component.base.ComponentAtlas;
@@ -64,7 +65,6 @@ public final class NodeHudRenderingHandler {
 
     private long lastTargetPosLong = Long.MIN_VALUE;
     private int requestCooldown;
-    private long clientTick;
 
     private NodeHudRenderingHandler() {
     }
@@ -115,7 +115,6 @@ public final class NodeHudRenderingHandler {
 
     @SubscribeEvent
     public void onClientTick(ClientTickEvent.Post event) {
-        clientTick++;
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null) {
             hasData = false;
@@ -206,6 +205,7 @@ public final class NodeHudRenderingHandler {
 
         AtlasRegion crystalRegion = atlas.getRegion("node_hud_crystal");
         if (crystalRegion != null) {
+            long clientTick = ClientAnimationTicker.ticks();
             float angle = (clientTick + partialTick) * 360.0f / ROTATION_PERIOD_TICKS;
             float cx = anchorX + 20 + CRYSTAL_SIZE / 2.0f;
             float cy = anchorY + 20 + CRYSTAL_SIZE / 2.0f;
@@ -245,7 +245,7 @@ public final class NodeHudRenderingHandler {
             return;
         }
         bufferSource.endBatch();
-        float offset = ScrollingTextHelper.getScrollOffset(textWidth, maxWidth, clientTick, partialTick);
+        float offset = ScrollingTextHelper.getScrollOffset(textWidth, maxWidth, ClientAnimationTicker.ticks(), partialTick);
         font.drawInBatch(text, x - offset, y, color, false, textPose.last().pose(), bufferSource, Font.DisplayMode.SEE_THROUGH, 0, 15728880);
         enableHudScissor(x, y, maxWidth, 9);
         bufferSource.endBatch();

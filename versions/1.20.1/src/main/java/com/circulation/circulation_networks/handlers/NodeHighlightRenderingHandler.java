@@ -1,5 +1,6 @@
 package com.circulation.circulation_networks.handlers;
 
+import com.circulation.circulation_networks.client.render.ClientAnimationTicker;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
@@ -30,7 +31,6 @@ public final class NodeHighlightRenderingHandler {
     private BlockPos targetPos;
     private int targetDimId;
     private long startTick;
-    private long clientTick;
 
     private NodeHighlightRenderingHandler() {
     }
@@ -38,7 +38,7 @@ public final class NodeHighlightRenderingHandler {
     public void highlight(BlockPos pos, int dimId) {
         this.targetPos = pos;
         this.targetDimId = dimId;
-        this.startTick = clientTick;
+        this.startTick = ClientAnimationTicker.ticks();
     }
 
     public void clear() {
@@ -50,7 +50,7 @@ public final class NodeHighlightRenderingHandler {
         if (event.phase != TickEvent.Phase.START) {
             return;
         }
-        clientTick++;
+        long clientTick = ClientAnimationTicker.ticks();
         if (targetPos != null && clientTick - startTick > HIGHLIGHT_DURATION_TICKS) {
             targetPos = null;
         }
@@ -68,6 +68,7 @@ public final class NodeHighlightRenderingHandler {
         if (mc.level.dimension().location().hashCode() != targetDimId) {
             return;
         }
+        long clientTick = ClientAnimationTicker.ticks();
         long elapsed = clientTick - startTick;
         if (elapsed > HIGHLIGHT_DURATION_TICKS) {
             return;

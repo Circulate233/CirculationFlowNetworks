@@ -237,16 +237,16 @@ public final class RotatingModelRenderHelper {
     private static int resolveNoDiffuseLightSignature(@NotNull TileEntity tileEntity, @NotNull IBlockState state, @NotNull BlockPos lightSamplePos) {
         BlockPos pos = tileEntity.getPos().toImmutable();
         int worldId = System.identityHashCode(tileEntity.getWorld());
-        long worldTime = tileEntity.getWorld().getTotalWorldTime();
+        long clientTicks = ClientAnimationTicker.ticks();
         int stateHash = state.hashCode();
         LightSignatureKey key = new LightSignatureKey(worldId, pos, lightSamplePos.toImmutable());
         CachedLightSignature cached = LIGHT_SIGNATURES.get(key);
-        if (cached != null && cached.worldTime == worldTime && cached.stateHash == stateHash) {
+        if (cached != null && cached.clientTicks == clientTicks && cached.stateHash == stateHash) {
             return cached.signature;
         }
 
         int signature = computeNoDiffuseLightSignature(tileEntity, state, lightSamplePos);
-        LIGHT_SIGNATURES.put(key, new CachedLightSignature(worldTime, stateHash, signature));
+        LIGHT_SIGNATURES.put(key, new CachedLightSignature(clientTicks, stateHash, signature));
         return signature;
     }
 
@@ -632,7 +632,7 @@ public final class RotatingModelRenderHelper {
     }
 
     @Desugar
-    private record CachedLightSignature(long worldTime, int stateHash, int signature) {
+    private record CachedLightSignature(long clientTicks, int stateHash, int signature) {
     }
 
     @Desugar

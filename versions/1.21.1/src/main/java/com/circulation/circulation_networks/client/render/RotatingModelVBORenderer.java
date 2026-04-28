@@ -258,15 +258,15 @@ public final class RotatingModelVBORenderer {
         }
 
         AmbientLightKey key = new AmbientLightKey(System.identityHashCode(level), originPos.immutable(), lightSamplePos.immutable());
-        long gameTime = worldLevel.getGameTime();
+        long clientTicks = ClientAnimationTicker.ticks();
         int stateHash = state.hashCode();
         CachedLightSignature cached = AMBIENT_LIGHT_SIGNATURES.get(key);
-        if (cached != null && cached.gameTime == gameTime && cached.stateHash == stateHash) {
+        if (cached != null && cached.clientTicks == clientTicks && cached.stateHash == stateHash) {
             return cached.signature;
         }
 
         int signature = computeLightSignature(level, lightSamplePos, state);
-        AMBIENT_LIGHT_SIGNATURES.put(key, new CachedLightSignature(gameTime, stateHash, signature));
+        AMBIENT_LIGHT_SIGNATURES.put(key, new CachedLightSignature(clientTicks, stateHash, signature));
         return signature;
     }
 
@@ -372,7 +372,7 @@ public final class RotatingModelVBORenderer {
     private record AmbientLightKey(int worldId, BlockPos originPos, BlockPos lightSamplePos) {
     }
 
-    private record CachedLightSignature(long gameTime, int stateHash, int signature) {
+    private record CachedLightSignature(long clientTicks, int stateHash, int signature) {
     }
 
     public static final class RenderSession implements AutoCloseable {
