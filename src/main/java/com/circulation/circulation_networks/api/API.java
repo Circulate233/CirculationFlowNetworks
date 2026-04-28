@@ -24,6 +24,8 @@ import java.util.Collection;
 import java.util.Set;
 import java.util.UUID;
 
+import static com.circulation.circulation_networks.utils.WorldResolveCompat.isClientWorld;
+
 /**
  * 仅作为一个API方法汇总。
  * 这个类的方法不应该被重命名。
@@ -57,10 +59,6 @@ public final class API {
             }
         }
         return NetworkManager.INSTANCE.getNodeFromPos(world, pos);
-    }
-
-    private static boolean isClientWorld(@NotNull Level world) {
-        return world.isClientSide();
     }
 
     @Nullable

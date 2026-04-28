@@ -1,9 +1,13 @@
 package com.circulation.circulation_networks.utils;
 
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Path;
@@ -32,7 +36,7 @@ public final class WorldResolveCompat {
         }
 
         if (dimensionKey != null && !dimensionKey.isEmpty()) {
-            return server.getLevel(DimensionHelper.createDimensionKey(dimensionKey));
+            return server.getLevel(ResourceKey.create(Registries.DIMENSION, Identifier.parse(dimensionKey)));
         }
         return null;
     }
@@ -42,27 +46,31 @@ public final class WorldResolveCompat {
         if (server == null) {
             return false;
         }
-        return server.getLevel(DimensionHelper.createDimensionKey(dimKey)) != null;
+        return server.getLevel(ResourceKey.create(Registries.DIMENSION, Identifier.parse(dimKey))) != null;
     }
 
-    public static boolean isClientWorld(Level world) {
+    public static boolean isClientWorld(@NotNull Level world) {
         return world.isClientSide();
     }
 
-    public static java.util.List<? extends net.minecraft.world.entity.player.Player> getPlayers(Level world) {
+    public static boolean isServerWorld(@NotNull Level world) {
+        return !isClientWorld(world);
+    }
+
+    public static java.util.List<? extends net.minecraft.world.entity.player.Player> getPlayers(@NotNull Level world) {
         return world.players();
     }
 
-    public static String getDimensionId(Level world) {
-        return DimensionHelper.getDimensionId(world);
+    public static String getDimensionId(@NotNull Level world) {
+        return world.dimension().identifier().toString();
     }
 
     public static String getPlayerDimensionId(net.minecraft.server.level.ServerPlayer player) {
-        return DimensionHelper.getDimensionId(player.level());
+        return player.level().dimension().identifier().toString();
     }
 
     public static String getPlayerDimensionId(net.minecraft.world.entity.player.Player player) {
-        return DimensionHelper.getDimensionId(player.level());
+        return player.level().dimension().identifier().toString();
     }
 
     public static String getBlockVisualId(Level world, net.minecraft.core.BlockPos pos) {

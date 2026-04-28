@@ -20,6 +20,8 @@ import org.jetbrains.annotations.Nullable;
 import java.io.File;
 import java.io.IOException;
 
+import static com.circulation.circulation_networks.utils.WorldResolveCompat.isClientWorld;
+
 public final class EnergyTypeOverrideManager {
 
     private static volatile EnergyTypeOverrideManager INSTANCE;
@@ -59,10 +61,6 @@ public final class EnergyTypeOverrideManager {
 
     private static String getPlayerDimensionId(ServerPlayer player) {
         return WorldResolveCompat.getPlayerDimensionId(player);
-    }
-
-    private static boolean isClientWorld(net.minecraft.world.level.Level world) {
-        return WorldResolveCompat.isClientWorld(world);
     }
 
     private static String getDimensionId(net.minecraft.world.level.Level world) {

@@ -18,6 +18,7 @@ import com.circulation.circulation_networks.network.hub.HubChannel;
 import com.circulation.circulation_networks.network.nodes.HubNode;
 import com.circulation.circulation_networks.utils.HubPlatformServices;
 import com.circulation.circulation_networks.utils.NbtCompat;
+import static com.circulation.circulation_networks.utils.WorldResolveCompat.isClientWorld;
 import it.unimi.dsi.fastutil.objects.Object2ReferenceMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2ReferenceOpenHashMap;
@@ -54,10 +55,6 @@ public final class HubChannelManager {
 
     private HubChannelManager() {
         hubChannels.defaultReturnValue(EMPTY);
-    }
-
-    private static boolean isClientWorld(net.minecraft.world.level.Level world) {
-        return world.isClientSide();
     }
 
     private static String normalizeChannelName(String rawName) {
@@ -131,10 +128,16 @@ public final class HubChannelManager {
     }
 
     public void bindHub(IHubNode hub) {
+        if (hub == null || !NetworkManager.isServerAvailable()) {
+            return;
+        }
         register(hub, hub.getChannelId(), hub.getChannelName(), hub.getPermissionMode());
     }
 
     public void register(IHubNode hub, UUID channelId, String name, PermissionMode permissionMode) {
+        if (hub == null || !NetworkManager.isServerAvailable()) {
+            return;
+        }
         ensureLoaded();
         if (channelId == null || name == null) {
             return;
@@ -172,6 +175,9 @@ public final class HubChannelManager {
     }
 
     public void unregister(IHubNode hub) {
+        if (hub == null || !NetworkManager.isServerAvailable()) {
+            return;
+        }
         ensureLoaded();
         UUID oldChannelId = hubChannels.remove(hub);
         if (oldChannelId == EMPTY) {
@@ -190,6 +196,9 @@ public final class HubChannelManager {
     }
 
     public void updateChannelFromHub(IHubNode hub) {
+        if (hub == null || !NetworkManager.isServerAvailable()) {
+            return;
+        }
         ensureLoaded();
         UUID boundChannelId = hubChannels.get(hub);
         if (boundChannelId == EMPTY || !boundChannelId.equals(hub.getChannelId())) {
@@ -227,10 +236,6 @@ public final class HubChannelManager {
         return Collections.unmodifiableList(new ObjectArrayList<>(channels.values()));
     }
 
-    public ChannelSnapshotList getAccessibleChannelSnapshots(UUID playerId) {
-        return getAccessibleChannelSnapshots(playerId, null);
-    }
-
     public ChannelSnapshotList getAccessibleChannelSnapshots(UUID playerId, @Nullable UUID connectedChannelId) {
         ensureLoaded();
         List<ChannelSnapshotEntry> entries = new ObjectArrayList<>();
@@ -250,10 +255,6 @@ public final class HubChannelManager {
         entries.sort(Comparator.comparing(ChannelSnapshotEntry::name, String.CASE_INSENSITIVE_ORDER)
                                .thenComparing(entry -> entry.id().toString()));
         return new ChannelSnapshotList(entries);
-    }
-
-    public String getAccessibleChannelSnapshotsJson(UUID playerId) {
-        return getAccessibleChannelSnapshots(playerId).toJson();
     }
 
     public PermissionSnapshotList getOnlinePlayerSnapshots(UUID channelId) {

@@ -2,7 +2,6 @@ package com.circulation.circulation_networks.packets;
 
 import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.handlers.SpoceRenderingHandler;
-import com.circulation.circulation_networks.utils.DimensionHelper;
 import com.circulation.circulation_networks.utils.Packet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -51,7 +50,7 @@ public final class SpoceRendering implements Packet<SpoceRendering> {
             if (mc.level == null || SpoceRenderingHandler.INSTANCE == null) {
                 return;
             }
-            String dimId = DimensionHelper.getDimensionId(mc.level);
+            String dimId = mc.level.dimension().identifier().toString();
             SpoceRenderingHandler.INSTANCE.setStaus(dimId, message.pos, message.linkScope, message.energyScope, message.chargingScope);
         });
     }

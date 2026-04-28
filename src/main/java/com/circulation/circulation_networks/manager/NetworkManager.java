@@ -15,6 +15,7 @@ import com.circulation.circulation_networks.utils.NodeEventHooks;
 import com.circulation.circulation_networks.utils.Functions;
 import com.circulation.circulation_networks.utils.NbtCompat;
 import com.circulation.circulation_networks.utils.WorldResolveCompat;
+import static com.circulation.circulation_networks.utils.WorldResolveCompat.isClientWorld;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMaps;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
@@ -42,6 +43,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.neoforged.fml.loading.FMLEnvironment;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -95,7 +97,7 @@ public final class NetworkManager {
     }
 
     public static boolean isServerAvailable() {
-        return saveFile != null;
+        return FMLEnvironment.getDist().isDedicatedServer();
     }
 
     static void runFileIoAsync(Runnable task) {
@@ -157,10 +159,6 @@ public final class NetworkManager {
 
     private static String getDimensionId(INode node) {
         return node.getDimensionId();
-    }
-
-    private static boolean isClientWorld(Level world) {
-        return world.isClientSide();
     }
 
     private static boolean isRegisteredDimension(String dimId) {

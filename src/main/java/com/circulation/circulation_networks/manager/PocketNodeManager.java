@@ -11,7 +11,6 @@ import com.circulation.circulation_networks.pocket.PocketNodeHostRules;
 import com.circulation.circulation_networks.pocket.PocketNodeRecord;
 import com.circulation.circulation_networks.registry.NodeTypes;
 import com.circulation.circulation_networks.registry.PocketNodeItems;
-import com.circulation.circulation_networks.utils.DimensionHelper;
 import com.circulation.circulation_networks.utils.Functions;
 import com.circulation.circulation_networks.utils.WorldResolveCompat;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
@@ -36,6 +35,8 @@ import org.jetbrains.annotations.Nullable;
 
 import java.io.File;
 import java.util.Objects;
+
+import static com.circulation.circulation_networks.utils.WorldResolveCompat.isClientWorld;
 
 @SuppressWarnings("resource")
 public final class PocketNodeManager {
@@ -138,11 +139,7 @@ public final class PocketNodeManager {
     }
 
     private static String getDimensionId(Level world) {
-        return DimensionHelper.getDimensionId(world);
-    }
-
-    private static boolean isClientWorld(Level world) {
-        return world.isClientSide();
+        return world.dimension().identifier().toString();
     }
 
     private static boolean isHostChunkLoaded(Level world, BlockPos pos) {

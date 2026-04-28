@@ -5,7 +5,6 @@ import com.circulation.circulation_networks.handlers.PocketNodeRenderingHandler;
 import com.circulation.circulation_networks.manager.PocketNodeManager;
 import com.circulation.circulation_networks.pocket.PocketNodeRecord;
 import com.circulation.circulation_networks.registry.NodeTypes;
-import com.circulation.circulation_networks.utils.DimensionHelper;
 import com.circulation.circulation_networks.utils.Packet;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.ObjectList;
@@ -42,7 +41,7 @@ public final class PocketNodeRendering implements Packet<PocketNodeRendering> {
 
     public PocketNodeRendering(ServerPlayer player) {
         this.mode = SET;
-        this.dim = DimensionHelper.getDimensionId(player.level());
+        this.dim = player.level().dimension().identifier().toString();
         this.records = PocketNodeManager.INSTANCE.getActiveRecords(dim);
     }
 

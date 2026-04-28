@@ -4,7 +4,6 @@ import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.api.IEnergyHandler;
 import com.circulation.circulation_networks.handlers.ConfigOverrideRenderingHandler;
 import com.circulation.circulation_networks.manager.EnergyTypeOverrideManager;
-import com.circulation.circulation_networks.utils.DimensionHelper;
 import com.circulation.circulation_networks.utils.Packet;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -65,7 +64,7 @@ public final class ConfigOverrideRendering implements Packet<ConfigOverrideRende
     }
 
     public static void sendFullSync(ServerPlayer player) {
-        CirculationFlowNetworks.sendToPlayer(new ConfigOverrideRendering(DimensionHelper.getDimensionId(player.level())), player);
+        CirculationFlowNetworks.sendToPlayer(new ConfigOverrideRendering(player.level().dimension().identifier().toString()), player);
     }
 
     public static void sendAdd(ServerPlayer player, long pos, IEnergyHandler.EnergyType type) {

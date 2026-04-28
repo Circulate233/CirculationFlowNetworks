@@ -8,7 +8,6 @@ import com.circulation.circulation_networks.api.node.INode;
 import com.circulation.circulation_networks.handlers.NodeNetworkRenderingHandler;
 import com.circulation.circulation_networks.manager.EnergyMachineManager;
 import com.circulation.circulation_networks.manager.NetworkManager;
-import com.circulation.circulation_networks.utils.DimensionHelper;
 import com.circulation.circulation_networks.utils.Packet;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
@@ -62,7 +61,7 @@ public final class NodeNetworkRendering implements Packet<NodeNetworkRendering> 
     }
 
     public NodeNetworkRendering(Player player, IGrid grid) {
-        this.dim = DimensionHelper.getDimensionId(player.level());
+        this.dim = player.level().dimension().identifier().toString();
         this.grid = grid;
         this.nodes = grid.getNodes();
         this.mode = SET;
@@ -81,7 +80,7 @@ public final class NodeNetworkRendering implements Packet<NodeNetworkRendering> 
     }
 
     public NodeNetworkRendering(Player player, INode node, int mode) {
-        this.dim = DimensionHelper.getDimensionId(player.level());
+        this.dim = player.level().dimension().identifier().toString();
         this.grid = node.getGrid();
         this.mode = mode;
         this.targetNode = node;
@@ -97,7 +96,7 @@ public final class NodeNetworkRendering implements Packet<NodeNetworkRendering> 
     }
 
     public NodeNetworkRendering(Player player, BlockEntity blockEntity, INode node, int mode) {
-        this.dim = DimensionHelper.getDimensionId(player.level());
+        this.dim = player.level().dimension().identifier().toString();
         this.grid = node.getGrid();
         this.mode = mode;
         this.entryList = ObjectLists.singleton(new Pair(blockEntity, node));
@@ -169,7 +168,7 @@ public final class NodeNetworkRendering implements Packet<NodeNetworkRendering> 
                 LongSet processedLinks = new LongOpenHashSet();
                 if (mode == SET) {
                     for (var node : nodes) {
-                        if (node.getWorld() == null || !dim.equals(DimensionHelper.getDimensionId(node.getWorld()))) {
+                        if (node.getWorld() == null || !dim.equals(node.getWorld().dimension().identifier().toString())) {
                             continue;
                         }
                         long posA = node.getPos().asLong();
@@ -220,7 +219,7 @@ public final class NodeNetworkRendering implements Packet<NodeNetworkRendering> 
             writeLinks(buf, () -> {
                 int count = 0;
                 for (var entry : entryList) {
-                    if (entry.blockEntity.getLevel() == null || !dim.equals(DimensionHelper.getDimensionId(entry.blockEntity.getLevel()))) {
+                    if (entry.blockEntity.getLevel() == null || !dim.equals(entry.blockEntity.getLevel().dimension().identifier().toString())) {
                         continue;
                     }
                     var node = entry.node;

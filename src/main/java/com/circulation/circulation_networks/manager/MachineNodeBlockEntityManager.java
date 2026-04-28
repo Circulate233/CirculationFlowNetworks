@@ -6,16 +6,14 @@ import com.circulation.circulation_networks.events.BlockEntityLifeCycleEvent;
 import it.unimi.dsi.fastutil.objects.ReferenceLinkedOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
 
+import static com.circulation.circulation_networks.utils.WorldResolveCompat.isClientWorld;
+
 public class MachineNodeBlockEntityManager {
 
     public static final MachineNodeBlockEntityManager INSTANCE = new MachineNodeBlockEntityManager();
 
     private final ReferenceSet<ServerTickMachine> serverTe = new ReferenceLinkedOpenHashSet<>();
     private final ReferenceSet<ClientTickMachine> clientTe = new ReferenceLinkedOpenHashSet<>();
-
-    private static boolean isClientWorld(net.minecraft.world.level.Level world) {
-        return world.isClientSide();
-    }
 
     public void onBlockEntityValidate(BlockEntityLifeCycleEvent.Validate event) {
         if (isClientWorld(event.getWorld())) {

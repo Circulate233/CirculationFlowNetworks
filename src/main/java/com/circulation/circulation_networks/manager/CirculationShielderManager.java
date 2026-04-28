@@ -10,6 +10,8 @@ import it.unimi.dsi.fastutil.objects.ReferenceSets;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 
+import static com.circulation.circulation_networks.utils.WorldResolveCompat.isClientWorld;
+
 @SuppressWarnings("unused")
 public final class CirculationShielderManager {
 
@@ -19,10 +21,6 @@ public final class CirculationShielderManager {
 
     public CirculationShielderManager() {
         dimShielders.defaultReturnValue(ReferenceSets.emptySet());
-    }
-
-    private static boolean isClientWorld(Level world) {
-        return WorldResolveCompat.isClientWorld(world);
     }
 
     private static String getDimensionId(Level world) {

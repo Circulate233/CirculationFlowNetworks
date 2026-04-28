@@ -12,6 +12,7 @@ import com.circulation.circulation_networks.network.hub.HubChannel;
 import com.circulation.circulation_networks.network.hub.HubPluginCapability;
 import com.circulation.circulation_networks.registry.NodeTypes;
 import com.circulation.circulation_networks.utils.NbtCompat;
+import com.circulation.circulation_networks.utils.WorldResolveCompat;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceMap;
@@ -284,7 +285,7 @@ public final class HubNode extends Node implements IHubNode {
 
     private boolean shouldSyncChannelManager() {
         try {
-            return !getWorld().isClientSide();
+            return WorldResolveCompat.isServerWorld(getWorld());
         } catch (IllegalStateException ignored) {
             return false;
         }

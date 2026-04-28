@@ -15,7 +15,6 @@ import com.circulation.circulation_networks.packets.SpoceRendering;
 import com.circulation.circulation_networks.registry.RegistryEnergyHandler;
 import com.circulation.circulation_networks.tiles.BlockEntityMultiblockShell;
 import com.circulation.circulation_networks.tooltip.LocalizedComponent;
-import com.circulation.circulation_networks.utils.DimensionHelper;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -67,7 +66,7 @@ public class ItemCirculationConfigurator extends BaseItem {
     }
 
     private static String getDimensionId(Level world) {
-        return DimensionHelper.getDimensionId(world);
+        return world.dimension().identifier().toString();
     }
 
     private static long packPos(BlockPos pos) {
