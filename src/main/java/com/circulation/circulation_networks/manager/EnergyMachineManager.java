@@ -53,6 +53,7 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 
 import net.minecraft.server.MinecraftServer;
 import static com.circulation.circulation_networks.utils.SideCompat.isClientWorld;
@@ -79,6 +80,7 @@ public final class EnergyMachineManager {
     private final ReferenceSet<IEnergyHandler> tickSharedHandlers = new ReferenceOpenHashSet<>();
     private final Int2ObjectMap<LongSet> warningPositionsScratch = new Int2ObjectOpenHashMap<>();
     private final ChannelMergeScratch channelMergeScratch = new ChannelMergeScratch();
+    private final ReferenceSet<IGrid> channelTickGridsScratch = new ReferenceOpenHashSet<>();
     private final ReferenceSet<IGrid> tickMachineSeenGrids = new ReferenceOpenHashSet<>();
     private final ReferenceSet<TileEntity> cache = new ReferenceOpenHashSet<>();
     private final Int2ObjectMap<Long2LongMap> lastWarningTicks = new Int2ObjectOpenHashMap<>();
@@ -322,8 +324,8 @@ public final class EnergyMachineManager {
             if (hubNode != null && hubNode.isActive()) {
                 var channelId = hubNode.getChannelId();
                 if (!channelId.equals(HubNode.EMPTY)) {
-                    var channelGrids = HubChannelManager.INSTANCE.getChannelGrids(channelId);
-                    if (channelGrids != null && channelGrids.size() > 1) {
+                    var channelGrids = collectActiveChannelTickGrids(channelId);
+                    if (channelGrids.size() > 1) {
                         var merged = channelMergeScratch.prepare();
                         for (var cg : channelGrids) {
                             var handlers = tickGridData.get(cg);
@@ -377,6 +379,20 @@ public final class EnergyMachineManager {
         }
         recycleTickMachineHandlers();
         activeTickGrids.clear();
+    }
+
+    private ReferenceSet<IGrid> collectActiveChannelTickGrids(UUID channelId) {
+        channelTickGridsScratch.clear();
+        for (var candidate : activeTickGrids) {
+            if (processedTickGrids.contains(candidate)) {
+                continue;
+            }
+            var candidateHub = candidate.getHubNode();
+            if (candidateHub != null && candidateHub.isActive() && channelId.equals(candidateHub.getChannelId())) {
+                channelTickGridsScratch.add(candidate);
+            }
+        }
+        return channelTickGridsScratch;
     }
 
     //~ if >=1.20 'TileEntity' -> 'BlockEntity' {

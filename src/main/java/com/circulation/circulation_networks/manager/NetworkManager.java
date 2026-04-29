@@ -11,7 +11,6 @@ import com.circulation.circulation_networks.network.Grid;
 import com.circulation.circulation_networks.utils.ChunkCoordUtils;
 import com.circulation.circulation_networks.utils.NodeEventHooks;
 import static com.circulation.circulation_networks.utils.SideCompat.isClientWorld;
-import static com.circulation.circulation_networks.utils.SideCompat.isServer;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 
@@ -107,7 +106,13 @@ public final class NetworkManager {
     }
 
     public static boolean isServerAvailable() {
-        return isServer();
+        //? if <1.20 {
+        return CirculationFlowNetworks.server != null;
+        //?} else if <1.21 {
+        /*return net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer() != null;
+        *///?} else {
+        /*return net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer() != null;
+        *///?}
     }
 
     static void runFileIoAsync(Runnable task) {
