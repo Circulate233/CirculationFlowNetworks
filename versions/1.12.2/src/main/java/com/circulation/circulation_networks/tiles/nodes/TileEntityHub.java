@@ -22,10 +22,14 @@ import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.network.NetworkManager;
+import net.minecraft.network.play.server.SPacketUpdateTileEntity;
+import net.minecraft.block.state.IBlockState;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 public class TileEntityHub extends BaseNodeTileEntity<IHubNode> implements IHubNodeBlockEntity, CFNInternalInventoryHost {
 
@@ -126,6 +130,28 @@ public class TileEntityHub extends BaseNodeTileEntity<IHubNode> implements IHubN
     }
 
     @Override
+    @Nullable
+    public SPacketUpdateTileEntity getUpdatePacket() {
+        return new SPacketUpdateTileEntity(pos, 0, getUpdateTag());
+    }
+
+    @Override
+    @NotNull
+    public NBTTagCompound getUpdateTag() {
+        return writeToNBT(new NBTTagCompound());
+    }
+
+    @Override
+    public void onDataPacket(@NotNull NetworkManager net, @NotNull SPacketUpdateTileEntity pkt) {
+        handleUpdateTag(pkt.getNbtCompound());
+    }
+
+    @Override
+    public void handleUpdateTag(@NotNull NBTTagCompound tag) {
+        readFromNBT(tag);
+    }
+
+    @Override
     public final void readFromNBT(@NotNull NBTTagCompound nbt) {
         super.readFromNBT(nbt);
         plugins.readFromNBT(nbt, "plugins");
@@ -175,6 +201,7 @@ public class TileEntityHub extends BaseNodeTileEntity<IHubNode> implements IHubN
             HubPluginStateTracker.saveAllPluginData(getNode(), plugins);
             HubPluginStateTracker.savePluginData(getNode(), oldStack);
             HubPluginStateTracker.syncInventoryChange(getNode(), oldStack, newStack);
+            notifyPluginInventoryChanged();
         }
         markDirty();
     }
@@ -190,5 +217,10 @@ public class TileEntityHub extends BaseNodeTileEntity<IHubNode> implements IHubN
 
     private void initializeHubPluginState() {
         HubPluginStateTracker.initializeFromInventory(getNode(), plugins);
+    }
+
+    private void notifyPluginInventoryChanged() {
+        IBlockState state = world.getBlockState(pos);
+        world.notifyBlockUpdate(pos, state, state, 3);
     }
 }

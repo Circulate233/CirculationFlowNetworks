@@ -227,8 +227,9 @@ public class CommonProxy implements IGuiHandler {
     @SubscribeEvent
     public void onPlayerChangedDimension(PlayerEvent.PlayerChangedDimensionEvent event) {
         if (event.player instanceof EntityPlayerMP player) {
-            NET_CHANNEL.sendTo(new ConfigOverrideRendering(player.dimension), player);
             NET_CHANNEL.sendTo(RenderingClear.INSTANCE, player);
+            NET_CHANNEL.sendTo(new ConfigOverrideRendering(player.dimension), player);
+            NET_CHANNEL.sendTo(new PocketNodeRendering(player), player);
         }
     }
 

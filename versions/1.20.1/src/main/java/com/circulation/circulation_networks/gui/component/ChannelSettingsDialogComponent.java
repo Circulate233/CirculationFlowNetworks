@@ -14,12 +14,14 @@ import com.circulation.circulation_networks.packets.DeleteHubChannel;
 import com.circulation.circulation_networks.packets.UpdateHubChannelSettings;
 import com.circulation.circulation_networks.tooltip.LocalizedComponent;
 import com.circulation.circulation_networks.utils.CI18n;
+import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import org.jetbrains.annotations.NotNull;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 
 public final class ChannelSettingsDialogComponent extends DraggableComponent {
@@ -206,6 +208,22 @@ public final class ChannelSettingsDialogComponent extends DraggableComponent {
         return HubPermissionLevel.NONE;
     }
 
+    private static String getPermissionModeTitleKey(PermissionMode permissionMode) {
+        return switch (permissionMode) {
+            case PUBLIC -> "gui.channel_settings.mode.public";
+            case TEAM -> "gui.channel_settings.mode.team";
+            case PRIVATE -> "gui.channel_settings.mode.private";
+        };
+    }
+
+    private static String getPermissionModeDescriptionKey(PermissionMode permissionMode) {
+        return switch (permissionMode) {
+            case PUBLIC -> "gui.channel_settings.mode.public.desc";
+            case TEAM -> "gui.channel_settings.mode.team.desc";
+            case PRIVATE -> "gui.channel_settings.mode.private.desc";
+        };
+    }
+
     private void drawCenteredText(String text, int x, int y) {
         if (text == null || text.isEmpty()) {
             return;
@@ -302,6 +320,14 @@ public final class ChannelSettingsDialogComponent extends DraggableComponent {
         @Override
         protected void onClick() {
             selectMode(permissionMode);
+        }
+
+        @Override
+        protected @NotNull List<LocalizedComponent> getTooltip(int mouseX, int mouseY) {
+            List<LocalizedComponent> tooltip = new ObjectArrayList<>(2);
+            tooltip.add(LocalizedComponent.of(getPermissionModeTitleKey(permissionMode)));
+            tooltip.add(LocalizedComponent.description(getPermissionModeDescriptionKey(permissionMode)));
+            return tooltip;
         }
     }
 

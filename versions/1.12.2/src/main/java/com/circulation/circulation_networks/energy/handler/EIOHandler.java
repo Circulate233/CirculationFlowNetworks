@@ -5,7 +5,7 @@ import com.circulation.circulation_networks.api.EnergyAmounts;
 import com.circulation.circulation_networks.api.IEnergyHandler;
 import com.circulation.circulation_networks.network.nodes.HubNode;
 import crazypants.enderio.base.power.IPowerStorage;
-import crazypants.enderio.base.power.forge.tile.ILegacyPoweredTile;
+import crazypants.enderio.powertools.machine.capbank.TileCapBank;
 import crazypants.enderio.powertools.machine.capbank.network.ICapBankNetwork;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
@@ -19,11 +19,7 @@ public class EIOHandler implements IEnergyHandler {
     @Nullable
     private ICapBankNetwork capBankNetwork;
     @Nullable
-    private ILegacyPoweredTile.Generator generator;
-    @Nullable
-    private ILegacyPoweredTile.Receiver receiver;
-    @Nullable
-    private EnumFacing receiveFacing;
+    private TileCapBank capBank;
     @Nullable
     private EnergyType energyType;
 
@@ -38,41 +34,44 @@ public class EIOHandler implements IEnergyHandler {
         return clamped >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) clamped;
     }
 
-    @Nullable
-    private static EnumFacing findConnectedFacing(ILegacyPoweredTile tile) {
-        for (int i = 0; i < EnumFacing.VALUES.length; i++) {
-            EnumFacing facing = EnumFacing.VALUES[i];
-            if (tile.canConnectEnergy(facing)) {
-                return facing;
-            }
-        }
-        return null;
-    }
-
     @Override
     public IEnergyHandler init(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
-        if (tileEntity instanceof IPowerStorage powerStorage) {
-            IPowerStorage controller = powerStorage.getController();
-            storage = controller != null ? controller : powerStorage;
-            if (storage instanceof ICapBankNetwork network) {
-                capBankNetwork = network;
+        if (tileEntity instanceof TileCapBank capBank) {
+            this.capBank = capBank;
+            ICapBankNetwork activeNetwork = capBank.getNetwork();
+            storage = activeNetwork != null ? activeNetwork : resolveStorage(capBank);
+            if (storage instanceof ICapBankNetwork networkStorage) {
+                capBankNetwork = networkStorage;
             }
             energyType = EnergyType.STORAGE;
             return this;
         }
-        if (tileEntity instanceof ILegacyPoweredTile.Generator legacyGenerator) {
-            generator = legacyGenerator;
-            energyType = EnergyType.SEND;
-            return this;
-        }
-        if (tileEntity instanceof ILegacyPoweredTile.Receiver legacyReceiver) {
-            receiver = legacyReceiver;
-            receiveFacing = findConnectedFacing(legacyReceiver);
-            energyType = EnergyType.RECEIVE;
-            return this;
-        }
         energyType = EnergyType.INVALID;
         return this;
+    }
+
+    private static IPowerStorage resolveStorage(TileCapBank capBank) {
+        IPowerStorage controller = capBank.getController();
+        return controller != null ? controller : capBank;
+    }
+
+    private void refreshNetworkStorage() {
+        if (capBank == null) {
+            return;
+        }
+        ICapBankNetwork activeNetwork = capBank.getNetwork();
+        if (activeNetwork != null) {
+            if (activeNetwork == capBankNetwork) {
+                return;
+            }
+            capBankNetwork = activeNetwork;
+            storage = activeNetwork;
+            return;
+        }
+        if (capBankNetwork != null) {
+            capBankNetwork = null;
+            storage = resolveStorage(capBank);
+        }
     }
 
     @Override
@@ -85,35 +84,61 @@ public class EIOHandler implements IEnergyHandler {
     public void clear() {
         storage = null;
         capBankNetwork = null;
-        generator = null;
-        receiver = null;
-        receiveFacing = null;
+        capBank = null;
         energyType = null;
+    }
+
+    @Nullable
+    private EnumFacing findInputFace() {
+        if (capBank == null) {
+            return null;
+        }
+        for (EnumFacing facing : EnumFacing.VALUES) {
+            if (capBank.isInputEnabled(facing)) {
+                return facing;
+            }
+        }
+        return null;
+    }
+
+    private boolean canInput() {
+        if (capBankNetwork != null) {
+            return capBankNetwork.isInputEnabled();
+        }
+        return findInputFace() != null;
+    }
+
+    private boolean canOutput() {
+        if (capBankNetwork != null) {
+            return capBankNetwork.isOutputEnabled();
+        }
+        if (capBank == null) {
+            return false;
+        }
+        for (EnumFacing facing : EnumFacing.VALUES) {
+            if (capBank.isOutputEnabled(facing)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
     public EnergyAmount receiveEnergy(EnergyAmount maxReceive, @Nullable HubNode.HubMetadata hubMetadata) {
-        if (storage != null) {
+        refreshNetworkStorage();
+        if (storage != null && canInput()) {
             long before = storage.getEnergyStoredL();
             int requested = clampPositive(maxReceive.asLongClamped(), storage.getMaxEnergyStoredL() - before, storage.getMaxInput());
             if (requested <= 0) {
                 return EnergyAmounts.ZERO;
             }
+            int accepted;
             if (capBankNetwork != null) {
-                capBankNetwork.receiveEnergy(requested, false);
+                accepted = capBankNetwork.receiveEnergy(requested, false);
             } else {
-                storage.addEnergy(requested);
+                EnumFacing inputFace = findInputFace();
+                accepted = inputFace == null || capBank == null ? 0 : capBank.receiveEnergy(inputFace, requested, false);
             }
-            long accepted = Math.max(0L, storage.getEnergyStoredL() - before);
-            return accepted > 0L ? EnergyAmount.obtain(accepted) : EnergyAmounts.ZERO;
-        }
-        if (receiver != null && receiveFacing != null) {
-            long room = Math.max(0L, receiver.getMaxEnergyStored() - receiver.getEnergyStored());
-            int requested = clampPositive(maxReceive.asLongClamped(), room, receiver.getMaxEnergyRecieved(receiveFacing));
-            if (requested <= 0) {
-                return EnergyAmounts.ZERO;
-            }
-            int accepted = receiver.receiveEnergy(receiveFacing, requested, false);
             return accepted > 0 ? EnergyAmount.obtain(accepted) : EnergyAmounts.ZERO;
         }
         return EnergyAmounts.ZERO;
@@ -121,48 +146,35 @@ public class EIOHandler implements IEnergyHandler {
 
     @Override
     public EnergyAmount extractEnergy(EnergyAmount maxExtract, @Nullable HubNode.HubMetadata hubMetadata) {
-        if (storage != null) {
+        refreshNetworkStorage();
+        if (storage != null && canOutput()) {
             long before = storage.getEnergyStoredL();
             int requested = clampPositive(maxExtract.asLongClamped(), before, storage.getMaxOutput());
             if (requested <= 0) {
                 return EnergyAmounts.ZERO;
             }
             storage.addEnergy(-requested);
-            long extracted = Math.max(0L, before - storage.getEnergyStoredL());
+            long extracted = storage.isCreative() ? requested : Math.max(0L, before - storage.getEnergyStoredL());
             return extracted > 0L ? EnergyAmount.obtain(extracted) : EnergyAmounts.ZERO;
-        }
-        if (generator != null) {
-            int before = generator.getEnergyStored();
-            int requested = clampPositive(maxExtract.asLongClamped(), before, before);
-            if (requested <= 0) {
-                return EnergyAmounts.ZERO;
-            }
-            generator.setEnergyStored(before - requested);
-            return EnergyAmount.obtain(Math.max(0, before - generator.getEnergyStored()));
         }
         return EnergyAmounts.ZERO;
     }
 
     @Override
     public EnergyAmount canExtractValue(@Nullable HubNode.HubMetadata hubMetadata) {
-        if (storage != null) {
+        refreshNetworkStorage();
+        if (storage != null && canOutput()) {
             return EnergyAmount.obtain(Math.max(0L, Math.min(storage.getEnergyStoredL(), storage.getMaxOutput())));
-        }
-        if (generator != null) {
-            return EnergyAmount.obtain(Math.max(0, generator.getEnergyStored()));
         }
         return EnergyAmounts.ZERO;
     }
 
     @Override
     public EnergyAmount canReceiveValue(@Nullable HubNode.HubMetadata hubMetadata) {
-        if (storage != null) {
+        refreshNetworkStorage();
+        if (storage != null && canInput()) {
             long room = Math.max(0L, storage.getMaxEnergyStoredL() - storage.getEnergyStoredL());
             return EnergyAmount.obtain(Math.min(room, storage.getMaxInput()));
-        }
-        if (receiver != null && receiveFacing != null) {
-            long room = Math.max(0L, receiver.getMaxEnergyStored() - receiver.getEnergyStored());
-            return EnergyAmount.obtain(Math.min(room, receiver.getMaxEnergyRecieved(receiveFacing)));
         }
         return EnergyAmounts.ZERO;
     }

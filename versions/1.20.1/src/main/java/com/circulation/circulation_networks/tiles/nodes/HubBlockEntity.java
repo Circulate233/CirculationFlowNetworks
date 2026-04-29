@@ -22,6 +22,9 @@ import com.circulation.circulation_networks.registry.NodeTypes;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientGamePacketListener;
+import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
@@ -110,6 +113,20 @@ public class HubBlockEntity extends BaseNodeBlockEntity<IHubNode> implements IHu
     }
 
     @Override
+    @Nullable
+    public Packet<ClientGamePacketListener> getUpdatePacket() {
+        return ClientboundBlockEntityDataPacket.create(this);
+    }
+
+    @Override
+    @NotNull
+    public CompoundTag getUpdateTag() {
+        CompoundTag tag = new CompoundTag();
+        saveAdditional(tag);
+        return tag;
+    }
+
+    @Override
     public void load(@NotNull CompoundTag nbt) {
         super.load(nbt);
         plugins.readFromNBT(nbt, "plugins");
@@ -158,6 +175,7 @@ public class HubBlockEntity extends BaseNodeBlockEntity<IHubNode> implements IHu
             HubPluginStateTracker.saveAllPluginData(getNode(), plugins);
             HubPluginStateTracker.savePluginData(getNode(), oldStack);
             HubPluginStateTracker.syncInventoryChange(getNode(), oldStack, newStack);
+            notifyPluginInventoryChanged();
         }
         setChanged();
     }
@@ -184,5 +202,10 @@ public class HubBlockEntity extends BaseNodeBlockEntity<IHubNode> implements IHu
 
     private void initializeHubPluginState() {
         HubPluginStateTracker.initializeFromInventory(getNode(), plugins);
+    }
+
+    private void notifyPluginInventoryChanged() {
+        BlockState state = getBlockState();
+        level.sendBlockUpdated(worldPosition, state, state, 3);
     }
 }
