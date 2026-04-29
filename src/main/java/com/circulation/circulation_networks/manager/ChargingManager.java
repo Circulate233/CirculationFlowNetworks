@@ -39,6 +39,7 @@ import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 import static com.circulation.circulation_networks.manager.EnergyMachineManager.transferEnergy;
 
@@ -61,6 +62,7 @@ public final class ChargingManager {
     private final ObjectList<IGrid> activeChargeTargetGrids = new ObjectArrayList<>();
     private final ReferenceSet<IGrid> processedTransferGrids = new ReferenceOpenHashSet<>();
     private final ChannelTransferScratch channelTransferScratch = new ChannelTransferScratch();
+    private final ReferenceSet<IGrid> channelTransferGridsScratch = new ReferenceOpenHashSet<>();
     private final ObjectList<PlayerChargeState> playerStates = new ObjectArrayList<>();
 
     private static void collectChargeablesForGrid(IGrid grid,
@@ -249,9 +251,9 @@ public final class ChargingManager {
         var chargingTargets = chargeTargetsByGrid.getOrDefault(grid, Collections.emptySet());
 
         var hubNode = grid.getHubNode();
-        if (hubNode != null && !hubNode.getChannelId().equals(HubNode.EMPTY)) {
-            var channelGrids = HubChannelManager.INSTANCE.getChannelGrids(hubNode.getChannelId());
-            if (channelGrids != null && channelGrids.size() > 1) {
+        if (hubNode != null && hubNode.isActive() && !hubNode.getChannelId().equals(HubNode.EMPTY)) {
+            var channelGrids = INSTANCE.collectActiveChannelTransferGrids(hubNode.getChannelId(), grid, machineMap, processedGrids);
+            if (channelGrids.size() > 1) {
                 var merged = INSTANCE.channelTransferScratch.prepare();
 
                 for (var channelGrid : channelGrids) {
@@ -298,6 +300,30 @@ public final class ChargingManager {
             transferEnergy(handlers.send, chargingTargets, EnergyMachineManager.Status.EXTRACT, false);
             transferEnergy(handlers.storage, chargingTargets, EnergyMachineManager.Status.EXTRACT, false);
             EnergyMachineManager.recordGridTickTimeNanos(grid, System.nanoTime() - startNanos);
+        }
+    }
+
+    private ReferenceSet<IGrid> collectActiveChannelTransferGrids(UUID channelId,
+                                                                  IGrid rootGrid,
+                                                                  Reference2ObjectMap<IGrid, EnergyMachineManager.GridTickData> machineMap,
+                                                                  ReferenceSet<IGrid> processedGrids) {
+        channelTransferGridsScratch.clear();
+        for (var candidate : machineMap.keySet()) {
+            collectActiveChannelTransferGrid(channelId, rootGrid, candidate, processedGrids);
+        }
+        for (var candidate : activeChargeTargetGrids) {
+            collectActiveChannelTransferGrid(channelId, rootGrid, candidate, processedGrids);
+        }
+        return channelTransferGridsScratch;
+    }
+
+    private void collectActiveChannelTransferGrid(UUID channelId, IGrid rootGrid, IGrid candidate, ReferenceSet<IGrid> processedGrids) {
+        if (candidate != rootGrid && processedGrids.contains(candidate)) {
+            return;
+        }
+        var candidateHub = candidate.getHubNode();
+        if (candidateHub != null && candidateHub.isActive() && channelId.equals(candidateHub.getChannelId())) {
+            channelTransferGridsScratch.add(candidate);
         }
     }
 
@@ -570,6 +596,7 @@ public final class ChargingManager {
         tickChargeTargetsByGrid.clear();
         activeChargeTargetGrids.clear();
         processedTransferGrids.clear();
+        channelTransferGridsScratch.clear();
         playerStates.clear();
     }
 

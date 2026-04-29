@@ -458,7 +458,11 @@ public final class HubChannelManager {
     public ReferenceSet<IGrid> getChannelGrids(UUID channelId) {
         ensureLoaded();
         HubChannel channel = channels.get(channelId);
-        return channel != null ? channel.getGrids() : ReferenceSets.emptySet();
+        if (channel == null) {
+            return ReferenceSets.emptySet();
+        }
+        refreshChannelGrids(channel);
+        return channel.getGrids();
     }
 
     public void load() {
@@ -591,6 +595,28 @@ public final class HubChannelManager {
             }
         }
         return boundHubs;
+    }
+
+    private void refreshChannelGrids(HubChannel channel) {
+        var grids = channel.getGrids();
+        grids.clear();
+        UUID channelId = channel.getChannelId();
+        var iterator = hubChannels.reference2ObjectEntrySet().iterator();
+        while (iterator.hasNext()) {
+            var entry = iterator.next();
+            IHubNode hub = entry.getKey();
+            if (hub == null || !hub.isActive()) {
+                iterator.remove();
+                continue;
+            }
+            if (!channelId.equals(entry.getValue())) {
+                continue;
+            }
+            IGrid grid = hub.getGrid();
+            if (grid != null) {
+                grids.add(grid);
+            }
+        }
     }
 
     @Nullable

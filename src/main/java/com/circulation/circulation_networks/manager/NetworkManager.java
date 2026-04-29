@@ -42,7 +42,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.neoforged.fml.loading.FMLEnvironment;
+import net.neoforged.neoforge.server.ServerLifecycleHooks;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -98,7 +98,7 @@ public final class NetworkManager {
     }
 
     public static boolean isServerAvailable() {
-        return FMLEnvironment.getDist().isDedicatedServer();
+        return ServerLifecycleHooks.getCurrentServer() != null;
     }
 
     static void runFileIoAsync(Runnable task) {

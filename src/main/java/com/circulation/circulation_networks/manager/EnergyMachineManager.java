@@ -47,6 +47,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 
 public final class EnergyMachineManager {
 
@@ -69,6 +70,7 @@ public final class EnergyMachineManager {
     private final ReferenceSet<IEnergyHandler> tickSharedHandlers = new ReferenceOpenHashSet<>();
     private final Object2ObjectMap<String, LongSet> warningPositionsScratch = new Object2ObjectOpenHashMap<>();
     private final ChannelMergeScratch channelMergeScratch = new ChannelMergeScratch();
+    private final ReferenceSet<IGrid> channelTickGridsScratch = new ReferenceOpenHashSet<>();
     private final ReferenceSet<IGrid> dedupGridScratch = new ReferenceOpenHashSet<>();
     private final ReferenceSet<BlockEntity> cache = new ReferenceOpenHashSet<>();
     private final Object2ObjectMap<String, Long2LongMap> lastWarningTicks = new Object2ObjectOpenHashMap<>();
@@ -309,8 +311,8 @@ public final class EnergyMachineManager {
             if (hubNode != null && hubNode.isActive()) {
                 var channelId = hubNode.getChannelId();
                 if (!channelId.equals(HubNode.EMPTY)) {
-                    var channelGrids = HubChannelManager.INSTANCE.getChannelGrids(channelId);
-                    if (channelGrids != null && channelGrids.size() > 1) {
+                    var channelGrids = collectActiveChannelTickGrids(channelId);
+                    if (channelGrids.size() > 1) {
                         var merged = channelMergeScratch.prepare();
                         for (var cg : channelGrids) {
                             var handlers = tickGridData.get(cg);
@@ -364,6 +366,20 @@ public final class EnergyMachineManager {
         }
         recycleTickMachineHandlers();
         activeTickGrids.clear();
+    }
+
+    private ReferenceSet<IGrid> collectActiveChannelTickGrids(UUID channelId) {
+        channelTickGridsScratch.clear();
+        for (var candidate : activeTickGrids) {
+            if (processedTickGrids.contains(candidate)) {
+                continue;
+            }
+            var candidateHub = candidate.getHubNode();
+            if (candidateHub != null && candidateHub.isActive() && channelId.equals(candidateHub.getChannelId())) {
+                channelTickGridsScratch.add(candidate);
+            }
+        }
+        return channelTickGridsScratch;
     }
 
     public void addMachine(BlockEntity blockEntity) {
@@ -633,6 +649,7 @@ public final class EnergyMachineManager {
         tickGridData.clear();
         activeTickGrids.clear();
         processedTickGrids.clear();
+        channelTickGridsScratch.clear();
         machineEnergyTypeCache.clear();
         nodeRescanTicks.clear();
         warningPositionsScratch.clear();
