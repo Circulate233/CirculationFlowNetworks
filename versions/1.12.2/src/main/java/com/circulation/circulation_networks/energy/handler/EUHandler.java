@@ -13,6 +13,7 @@ import ic2.api.item.ElectricItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 
+import net.minecraft.util.EnumFacing;
 import org.jetbrains.annotations.Nullable;
 
 @SuppressWarnings("DataFlowIssue")
@@ -28,9 +29,7 @@ public class EUHandler implements IEnergyHandler {
 
     @Nullable
     private IEnergySink receive;
-
-    public EUHandler() {
-    }
+    private EnumFacing receiveFacing = EnumFacing.NORTH;
 
     static EnergyAmount positiveFeAmountFromEu(double valueEu) {
         if (!(valueEu > 0.0D)) {
@@ -99,8 +98,15 @@ public class EUHandler implements IEnergyHandler {
             } else energyType = EnergyType.SEND;
             send = (IEnergySource) tile;
         } else {
-            energyType = EnergyType.RECEIVE;
-            receive = (IEnergySink) tile;
+            var receive = (IEnergySink) tile;
+            for (var value : EnumFacing.values()) {
+                if (receive.acceptsEnergyFrom(null, value)) {
+                    this.receiveFacing = value;
+                    this.receive = receive;
+                    energyType = EnergyType.RECEIVE;
+                    break;
+                }
+            }
         }
         if (!(send != null && send.getOfferedEnergy() > 0) && !(receive != null && receive.getDemandedEnergy() > 0))
             energyType = EnergyType.INVALID;
@@ -147,7 +153,7 @@ public class EUHandler implements IEnergyHandler {
             }
             EnergyAmount euAmount = EnergyAmount.obtain(receivable).divide(4L);
             try {
-                double leftover = receive.injectEnergy(null, EnergyAmountConversionUtils.toDoubleClamped(euAmount), 0);
+                double leftover = receive.injectEnergy(receiveFacing, EnergyAmountConversionUtils.toDoubleClamped(euAmount), 0);
                 setAcceptedFeFromEuRemainder(receivable, leftover, euAmount);
                 return receivable;
             } finally {
