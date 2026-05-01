@@ -15,6 +15,7 @@ import com.circulation.circulation_networks.packets.NodeHudRequest;
 import com.circulation.circulation_networks.packets.NodeNetworkRendering;
 import com.circulation.circulation_networks.packets.PocketNodeRendering;
 import com.circulation.circulation_networks.packets.RenderingClear;
+import com.circulation.circulation_networks.packets.ToggleItemFunctionMessage;
 import com.circulation.circulation_networks.packets.SpoceRendering;
 import com.circulation.circulation_networks.packets.UpdateHubChannelPermission;
 import com.circulation.circulation_networks.packets.UpdateHubChannelSettings;
@@ -47,6 +48,7 @@ public final class CFNNetwork {
         registerPlayToServer(registrar, UpdateHubChannelSettings.class);
         registerPlayToServer(registrar, UpdateNodeCustomName.class);
         registerPlayToServer(registrar, UpdatePlayerChargingMode.class);
+        registerPlayToServer(registrar, ToggleItemFunctionMessage.class);
         registerPlayToServer(registrar, NodeHudRequest.class);
         registerPlayToServer(registrar, HubPluginSyncRequest.class);
 

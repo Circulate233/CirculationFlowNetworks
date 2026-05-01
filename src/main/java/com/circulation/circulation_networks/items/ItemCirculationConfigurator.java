@@ -12,6 +12,8 @@ import com.circulation.circulation_networks.manager.PocketNodeManager;
 import com.circulation.circulation_networks.packets.ConfigOverrideRendering;
 import com.circulation.circulation_networks.packets.NodeNetworkRendering;
 import com.circulation.circulation_networks.packets.SpoceRendering;
+import com.circulation.circulation_networks.packets.ToggleItemFunctionMessage;
+import com.circulation.circulation_networks.registry.CFNItems;
 import com.circulation.circulation_networks.registry.RegistryEnergyHandler;
 import com.circulation.circulation_networks.tiles.BlockEntityMultiblockShell;
 import com.circulation.circulation_networks.tooltip.LocalizedComponent;
@@ -36,7 +38,7 @@ public class ItemCirculationConfigurator extends BaseItem {
         super(properties);
     }
 
-    private static void sendModeMessage(ServerPlayer player, CirculationConfiguratorSelection selection) {
+    public static void sendModeMessage(ServerPlayer player, CirculationConfiguratorSelection selection) {
         player.sendOverlayMessage(
             Component.translatable(
                 selection.modeDisplayKey(),
@@ -54,7 +56,7 @@ public class ItemCirculationConfigurator extends BaseItem {
         }
     }
 
-    private static CirculationConfiguratorSelection toggleFunction(ItemStack stack, ServerPlayer player) {
+    public static CirculationConfiguratorSelection toggleFunction(ItemStack stack, ServerPlayer player) {
         var toggleResult = CirculationConfiguratorState.toggleFunction(stack);
         var selection = CirculationConfiguratorSelection.fromStack(stack);
         if (toggleResult.currentFunction() == ToolFunction.CONFIGURATION) {
@@ -135,11 +137,16 @@ public class ItemCirculationConfigurator extends BaseItem {
 
     @Override
     public @NotNull InteractionResult use(@NotNull Level worldIn, @NotNull Player player, @NotNull InteractionHand hand) {
-        if (!worldIn.isClientSide() && player instanceof ServerPlayer p && p.isShiftKeyDown()) {
-            HitResult ray = p.pick(5.0D, 1.0F, false);
+        if (player.isShiftKeyDown()) {
+            ItemStack stack = player.getItemInHand(hand);
+            if (stack.getItem() != CFNItems.circulationConfigurator) {
+                return super.use(worldIn, player, hand);
+            }
+            HitResult ray = player.pick(5.0D, 1.0F, false);
             if (ray == null || ray.getType() == HitResult.Type.MISS) {
-                ItemStack stack = p.getItemInHand(hand);
-                sendModeMessage(p, toggleFunction(stack, p));
+                if (worldIn.isClientSide()) {
+                    CirculationFlowNetworks.sendToServer(new ToggleItemFunctionMessage());
+                }
                 return InteractionResult.SUCCESS;
             }
         }
