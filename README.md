@@ -30,7 +30,7 @@ It's time to leave the cable era behind and experience a new generation of energ
 
 1. Craft a **Node Pedestal** and a **Port Node**
 2. Place the pedestal and put the Port Node on top
-3. Place generators and consumers within the Port Node's energy range (default: 8 blocks)
+3. Place generators and consumers within the Port Node's energy range (default: 12 blocks)
 4. The network automatically detects machines and starts transferring energy — no extra setup needed
 
 **Expanding your network:**
@@ -54,29 +54,29 @@ The foundation for placing nodes. Port Nodes, Charging Nodes, and Relay Nodes mu
 
 The basic building block of an energy network. Automatically detects energy machines within range and connects them to the network. In most cases, this is the only node type you need to build a fully functional energy network.
 
-- Energy detection range: 8 blocks
-- Link range: 12 blocks
+- Energy detection range: 12 blocks
+- Link range: 18 blocks
 
 ### Charging Node
 
 Wirelessly charges items in the inventories of nearby players. Charging slots are configured through the Hub's charging settings tab. Ideal for placing in work areas or base entrances.
 
-- Charging range: 5 blocks
-- Link range: 8 blocks
+- Charging range: 7.5 blocks
+- Link range: 12 blocks
 
 ### Relay Node
 
 Does not detect energy machines — used solely to extend network coverage. When two groups of nodes are too far apart to link directly, place Relay Nodes in between to bridge them.
 
-- Link range: 20 blocks
+- Link range: 30 blocks
 
 ### Hub
 
 An optional management center for the network. Provides a GUI with plugin, channel, and permission systems. Only one Hub is allowed per network. The Hub can also detect energy machines and charge nearby players.
 
-- Energy detection range: 10 blocks
-- Charging range: 8 blocks
-- Link range: 16 blocks
+- Energy detection range: 15 blocks
+- Charging range: 12 blocks
+- Link range: 24 blocks
 - Plugin slots: 5
 
 ### Circulation Shielder
@@ -177,14 +177,14 @@ All parameters are adjustable in the config file:
 
 | Node                 | Parameter              | Default |
 |----------------------|------------------------|---------|
-| Port Node            | Energy detection range | 8       |
-| Port Node            | Link range             | 12      |
-| Charging Node        | Charging range         | 5       |
-| Charging Node        | Link range             | 8       |
-| Relay Node           | Link range             | 20      |
-| Hub                  | Energy detection range | 10      |
-| Hub                  | Charging range         | 8       |
-| Hub                  | Link range             | 16      |
+| Port Node            | Energy detection range | 12      |
+| Port Node            | Link range             | 18      |
+| Charging Node        | Charging range         | 7.5     |
+| Charging Node        | Link range             | 12      |
+| Relay Node           | Link range             | 30      |
+| Hub                  | Energy detection range | 15      |
+| Hub                  | Charging range         | 12      |
+| Hub                  | Link range             | 24      |
 | Circulation Shielder | Max range              | 8       |
 
 ### Other Options

@@ -70,49 +70,49 @@ public final class CFNConfig {
         public static class PortNodeConfig {
             @Config.Comment({"环流端口节点的能量范围", "Energy range of Circulation Port Node"})
             @Config.Name("energyScope")
-            @Config.RangeDouble(min = 0.1, max = 32)
-            public double energyScope = 8;
+            @Config.RangeDouble(min = 0.1, max = 48)
+            public double energyScope = 12;
 
             @Config.Comment({"环流端口节点的链接范围", "Link range of Circulation Port Node"})
             @Config.Name("linkScope")
-            @Config.RangeDouble(min = 0.1, max = 32)
-            public double linkScope = 12;
+            @Config.RangeDouble(min = 0.1, max = 48)
+            public double linkScope = 18;
         }
 
         public static class ChargingNodeConfig {
             @Config.Comment({"环流充能节点的充能范围", "Charging range of Circulation Charging Node"})
             @Config.Name("chargingScope")
-            @Config.RangeDouble(min = 1, max = 32)
-            public double chargingScope = 5;
+            @Config.RangeDouble(min = 1, max = 48)
+            public double chargingScope = 7.5;
 
             @Config.Comment({"环流充能节点的链接范围", "Link range of Circulation Charging Node"})
             @Config.Name("linkScope")
-            @Config.RangeDouble(min = 1, max = 32)
-            public double linkScope = 8;
+            @Config.RangeDouble(min = 1, max = 48)
+            public double linkScope = 12;
         }
 
         public static class RelayNodeConfig {
             @Config.Comment({"环流中继节点的链接范围", "Link range of Circulation Relay Node"})
             @Config.Name("linkScope")
-            @Config.RangeDouble(min = 1, max = 64)
+            @Config.RangeDouble(min = 1, max = 96)
             public double linkScope = 20;
         }
 
         public static class HubConfig {
             @Config.Comment({"中枢的能量范围", "Energy range of Hub"})
             @Config.Name("energyScope")
-            @Config.RangeDouble(min = 1, max = 32)
-            public double energyScope = 10;
+            @Config.RangeDouble(min = 1, max = 48)
+            public double energyScope = 15;
 
             @Config.Comment({"中枢的充能范围", "Charging range of Hub"})
             @Config.Name("chargingScope")
-            @Config.RangeDouble(min = 1, max = 32)
-            public double chargingScope = 8;
+            @Config.RangeDouble(min = 1, max = 48)
+            public double chargingScope = 12;
 
             @Config.Comment({"中枢的链接范围", "Link range of Hub"})
             @Config.Name("linkScope")
-            @Config.RangeDouble(min = 1, max = 32)
-            public double linkScope = 16;
+            @Config.RangeDouble(min = 1, max = 48)
+            public double linkScope = 24;
         }
 
         public static class RenderingConfig {

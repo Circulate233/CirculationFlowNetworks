@@ -11,6 +11,7 @@ import com.circulation.circulation_networks.packets.NodeHudRequest;
 import com.circulation.circulation_networks.packets.UpdateHubChannelPermission;
 import com.circulation.circulation_networks.packets.UpdateHubChannelSettings;
 import com.circulation.circulation_networks.packets.UpdateItemModeMessage;
+import com.circulation.circulation_networks.packets.ToggleItemFunctionMessage;
 import com.circulation.circulation_networks.packets.UpdateNodeCustomName;
 import com.circulation.circulation_networks.packets.UpdatePlayerChargingMode;
 import com.circulation.circulation_networks.utils.Packet;
@@ -45,6 +46,7 @@ public final class CFNNetwork {
 
         registerMessage(ContainerProgressBar.class, NetworkDirection.PLAY_TO_SERVER);
         registerMessage(UpdateItemModeMessage.class, NetworkDirection.PLAY_TO_SERVER);
+        registerMessage(ToggleItemFunctionMessage.class, NetworkDirection.PLAY_TO_SERVER);
         registerMessage(BindHubChannel.class, NetworkDirection.PLAY_TO_SERVER);
         registerMessage(CirculationShielderSyncPacket.class, NetworkDirection.PLAY_TO_SERVER);
         registerMessage(CreateHubChannel.class, NetworkDirection.PLAY_TO_SERVER);

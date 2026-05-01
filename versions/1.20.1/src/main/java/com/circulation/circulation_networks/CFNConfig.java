@@ -56,23 +56,23 @@ public final class CFNConfig {
         builder.push("Node");
 
         builder.push("PortNode");
-        PORT_NODE_ENERGY_SCOPE = builder.comment("Energy range of Circulation Port Node").defineInRange("energyScope", 8.0, 0.1, 32.0);
-        PORT_NODE_LINK_SCOPE = builder.comment("Link range of Circulation Port Node").defineInRange("linkScope", 12.0, 0.1, 32.0);
+        PORT_NODE_ENERGY_SCOPE = builder.comment("Energy range of Circulation Port Node").defineInRange("energyScope", 12.0, 0.1, 48.0);
+        PORT_NODE_LINK_SCOPE = builder.comment("Link range of Circulation Port Node").defineInRange("linkScope", 18.0, 0.1, 48.0);
         builder.pop();
 
         builder.push("ChargingNode");
-        CHARGING_NODE_CHARGING_SCOPE = builder.comment("Charging range of Circulation Charging Node").defineInRange("chargingScope", 5.0, 1.0, 32.0);
-        CHARGING_NODE_LINK_SCOPE = builder.comment("Link range of Circulation Charging Node").defineInRange("linkScope", 8.0, 1.0, 32.0);
+        CHARGING_NODE_CHARGING_SCOPE = builder.comment("Charging range of Circulation Charging Node").defineInRange("chargingScope", 7.5, 1.0, 48.0);
+        CHARGING_NODE_LINK_SCOPE = builder.comment("Link range of Circulation Charging Node").defineInRange("linkScope", 12.0, 1.0, 48.0);
         builder.pop();
 
         builder.push("RelayNode");
-        RELAY_NODE_LINK_SCOPE = builder.comment("Link range of Circulation Relay Node").defineInRange("linkScope", 20.0, 1.0, 64.0);
+        RELAY_NODE_LINK_SCOPE = builder.comment("Link range of Circulation Relay Node").defineInRange("linkScope", 30.0, 1.0, 96.0);
         builder.pop();
 
         builder.push("Hub");
-        HUB_ENERGY_SCOPE = builder.comment("Energy range of Hub").defineInRange("energyScope", 10.0, 1.0, 32.0);
-        HUB_CHARGING_SCOPE = builder.comment("Charging range of Hub").defineInRange("chargingScope", 8.0, 1.0, 32.0);
-        HUB_LINK_SCOPE = builder.comment("Link range of Hub").defineInRange("linkScope", 16.0, 1.0, 32.0);
+        HUB_ENERGY_SCOPE = builder.comment("Energy range of Hub").defineInRange("energyScope", 15.0, 1.0, 48.0);
+        HUB_CHARGING_SCOPE = builder.comment("Charging range of Hub").defineInRange("chargingScope", 12.0, 1.0, 48.0);
+        HUB_LINK_SCOPE = builder.comment("Link range of Hub").defineInRange("linkScope", 24.0, 1.0, 48.0);
         builder.pop();
 
         builder.push("Rendering");
@@ -124,23 +124,23 @@ public final class CFNConfig {
         public final RenderingConfig rendering = new RenderingConfig();
 
         public static class PortNodeConfig {
-            public double energyScope = 8;
-            public double linkScope = 12;
+            public double energyScope = 12;
+            public double linkScope = 18;
         }
 
         public static class ChargingNodeConfig {
-            public double chargingScope = 5;
-            public double linkScope = 8;
+            public double chargingScope = 7.5;
+            public double linkScope = 12;
         }
 
         public static class RelayNodeConfig {
-            public double linkScope = 20;
+            public double linkScope = 30;
         }
 
         public static class HubConfig {
-            public double energyScope = 10;
-            public double chargingScope = 8;
-            public double linkScope = 16;
+            public double energyScope = 15;
+            public double chargingScope = 12;
+            public double linkScope = 24;
         }
 
         public static class RenderingConfig {

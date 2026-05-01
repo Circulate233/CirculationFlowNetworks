@@ -12,6 +12,7 @@ import com.circulation.circulation_networks.manager.PocketNodeManager;
 import com.circulation.circulation_networks.packets.ConfigOverrideRendering;
 import com.circulation.circulation_networks.packets.NodeNetworkRendering;
 import com.circulation.circulation_networks.packets.SpoceRendering;
+import com.circulation.circulation_networks.packets.ToggleItemFunctionMessage;
 import com.circulation.circulation_networks.registry.RegistryEnergyHandler;
 import com.circulation.circulation_networks.tooltip.LocalizedComponent;
 //? if <1.20 {
@@ -109,7 +110,7 @@ public class ItemCirculationConfigurator extends BaseItem {
     //~}
 
     //~ if >=1.20 'EntityPlayerMP' -> 'ServerPlayer' {
-    private static CirculationConfiguratorSelection toggleFunction(ItemStack stack, EntityPlayerMP player) {
+    public static CirculationConfiguratorSelection toggleFunction(ItemStack stack, EntityPlayerMP player) {
         var toggleResult = CirculationConfiguratorState.toggleFunction(stack);
         var selection = CirculationConfiguratorSelection.fromStack(stack);
         if (toggleResult.currentFunction() == ToolFunction.CONFIGURATION) {
@@ -261,11 +262,13 @@ public class ItemCirculationConfigurator extends BaseItem {
     //? if <1.20 {
     @Override
     public @NotNull ActionResult<ItemStack> onItemRightClick(@NotNull World worldIn, @NotNull EntityPlayer player, @NotNull EnumHand hand) {
-        if (!worldIn.isRemote && player instanceof EntityPlayerMP p && p.isSneaking()) {
-            RayTraceResult ray = p.rayTrace(p.getEntityAttribute(EntityPlayer.REACH_DISTANCE).getAttributeValue(), 1.0F);
+        if (player.isSneaking()) {
+            RayTraceResult ray = player.rayTrace(player.getEntityAttribute(EntityPlayer.REACH_DISTANCE).getAttributeValue(), 1.0F);
             if (ray == null || ray.typeOfHit == RayTraceResult.Type.MISS) {
-                ItemStack stack = p.getHeldItem(hand);
-                sendModeMessage(p, toggleFunction(stack, p));
+                ItemStack stack = player.getHeldItem(hand);
+                if (worldIn.isRemote) {
+                    CirculationFlowNetworks.sendToServer(new ToggleItemFunctionMessage());
+                }
                 return new ActionResult<>(EnumActionResult.SUCCESS, stack);
             }
         }
@@ -274,11 +277,13 @@ public class ItemCirculationConfigurator extends BaseItem {
     //?} else {
     /*@Override
     public @NotNull InteractionResultHolder<ItemStack> use(@NotNull Level worldIn, @NotNull Player player, @NotNull InteractionHand hand) {
-        if (!worldIn.isClientSide && player instanceof ServerPlayer p && p.isShiftKeyDown()) {
-            HitResult ray = p.pick(5.0D, 1.0F, false);
+        if (player.isShiftKeyDown()) {
+            HitResult ray = player.pick(5.0D, 1.0F, false);
             if (ray == null || ray.getType() == HitResult.Type.MISS) {
-                ItemStack stack = p.getItemInHand(hand);
-                sendModeMessage(p, toggleFunction(stack, p));
+                ItemStack stack = player.getItemInHand(hand);
+                if (worldIn.isClientSide) {
+                    CirculationFlowNetworks.sendToServer(new ToggleItemFunctionMessage());
+                }
                 return InteractionResultHolder.success(stack);
             }
         }

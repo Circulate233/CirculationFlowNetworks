@@ -35,6 +35,7 @@ import com.circulation.circulation_networks.packets.SpoceRendering;
 import com.circulation.circulation_networks.packets.UpdateHubChannelPermission;
 import com.circulation.circulation_networks.packets.UpdateHubChannelSettings;
 import com.circulation.circulation_networks.packets.UpdateItemModeMessage;
+import com.circulation.circulation_networks.packets.ToggleItemFunctionMessage;
 import com.circulation.circulation_networks.packets.UpdateNodeCustomName;
 import com.circulation.circulation_networks.packets.UpdatePlayerChargingMode;
 import com.circulation.circulation_networks.registry.RegistryBlocks;
@@ -128,6 +129,7 @@ public class CommonProxy implements IGuiHandler {
         NetworkRegistry.INSTANCE.registerGuiHandler(CirculationFlowNetworks.instance, this);
         registerMessage(CirculationShielderSyncPacket.class, Side.SERVER);
         registerMessage(UpdateItemModeMessage.class, Side.SERVER);
+        registerMessage(ToggleItemFunctionMessage.class, Side.SERVER);
         registerMessage(ContainerProgressBar.class, Side.SERVER);
         registerMessage(UpdatePlayerChargingMode.class, Side.SERVER);
         registerMessage(UpdateNodeCustomName.class, Side.SERVER);
