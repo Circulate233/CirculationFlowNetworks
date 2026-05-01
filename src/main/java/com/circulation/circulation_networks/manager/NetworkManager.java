@@ -469,7 +469,7 @@ public final class NetworkManager {
                 return;
             }
             if (current != null && current != actual) {
-                removeNode(current);
+                removeNode(dimId, event.getPos());
             }
             addNode(actual, blockEntity);
             validationTracker.removeIfRegistered(dimId, event.getPos(), posNodes.get(dimId), actual);
@@ -519,7 +519,7 @@ public final class NetworkManager {
                 }
                 if (mapped != actual) {
                     if (mapped != null) {
-                        removeNode(mapped);
+                        removeNode(dimId, pos);
                     }
                     addNode(actual, blockEntity);
                     if (actual instanceof IMachineNode machineNode) {
@@ -536,7 +536,7 @@ public final class NetworkManager {
                 && nbe.getNode() == mapped) {
                 toRemove.add(posLong);
             } else if (mapped != null) {
-                removeNode(mapped);
+                removeNode(dimId, pos);
             } else {
                 toRemove.add(posLong);
             }
@@ -594,13 +594,16 @@ public final class NetworkManager {
         var pMap = posNodes.get(dim);
         if (pMap != null && pMap != posNodes.defaultReturnValue()) {
             //~ if >=1.20 '.toLong()' -> '.asLong()' {
-            removeNode(pMap.get(pos.toLong()));
+            INode removedNode = pMap.get(pos.toLong());
+            if (removedNode != null) {
+                removeNodeInternal(removedNode);
+            }
             //~}
         }
     }
 
-    public void removeNode(INode removedNode) {
-        if (removedNode == null || isClientWorld(removedNode.getWorld()) || !activeNodes.remove(removedNode)) return;
+    private void removeNodeInternal(INode removedNode) {
+        if (!activeNodes.remove(removedNode)) return;
 
         NodeEventHooks.postRemoveNodePre(removedNode);
         int dimId = getDimensionId(removedNode);

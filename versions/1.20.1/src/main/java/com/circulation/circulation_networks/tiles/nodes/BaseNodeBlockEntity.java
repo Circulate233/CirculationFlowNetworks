@@ -54,7 +54,7 @@ public abstract class BaseNodeBlockEntity<N extends INode> extends BaseCFNBlockE
     public void nodeInvalidate() {
         if (node == null) return;
         if (level != null && !level.isClientSide()) {
-            NetworkManager.INSTANCE.removeNode(node);
+            NetworkManager.INSTANCE.removeNode(node.getDimensionId(), node.getPos());
         } else {
             node.setActive(false);
         }
@@ -89,11 +89,11 @@ public abstract class BaseNodeBlockEntity<N extends INode> extends BaseCFNBlockE
         } else {
             if (!nodeType.matches(node)) {
                 if (existingNode != null) {
-                    NetworkManager.INSTANCE.removeNode(existingNode);
+                    NetworkManager.INSTANCE.removeNode(existingNode.getDimensionId(), existingNode.getPos());
                 }
                 node = NodeFactory.createNode(nodeType, createNodeContext());
             } else if (existingNode != null && existingNode != node) {
-                NetworkManager.INSTANCE.removeNode(existingNode);
+                NetworkManager.INSTANCE.removeNode(existingNode.getDimensionId(), existingNode.getPos());
             }
         }
         onNodeBound(node);

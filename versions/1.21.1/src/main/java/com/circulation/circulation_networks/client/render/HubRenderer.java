@@ -168,14 +168,14 @@ public final class HubRenderer implements BlockEntityRenderer<HubBlockEntity> {
     private static void renderPluginThroughBufferSource(HubBlockEntity hub, PoseStack poseStack, MultiBufferSource bufferSource, BlockState state, long clientTicks, float partialTick, int slot) {
         ItemStack stack = hub.getPlugins().getStackInSlot(slot);
         var offset = HubRenderLayout.cornerOffsetForSlot(slot);
-        BlockPos renderPos = hub.getBlockPos().offset(offset.x(), offset.y(), offset.z());
+        BlockPos renderPos = hub.getBlockPos().offset(offset.x, offset.y, offset.z);
         int rotationPeriodTicks = resolvePluginRotationPeriodTicks(stack);
         float angle = HubRenderLayout.isClockwiseCornerSlot(slot)
             ? NodeRotationAnimation.hubClockwisePluginAngle(clientTicks, partialTick, rotationPeriodTicks)
             : NodeRotationAnimation.hubCounterClockwisePluginAngle(clientTicks, partialTick, rotationPeriodTicks);
 
         poseStack.pushPose();
-        poseStack.translate(offset.x(), offset.y(), offset.z());
+        poseStack.translate(offset.x, offset.y, offset.z);
         RotatingModelVBORenderer.renderFullBrightYAxisThroughBufferSource(poseStack, bufferSource, state,
             resolvePluginModel(stack, renderPos), angle, CENTER, CENTER, CENTER);
         poseStack.popPose();
@@ -184,14 +184,14 @@ public final class HubRenderer implements BlockEntityRenderer<HubBlockEntity> {
     private static void renderPluginCached(HubBlockEntity hub, PoseStack poseStack, BlockState state, long clientTicks, float partialTick, int slot) {
         ItemStack stack = hub.getPlugins().getStackInSlot(slot);
         var offset = HubRenderLayout.cornerOffsetForSlot(slot);
-        BlockPos renderPos = hub.getBlockPos().offset(offset.x(), offset.y(), offset.z());
+        BlockPos renderPos = hub.getBlockPos().offset(offset.x, offset.y, offset.z);
         int rotationPeriodTicks = resolvePluginRotationPeriodTicks(stack);
         float angle = HubRenderLayout.isClockwiseCornerSlot(slot)
             ? NodeRotationAnimation.hubClockwisePluginAngle(clientTicks, partialTick, rotationPeriodTicks)
             : NodeRotationAnimation.hubCounterClockwisePluginAngle(clientTicks, partialTick, rotationPeriodTicks);
 
         poseStack.pushPose();
-        poseStack.translate(offset.x(), offset.y(), offset.z());
+        poseStack.translate(offset.x, offset.y, offset.z);
         RotatingModelVBORenderer.renderFullBrightYAxis(poseStack, state,
             resolvePluginModel(stack, renderPos), angle, CENTER, CENTER, CENTER);
         poseStack.popPose();

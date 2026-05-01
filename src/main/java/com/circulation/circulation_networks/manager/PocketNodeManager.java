@@ -415,7 +415,7 @@ public final class PocketNodeManager {
                 PocketNodeRecord resolvedRecord = resolveValidatedRecord(world, host.record());
                 if (resolvedRecord == null) {
                     removeActiveHost(dimId, posLong);
-                    NetworkManager.INSTANCE.removeNode(host.node());
+                    NetworkManager.INSTANCE.removeNode(dimId, host.record().pos());
                     syncRemove(dimId, host.record().pos());
                     markDirty();
                     continue;
@@ -490,7 +490,7 @@ public final class PocketNodeManager {
         long posLong = pos.toLong();
         PocketNodeHost activeHost = removeActiveHost(dimId, posLong);
         if (activeHost != null) {
-            NetworkManager.INSTANCE.removeNode(activeHost.node());
+            NetworkManager.INSTANCE.removeNode(dimId, activeHost.record().pos());
             if (dropItem) {
                 dropItem(world, activeHost.record());
             }

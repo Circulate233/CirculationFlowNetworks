@@ -78,10 +78,6 @@ public final class HubRotatingRenderer extends TileEntitySpecialRenderer<TileEnt
         GlStateManager.popMatrix();
     }
 
-    private static void renderHubRingAtYOffset(RotatingModelRenderHelper.RenderBatch batch, double yOffset, ResourceLocation model, float angle, boolean ambient) {
-        renderHubRingAtYOffset(batch, yOffset, model, angle, ambient, batch.getTileEntity().getPos());
-    }
-
     private static void renderChannel(TileEntityHub hub, RotatingModelRenderHelper.RenderBatch batch, long clientTicks, float partialTicks) {
         if (!hasChannelPlugin(hub.getPlugins().getStackInSlot(0))) {
             return;
@@ -120,22 +116,18 @@ public final class HubRotatingRenderer extends TileEntitySpecialRenderer<TileEnt
         GlStateManager.popMatrix();
     }
 
-    private static void renderChannelAtYOffset(RotatingModelRenderHelper.RenderBatch batch, double yOffset, ResourceLocation model, float angle, boolean ambient) {
-        renderChannelAtYOffset(batch, yOffset, model, angle, ambient, batch.getTileEntity().getPos());
-    }
-
     private static void renderPlugins(TileEntityHub hub, RotatingModelRenderHelper.RenderBatch batch, long clientTicks, float partialTicks) {
         for (int slot = 1; slot <= 4; slot++) {
             ItemStack stack = hub.getPlugins().getStackInSlot(slot);
             var offset = HubRenderLayout.cornerOffsetForSlot(slot);
-            BlockPos renderPos = hub.getPos().add(offset.x(), offset.y(), offset.z());
+            BlockPos renderPos = hub.getPos().add(offset.x, offset.y, offset.z);
             int rotationPeriodTicks = resolvePluginRotationPeriodTicks(stack);
             float angle = HubRenderLayout.isClockwiseCornerSlot(slot)
                 ? NodeRotationAnimation.hubClockwisePluginAngle(clientTicks, partialTicks, rotationPeriodTicks)
                 : NodeRotationAnimation.hubCounterClockwisePluginAngle(clientTicks, partialTicks, rotationPeriodTicks);
 
             GlStateManager.pushMatrix();
-            GlStateManager.translate(offset.x(), offset.y(), offset.z());
+            GlStateManager.translate(offset.x, offset.y, offset.z);
             batch.renderAroundYAxisFullBright(resolvePluginModel(stack, renderPos), angle, CENTER, CENTER, CENTER, renderPos);
             GlStateManager.popMatrix();
         }

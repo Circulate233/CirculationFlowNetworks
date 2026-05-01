@@ -83,7 +83,7 @@ public abstract class BaseNodeTileEntity<N extends INode> extends BaseTileEntity
 
     protected void onInvalidate() {
         if (node != null) {
-            NetworkManager.INSTANCE.removeNode(node);
+            NetworkManager.INSTANCE.removeNode(node.getDimensionId(), node.getPos());
         }
     }
 
@@ -108,11 +108,11 @@ public abstract class BaseNodeTileEntity<N extends INode> extends BaseTileEntity
         } else {
             if (!nodeType.matches(node)) {
                 if (existingNode != null) {
-                    NetworkManager.INSTANCE.removeNode(existingNode);
+                    NetworkManager.INSTANCE.removeNode(existingNode.getDimensionId(), existingNode.getPos());
                 }
                 node = NodeFactory.createNode(nodeType, createNodeContext());
             } else if (existingNode != null && existingNode != node) {
-                NetworkManager.INSTANCE.removeNode(existingNode);
+                NetworkManager.INSTANCE.removeNode(existingNode.getDimensionId(), existingNode.getPos());
             }
         }
         onNodeBound(node);

@@ -15,7 +15,7 @@ public class Vec3d {
     }
 
     public static Vec3d ofCenter(Vec3i pos) {
-        return new Vec3d(pos.x() + 0.5D, pos.y() + 0.5D, pos.z() + 0.5D);
+        return new Vec3d(pos.x + 0.5D, pos.y + 0.5D, pos.z + 0.5D);
     }
 
     public double squareDistanceTo(double x, double y, double z) {

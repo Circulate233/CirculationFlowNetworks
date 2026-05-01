@@ -1,12 +1,18 @@
 package com.circulation.circulation_networks.math;
 
 import org.jetbrains.annotations.NotNull;
-//? if <1.20 {
-import com.github.bsideup.jabel.Desugar;
 
-@Desugar
-//?}
-public record Vec3i(int x, int y, int z) {
+public class Vec3i {
+
+    public final int x;
+    public final int y;
+    public final int z;
+
+    public Vec3i(int x, int y, int z) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+    }
 
     public double distanceSquared(double x, double y, double z) {
         double dx = this.x - x;

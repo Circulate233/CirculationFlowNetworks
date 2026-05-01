@@ -46,7 +46,7 @@ public final class BlockHub extends BaseNodeBlock {
             positions.put(origin.toLong(), list);
             for (var i = 0; i < o.length; i++) {
                 var offset = o[i];
-                list[i] = origin.add(offset.x(), offset.y(), offset.z());
+                list[i] = origin.add(offset.x, offset.y, offset.z);
             }
             return list;
         }
