@@ -9,6 +9,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.GLAllocation;
 import net.minecraft.client.renderer.GlStateManager;
+import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.renderer.RenderHelper;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.block.model.BakedQuad;
@@ -43,6 +44,7 @@ import java.util.Map;
 public final class RotatingModelRenderHelper {
 
     private static final int FULL_BRIGHT_LIGHTMAP = 15728880;
+    private static final float FULL_BRIGHT_LIGHT = 240.0F;
     private static final int DESTROY_STAGE_COUNT = 10;
     private static final Map<IBakedModel, IBakedModel> FULL_BRIGHT_MODELS = new IdentityHashMap<>();
     private static final Map<List<BakedQuad>, List<BakedQuad>> FULL_BRIGHT_QUAD_LISTS = new IdentityHashMap<>();
@@ -471,13 +473,21 @@ public final class RotatingModelRenderHelper {
             GlStateManager.translate(-pivotX, -pivotY, -pivotZ);
 
             if (fullBright && destroyStage < 0) {
-                renderFullBrightDisplayList(minecraft, tessellator, buffer, lightAccess, modelLocation, model, state, tileEntity, lightSamplePos, renderLayer, blockX, blockY, blockZ);
+                renderWithFullBrightState(() ->
+                    renderFullBrightDisplayList(minecraft, tessellator, buffer, lightAccess, modelLocation, model, state, tileEntity, lightSamplePos, renderLayer, blockX, blockY, blockZ)
+                );
             } else if (noDiffuse && destroyStage < 0) {
                 renderNoDiffuseDisplayList(minecraft, tessellator, buffer, modelLocation, model, state, tileEntity, lightSamplePos, renderLayer, blockX, blockY, blockZ);
             } else if (destroyStage < 0) {
                 renderNormalDisplayList(minecraft, tessellator, buffer, lightAccess, modelLocation, model, state, tileEntity, lightSamplePos, renderLayer, blockX, blockY, blockZ);
             } else {
-                renderModelPass(minecraft, tessellator, buffer, lightAccess, model, state, tileEntity, lightSamplePos, renderLayer, blockX, blockY, blockZ);
+                if (fullBright) {
+                    renderWithFullBrightState(() ->
+                        renderModelPass(minecraft, tessellator, buffer, lightAccess, model, state, tileEntity, lightSamplePos, renderLayer, blockX, blockY, blockZ)
+                    );
+                } else {
+                    renderModelPass(minecraft, tessellator, buffer, lightAccess, model, state, tileEntity, lightSamplePos, renderLayer, blockX, blockY, blockZ);
+                }
             }
 
             IBakedModel damageModel = createDamageModel(model, state, tileEntity, destroyStage);
@@ -486,6 +496,26 @@ public final class RotatingModelRenderHelper {
             }
 
             GlStateManager.popMatrix();
+        }
+
+        private static void renderWithFullBrightState(@NotNull Runnable renderer) {
+            float savedBrightnessX = OpenGlHelper.lastBrightnessX;
+            float savedBrightnessY = OpenGlHelper.lastBrightnessY;
+            boolean lightingEnabled = GL11.glIsEnabled(GL11.GL_LIGHTING);
+            GlStateManager.disableLighting();
+            OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, FULL_BRIGHT_LIGHT, FULL_BRIGHT_LIGHT);
+            GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
+            try {
+                renderer.run();
+            } finally {
+                OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, savedBrightnessX, savedBrightnessY);
+                GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
+                if (lightingEnabled) {
+                    GlStateManager.enableLighting();
+                } else {
+                    GlStateManager.disableLighting();
+                }
+            }
         }
 
         private IBlockAccess resolveLightAccess(boolean fullBright, @NotNull BlockPos lightSamplePos) {

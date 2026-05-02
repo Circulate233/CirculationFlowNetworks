@@ -225,7 +225,7 @@ public class ContainerHub extends CFNBaseContainer {
     }
 
     public boolean hasChannelCapability() {
-        return (channelStateFlags & CHANNEL_CAPABILITY_FLAG) != 0;
+        return node.hasPluginCapability(HubCapabilitys.CHANNEL_CAPABILITY);
     }
 
     public boolean hasChannelManagementOverride() {
