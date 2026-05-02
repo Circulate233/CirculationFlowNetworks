@@ -56,7 +56,7 @@ public final class HubRotatingRenderer extends TileEntitySpecialRenderer<TileEnt
         BlockPos crystalLightSamplePos = translatedLightSamplePos(batch, HubRenderLayout.crystalYOffset());
 
         batch.renderAroundAxis(HUB_BASE, 0.0F, CENTER, CENTER, CENTER, 0.0F, 1.0F, 0.0F, false, false, ambientLightSamplePos);
-        batch.renderAroundYAxisFullBright(HUB_EMISSIVE, 0.0F, CENTER, CENTER, CENTER);
+        batch.renderAroundAxis(HUB_EMISSIVE, 0.0F, CENTER, CENTER, CENTER, 0.0F, 1.0F, 0.0F, true, true);
         renderHubRingAtYOffset(batch, HubRenderLayout.ringYOffset(), HUB_RING_UP_BASE, upperAngle, true, ambientLightSamplePos);
         renderHubRingAtYOffset(batch, HubRenderLayout.ringYOffset(), HUB_RING_UP_EMISSIVE, upperAngle, false, ringLightSamplePos);
         renderHubRingAtYOffset(batch, HubRenderLayout.ringYOffset(), HUB_RING_DOWN_BASE, lowerAngle, true, ambientLightSamplePos);

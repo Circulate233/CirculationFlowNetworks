@@ -17,6 +17,7 @@ import com.circulation.circulation_networks.registry.RegistryEnergyHandler;
 import com.circulation.circulation_networks.tooltip.LocalizedComponent;
 //? if <1.20 {
 import com.circulation.circulation_networks.tiles.TileEntityMultiblockShell;
+import net.minecraft.util.math.Vec3d;
 //?} else {
 /*import com.circulation.circulation_networks.tiles.MultiblockShellBlockEntity;
 *///?}
@@ -149,8 +150,8 @@ public class ItemCirculationConfigurator extends BaseItem {
     }
     //~}
     //?} else {
-    /*private static BlockPos resolveOriginPos(Level world, BlockPos pos) {
-        var te = world.getBlockEntity(pos);
+    /*private static BlockPos resolveOriginPos(World world, BlockPos pos) {
+        var te = world.getTileEntity(pos);
         if (te instanceof MultiblockShellBlockEntity shell && shell.canRedirect()) {
             return shell.getOriginPos();
         }
@@ -263,7 +264,11 @@ public class ItemCirculationConfigurator extends BaseItem {
     @Override
     public @NotNull ActionResult<ItemStack> onItemRightClick(@NotNull World worldIn, @NotNull EntityPlayer player, @NotNull EnumHand hand) {
         if (player.isSneaking()) {
-            RayTraceResult ray = player.rayTrace(player.getEntityAttribute(EntityPlayer.REACH_DISTANCE).getAttributeValue(), 1.0F);
+            double blockReachDistance = player.getEntityAttribute(EntityPlayer.REACH_DISTANCE).getAttributeValue();
+            Vec3d vec3d = player.getPositionEyes(1.0F);
+            Vec3d vec3d1 = player.getLook(1.0F);
+            Vec3d vec3d2 = vec3d.add(vec3d1.x * blockReachDistance, vec3d1.y * blockReachDistance, vec3d1.z * blockReachDistance);
+            RayTraceResult ray = player.world.rayTraceBlocks(vec3d, vec3d2, false, false, true);
             if (ray == null || ray.typeOfHit == RayTraceResult.Type.MISS) {
                 ItemStack stack = player.getHeldItem(hand);
                 if (worldIn.isRemote) {
@@ -274,6 +279,7 @@ public class ItemCirculationConfigurator extends BaseItem {
         }
         return super.onItemRightClick(worldIn, player, hand);
     }
+
     //?} else {
     /*@Override
     public @NotNull InteractionResultHolder<ItemStack> use(@NotNull Level worldIn, @NotNull Player player, @NotNull InteractionHand hand) {

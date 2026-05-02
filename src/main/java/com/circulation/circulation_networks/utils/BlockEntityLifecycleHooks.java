@@ -8,11 +8,7 @@ import com.circulation.circulation_networks.manager.HubChannelManager;
 import com.circulation.circulation_networks.manager.MachineNodeBlockEntityManager;
 import com.circulation.circulation_networks.manager.NetworkManager;
 //~ mc_imports
-//? if <1.20 {
 import net.minecraft.tileentity.TileEntity;
-//?} else {
-/*import net.minecraft.world.level.block.entity.BlockEntity;
- *///?}
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 //? if <1.21 {

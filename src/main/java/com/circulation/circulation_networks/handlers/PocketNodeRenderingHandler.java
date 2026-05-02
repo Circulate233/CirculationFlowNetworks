@@ -14,11 +14,7 @@ import it.unimi.dsi.fastutil.objects.ObjectList;
 import net.minecraft.client.Minecraft;
 //~ mc_imports
 import net.minecraft.util.math.BlockPos;
-//? if <1.20 {
 import net.minecraft.world.World;
-//?} else {
-/*import net.minecraft.world.level.Level;
-*///?}
 //? if <1.20 {
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.relauncher.Side;

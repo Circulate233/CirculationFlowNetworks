@@ -4,11 +4,7 @@ import com.circulation.circulation_networks.api.node.INode;
 import com.circulation.circulation_networks.events.AddNodeEvent;
 import com.circulation.circulation_networks.events.RemoveNodeEvent;
 //~ mc_imports
-//? if <1.20 {
 import net.minecraft.tileentity.TileEntity;
-//?} else {
-/*import net.minecraft.world.level.block.entity.BlockEntity;
- *///?}
 //? if <1.21 {
 import net.minecraftforge.common.MinecraftForge;
 //?} else {

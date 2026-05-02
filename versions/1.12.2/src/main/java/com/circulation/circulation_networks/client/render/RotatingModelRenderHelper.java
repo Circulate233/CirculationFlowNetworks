@@ -136,7 +136,6 @@ public final class RotatingModelRenderHelper {
                 model,
                 state,
                 tileEntity,
-                lightSamplePos,
                 renderLayer,
                 blockX,
                 blockY,
@@ -178,7 +177,6 @@ public final class RotatingModelRenderHelper {
                 model,
                 state,
                 tileEntity,
-                lightSamplePos,
                 renderLayer,
                 blockX,
                 blockY,
@@ -199,7 +197,6 @@ public final class RotatingModelRenderHelper {
         @NotNull IBakedModel model,
         @NotNull IBlockState state,
         @NotNull TileEntity tileEntity,
-        @NotNull BlockPos lightSamplePos,
         @NotNull BlockRenderLayer renderLayer,
         double blockX,
         double blockY,
@@ -207,7 +204,7 @@ public final class RotatingModelRenderHelper {
     ) {
         int displayList = FULL_BRIGHT_DISPLAY_LISTS.computeIfAbsent(
             modelLocation,
-            ignored -> compileFullBrightDisplayList(minecraft, tessellator, buffer, lightAccess, model, state, tileEntity, lightSamplePos, renderLayer, blockX, blockY, blockZ)
+            ignored -> compileFullBrightDisplayList(minecraft, tessellator, buffer, lightAccess, model, state, tileEntity, renderLayer, blockX, blockY, blockZ)
         );
         GlStateManager.callList(displayList);
     }
@@ -220,7 +217,6 @@ public final class RotatingModelRenderHelper {
         @NotNull IBakedModel model,
         @NotNull IBlockState state,
         @NotNull TileEntity tileEntity,
-        @NotNull BlockPos lightSamplePos,
         @NotNull BlockRenderLayer renderLayer,
         double blockX,
         double blockY,
@@ -229,7 +225,7 @@ public final class RotatingModelRenderHelper {
         int displayList = GLAllocation.generateDisplayLists(1);
         GlStateManager.glNewList(displayList, GL11.GL_COMPILE);
         try {
-            renderModelPass(minecraft, tessellator, buffer, lightAccess, model, state, tileEntity, lightSamplePos, renderLayer, blockX, blockY, blockZ);
+            renderModelPass(minecraft, tessellator, buffer, lightAccess, model, state, tileEntity, renderLayer, blockX, blockY, blockZ);
         } finally {
             GlStateManager.glEndList();
         }
@@ -273,7 +269,6 @@ public final class RotatingModelRenderHelper {
         @NotNull IBakedModel model,
         @NotNull IBlockState state,
         @NotNull TileEntity tileEntity,
-        @NotNull BlockPos lightSamplePos,
         @NotNull BlockRenderLayer renderLayer,
         double blockX,
         double blockY,
@@ -306,7 +301,6 @@ public final class RotatingModelRenderHelper {
         @NotNull IBakedModel damageModel,
         @NotNull IBlockState state,
         @NotNull TileEntity tileEntity,
-        @NotNull BlockPos lightSamplePos,
         @NotNull BlockRenderLayer renderLayer,
         double blockX,
         double blockY,
@@ -461,10 +455,14 @@ public final class RotatingModelRenderHelper {
             @NotNull BlockPos lightSamplePos
         ) {
             IBlockAccess lightAccess = resolveLightAccess(fullBright, lightSamplePos);
-            IBakedModel baseModel = RotatingBlockModelCache.get(modelLocation);
-            IBakedModel model = fullBright
-                ? toFullBrightModel(baseModel)
-                : (noDiffuse ? toNoDiffuseModel(baseModel) : baseModel);
+            IBakedModel model = RotatingBlockModelCache.get(modelLocation);
+            if (fullBright) {
+                model = toFullBrightModel(model);
+            }
+            if (noDiffuse) {
+                model = toNoDiffuseModel(model);
+            }
+            final IBakedModel renderedModel = model;
 
             GlStateManager.pushMatrix();
             GlStateManager.translate(x, y, z);
@@ -474,25 +472,25 @@ public final class RotatingModelRenderHelper {
 
             if (fullBright && destroyStage < 0) {
                 renderWithFullBrightState(() ->
-                    renderFullBrightDisplayList(minecraft, tessellator, buffer, lightAccess, modelLocation, model, state, tileEntity, lightSamplePos, renderLayer, blockX, blockY, blockZ)
+                    renderFullBrightDisplayList(minecraft, tessellator, buffer, lightAccess, modelLocation, renderedModel, state, tileEntity, renderLayer, blockX, blockY, blockZ)
                 );
             } else if (noDiffuse && destroyStage < 0) {
-                renderNoDiffuseDisplayList(minecraft, tessellator, buffer, modelLocation, model, state, tileEntity, lightSamplePos, renderLayer, blockX, blockY, blockZ);
+                renderNoDiffuseDisplayList(minecraft, tessellator, buffer, modelLocation, renderedModel, state, tileEntity, lightSamplePos, renderLayer, blockX, blockY, blockZ);
             } else if (destroyStage < 0) {
-                renderNormalDisplayList(minecraft, tessellator, buffer, lightAccess, modelLocation, model, state, tileEntity, lightSamplePos, renderLayer, blockX, blockY, blockZ);
+                renderNormalDisplayList(minecraft, tessellator, buffer, lightAccess, modelLocation, renderedModel, state, tileEntity, lightSamplePos, renderLayer, blockX, blockY, blockZ);
             } else {
                 if (fullBright) {
                     renderWithFullBrightState(() ->
-                        renderModelPass(minecraft, tessellator, buffer, lightAccess, model, state, tileEntity, lightSamplePos, renderLayer, blockX, blockY, blockZ)
+                        renderModelPass(minecraft, tessellator, buffer, lightAccess, renderedModel, state, tileEntity, renderLayer, blockX, blockY, blockZ)
                     );
                 } else {
-                    renderModelPass(minecraft, tessellator, buffer, lightAccess, model, state, tileEntity, lightSamplePos, renderLayer, blockX, blockY, blockZ);
+                    renderModelPass(minecraft, tessellator, buffer, lightAccess, renderedModel, state, tileEntity, renderLayer, blockX, blockY, blockZ);
                 }
             }
 
-            IBakedModel damageModel = createDamageModel(model, state, tileEntity, destroyStage);
+            IBakedModel damageModel = createDamageModel(renderedModel, state, tileEntity, destroyStage);
             if (damageModel != null) {
-                renderDamagePass(minecraft, tessellator, buffer, lightAccess, damageModel, state, tileEntity, lightSamplePos, renderLayer, blockX, blockY, blockZ);
+                renderDamagePass(minecraft, tessellator, buffer, lightAccess, damageModel, state, tileEntity, renderLayer, blockX, blockY, blockZ);
             }
 
             GlStateManager.popMatrix();

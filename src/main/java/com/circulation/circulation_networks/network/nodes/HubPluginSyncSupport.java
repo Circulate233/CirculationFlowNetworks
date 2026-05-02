@@ -3,8 +3,8 @@ package com.circulation.circulation_networks.network.nodes;
 //? if <1.20 {
 import net.minecraft.item.ItemStack;
 //?} else {
-/*import net.minecraft.world.item.ItemStack;*/
-//?}
+/*import net.minecraft.world.item.ItemStack;
+*///?}
 
 public final class HubPluginSyncSupport {
 
