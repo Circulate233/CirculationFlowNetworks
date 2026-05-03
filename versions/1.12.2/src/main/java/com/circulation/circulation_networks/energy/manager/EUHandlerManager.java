@@ -16,7 +16,6 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraftforge.fml.common.eventhandler.EventPriority;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import net.minecraftforge.fml.server.FMLServerHandler;
 
 public final class EUHandlerManager implements IEnergyHandlerManager {
 
@@ -69,10 +68,6 @@ public final class EUHandlerManager implements IEnergyHandlerManager {
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public void onEnergyTileLoad(EnergyTileLoadEvent event) {
         if (event.getWorld().isRemote) return;
-        FMLServerHandler.instance().getServer().addScheduledTask(() -> onServerEnergyTileLoad(event));
-    }
-
-    private void onServerEnergyTileLoad(EnergyTileLoadEvent event) {
         var tile = event.tile;
         BlockPos pos;
         if (tile instanceof TileEntity te && this.isAvailable(te)) {

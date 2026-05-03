@@ -62,10 +62,15 @@ public final class NodeNetworkRendering implements Packet<NodeNetworkRendering> 
         this.nodes = grid.getNodes();
         this.mode = SET;
         this.entryList = new ObjectArrayList<>();
-        for (var e : EnergyMachineManager.INSTANCE.getMachineGridMap().entrySet()) {
-            if (e.getKey() instanceof IMachineNodeBlockEntity) continue;
-            for (var node : e.getValue()) {
-                entryList.add(new Pair(e.getKey(), node));
+        for (var node : this.nodes) {
+            if (!(node instanceof IEnergySupplyNode energySupplyNode)) {
+                continue;
+            }
+            for (var machine : EnergyMachineManager.INSTANCE.getMachinesSuppliedBy(energySupplyNode)) {
+                if (machine instanceof IMachineNodeBlockEntity) {
+                    continue;
+                }
+                entryList.add(new Pair(machine, node));
             }
         }
     }
