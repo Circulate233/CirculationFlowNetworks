@@ -46,6 +46,7 @@ public final class RotatingModelRenderHelper {
     private static final int FULL_BRIGHT_LIGHTMAP = 15728880;
     private static final float FULL_BRIGHT_LIGHT = 240.0F;
     private static final int DESTROY_STAGE_COUNT = 10;
+    private static final int TESR_DEPTH_FUNC = GL11.GL_LEQUAL;
     private static final Map<IBakedModel, IBakedModel> FULL_BRIGHT_MODELS = new IdentityHashMap<>();
     private static final Map<List<BakedQuad>, List<BakedQuad>> FULL_BRIGHT_QUAD_LISTS = new IdentityHashMap<>();
     private static final Map<BakedQuad, BakedQuad> FULL_BRIGHT_QUADS = new IdentityHashMap<>();
@@ -58,6 +59,11 @@ public final class RotatingModelRenderHelper {
     private static final Object2ObjectMap<LightSignatureKey, CachedLightSignature> LIGHT_SIGNATURES = new Object2ObjectOpenHashMap<>();
 
     private RotatingModelRenderHelper() {
+    }
+
+    private static void forceTesrDepthFunc() {
+        GL11.glDepthFunc(TESR_DEPTH_FUNC);
+        GlStateManager.depthFunc(TESR_DEPTH_FUNC);
     }
 
     public static void clearDisplayLists() {
@@ -307,6 +313,7 @@ public final class RotatingModelRenderHelper {
         double blockZ
     ) {
         try {
+            GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
             minecraft.getTextureManager().bindTexture(TextureMap.LOCATION_BLOCKS_TEXTURE);
             buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.BLOCK);
             buffer.setTranslation(-blockX, -blockY, -blockZ);
@@ -402,8 +409,11 @@ public final class RotatingModelRenderHelper {
             GlStateManager.enableRescaleNormal();
             GlStateManager.enableBlend();
             GlStateManager.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
+            GlStateManager.enableDepth();
+            forceTesrDepthFunc();
             GlStateManager.disableCull();
             GlStateManager.shadeModel(smoothShading ? 7425 : 7424);
+            GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
             minecraft.getTextureManager().bindTexture(TextureMap.LOCATION_BLOCKS_TEXTURE);
         }
 
@@ -501,6 +511,8 @@ public final class RotatingModelRenderHelper {
             float savedBrightnessY = OpenGlHelper.lastBrightnessY;
             boolean lightingEnabled = GL11.glIsEnabled(GL11.GL_LIGHTING);
             GlStateManager.disableLighting();
+            GlStateManager.enableDepth();
+            forceTesrDepthFunc();
             OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, FULL_BRIGHT_LIGHT, FULL_BRIGHT_LIGHT);
             GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
             try {
@@ -539,6 +551,8 @@ public final class RotatingModelRenderHelper {
 
         public void end() {
             RenderHelper.enableStandardItemLighting();
+            forceTesrDepthFunc();
+            GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
             GlStateManager.enableCull();
             GlStateManager.disableBlend();
             GlStateManager.disableRescaleNormal();

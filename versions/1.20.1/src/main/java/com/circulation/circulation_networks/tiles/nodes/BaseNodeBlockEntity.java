@@ -4,7 +4,6 @@ import com.circulation.circulation_networks.api.API;
 import com.circulation.circulation_networks.api.INodeBlockEntity;
 import com.circulation.circulation_networks.api.node.INode;
 import com.circulation.circulation_networks.api.node.NodeContext;
-import com.circulation.circulation_networks.api.node.NodeType;
 import com.circulation.circulation_networks.manager.NetworkManager;
 import com.circulation.circulation_networks.network.nodes.NodeFactory;
 import com.circulation.circulation_networks.tiles.BaseCFNBlockEntity;
@@ -15,7 +14,7 @@ import net.minecraft.world.level.block.state.BlockState;
 
 import org.jetbrains.annotations.NotNull;
 
-public abstract class BaseNodeBlockEntity<N extends INode> extends BaseCFNBlockEntity implements INodeBlockEntity {
+public abstract class BaseNodeBlockEntity<N extends INode> extends BaseCFNBlockEntity implements INodeBlockEntity<N> {
 
     private N node;
 
@@ -27,9 +26,6 @@ public abstract class BaseNodeBlockEntity<N extends INode> extends BaseCFNBlockE
     public @NotNull N getNode() {
         return node;
     }
-
-    @NotNull
-    protected abstract NodeType<? extends N> getNodeType();
 
     protected @NotNull NodeContext createNodeContext() {
         return NodeContext.fromWorld(level, worldPosition);
@@ -91,7 +87,7 @@ public abstract class BaseNodeBlockEntity<N extends INode> extends BaseCFNBlockE
                 if (existingNode != null) {
                     NetworkManager.INSTANCE.removeNode(existingNode.getDimensionId(), existingNode.getPos());
                 }
-                node = NodeFactory.createNode(nodeType, createNodeContext());
+                node = castNode(NodeFactory.createNode(nodeType, createNodeContext()));
             } else if (existingNode != null && existingNode != node) {
                 NetworkManager.INSTANCE.removeNode(existingNode.getDimensionId(), existingNode.getPos());
             }
@@ -110,7 +106,7 @@ public abstract class BaseNodeBlockEntity<N extends INode> extends BaseCFNBlockE
     protected void onClientValidate() {
         var nodeType = getNodeType();
         if (node == null || !nodeType.matches(node)) {
-            node = NodeFactory.createNode(nodeType, createNodeContext());
+            node = castNode(NodeFactory.createNode(nodeType, createNodeContext()));
         }
         onNodeBound(node);
         node.setActive(true);

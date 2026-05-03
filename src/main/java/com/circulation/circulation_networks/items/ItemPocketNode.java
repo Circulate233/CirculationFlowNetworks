@@ -63,10 +63,6 @@ public class ItemPocketNode extends BaseItem {
     }
 
     //? if <1.20 {
-    private static void sendFeedback(EntityPlayerMP player, String key) {
-        player.sendMessage(new TextComponentTranslation(key));
-    }
-
     @Override
     public @NotNull EnumActionResult onItemUse(@NotNull EntityPlayer player, @NotNull World worldIn, @NotNull BlockPos pos, @NotNull EnumHand hand, @NotNull EnumFacing facing, float hitX, float hitY, float hitZ) {
         if (!(player instanceof EntityPlayerMP serverPlayer)) {
@@ -76,7 +72,9 @@ public class ItemPocketNode extends BaseItem {
         RegisterPocketNodeResult result = PocketNodeManager.INSTANCE.registerPocketNodeDetailed(worldIn, pos, nodeType, facing, null);
         if (!result.isSuccess()) {
             if (result == RegisterPocketNodeResult.OCCUPIED) {
-                sendFeedback(serverPlayer, "message.circulation_networks.pocket_node_occupied");
+                serverPlayer.sendMessage(new TextComponentTranslation("message.circulation_networks.pocket_node_occupied"));
+            } else if (result == RegisterPocketNodeResult.HUB_CONFLICT) {
+                serverPlayer.sendMessage(new TextComponentTranslation("message.circulation_networks.hub_conflict"));
             }
             return EnumActionResult.FAIL;
         }
@@ -91,7 +89,7 @@ public class ItemPocketNode extends BaseItem {
         return new ActionResult<>(EnumActionResult.PASS, player.getHeldItem(hand));
     }
     //?} else {
-    /*@Override
+            /*@Override
     public @NotNull InteractionResult useOn(@NotNull UseOnContext context) {
         Player player = context.getPlayer();
         if (!(player instanceof ServerPlayer serverPlayer)) {
@@ -107,7 +105,9 @@ public class ItemPocketNode extends BaseItem {
         );
         if (!result.isSuccess()) {
             if (result == RegisterPocketNodeResult.OCCUPIED) {
-                sendFeedback(serverPlayer, "message.circulation_networks.pocket_node_occupied");
+                serverPlayer.sendSystemMessage(Component.translatable("message.circulation_networks.pocket_node_occupied"));
+            } else if (result == RegisterPocketNodeResult.HUB_CONFLICT) {
+                serverPlayer.sendSystemMessage(Component.translatable("message.circulation_networks.hub_conflict"));
             }
             return InteractionResult.FAIL;
         }
@@ -120,10 +120,6 @@ public class ItemPocketNode extends BaseItem {
     @Override
     public @NotNull InteractionResultHolder<ItemStack> use(@NotNull Level worldIn, @NotNull Player player, @NotNull InteractionHand hand) {
         return InteractionResultHolder.pass(player.getItemInHand(hand));
-    }
-
-    private static void sendFeedback(ServerPlayer player, String key) {
-        player.displayClientMessage(Component.translatable(key), true);
     }
     *///?}
 }

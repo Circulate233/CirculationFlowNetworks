@@ -3,6 +3,7 @@ package com.circulation.circulation_networks;
 import com.circulation.circulation_networks.energy.manager.DEHandlerManager;
 import com.circulation.circulation_networks.energy.manager.FEHandlerManager;
 import com.circulation.circulation_networks.energy.manager.MEKHandlerManager;
+import com.circulation.circulation_networks.handlers.NodePlacementValidationHandler;
 import com.circulation.circulation_networks.handlers.NodeRescanHandler;
 import com.circulation.circulation_networks.manager.ChargingManager;
 import com.circulation.circulation_networks.manager.DatPersistenceScheduler;
@@ -81,6 +82,7 @@ public final class CirculationFlowNetworks {
         MinecraftForge.EVENT_BUS.addListener(this::onPlayerLoggedOut);
         MinecraftForge.EVENT_BUS.addListener(this::onPlayerChangedDimension);
         MinecraftForge.EVENT_BUS.addListener(this::onServerTick);
+        MinecraftForge.EVENT_BUS.register(NodePlacementValidationHandler.INSTANCE);
         MinecraftForge.EVENT_BUS.register(NodeRescanHandler.INSTANCE);
     }
 

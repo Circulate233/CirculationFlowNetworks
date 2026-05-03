@@ -18,13 +18,13 @@ import com.circulation.circulation_networks.network.nodes.HubPluginStateTracker;
 import com.circulation.circulation_networks.network.nodes.HubPluginSyncSupport;
 import com.circulation.circulation_networks.packets.HubPluginSyncRequest;
 import com.circulation.circulation_networks.registry.NodeTypes;
+import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.network.NetworkManager;
 import net.minecraft.network.play.server.SPacketUpdateTileEntity;
-import net.minecraft.block.state.IBlockState;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
@@ -88,7 +88,7 @@ public class TileEntityHub extends BaseNodeTileEntity<IHubNode> implements IHubN
     }
 
     @Override
-    protected @NotNull NodeType<? extends IHubNode> getNodeType() {
+    public @NotNull NodeType<HubNode> getNodeType() {
         return NodeTypes.HUB;
     }
 

@@ -15,7 +15,7 @@ public final class RelayNodeBlockEntity extends BaseNodeBlockEntity<Node> {
     }
 
     @Override
-    protected @NotNull NodeType<? extends Node> getNodeType() {
+    public @NotNull NodeType<? extends Node> getNodeType() {
         return NodeTypes.RELAY_NODE;
     }
 }

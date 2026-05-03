@@ -8,7 +8,7 @@ import org.jetbrains.annotations.NotNull;
 public final class TileEntityChargingNode extends BaseNodeTileEntity<ChargingNode> {
 
     @Override
-    protected @NotNull NodeType<? extends ChargingNode> getNodeType() {
+    public @NotNull NodeType<? extends ChargingNode> getNodeType() {
         return NodeTypes.CHARGING_NODE;
     }
 }

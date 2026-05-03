@@ -15,7 +15,7 @@ public final class PortNodeBlockEntity extends BaseNodeBlockEntity<PortNode> {
     }
 
     @Override
-    protected @NotNull NodeType<? extends PortNode> getNodeType() {
+    public @NotNull NodeType<? extends PortNode> getNodeType() {
         return NodeTypes.PORT_NODE;
     }
 }

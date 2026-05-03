@@ -8,7 +8,7 @@ import org.jetbrains.annotations.NotNull;
 public final class TileEntityRelayNode extends BaseNodeTileEntity<Node> {
 
     @Override
-    protected @NotNull NodeType<? extends Node> getNodeType() {
+    public @NotNull NodeType<? extends Node> getNodeType() {
         return NodeTypes.RELAY_NODE;
     }
 

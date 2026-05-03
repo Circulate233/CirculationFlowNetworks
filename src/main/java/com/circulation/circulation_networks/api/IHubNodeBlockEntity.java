@@ -6,12 +6,8 @@ import net.minecraftforge.items.IItemHandler;
 //?} else {
 /*import net.neoforged.neoforge.items.IItemHandler;
  *///?}
-import org.jetbrains.annotations.NotNull;
 
-public interface IHubNodeBlockEntity extends INodeBlockEntity {
-
-    @Override
-    @NotNull IHubNode getNode();
+public interface IHubNodeBlockEntity extends INodeBlockEntity<IHubNode> {
 
     IItemHandler getPlugins();
 }

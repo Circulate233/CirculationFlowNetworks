@@ -73,5 +73,4 @@ public abstract class BaseNodeBlock extends BaseBlock {
     public boolean hasCustomBreakingProgress(@NotNull IBlockState state) {
         return true;
     }
-
 }

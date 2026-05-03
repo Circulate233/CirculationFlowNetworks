@@ -4,7 +4,6 @@ import com.circulation.circulation_networks.api.API;
 import com.circulation.circulation_networks.api.INodeBlockEntity;
 import com.circulation.circulation_networks.api.node.INode;
 import com.circulation.circulation_networks.api.node.NodeContext;
-import com.circulation.circulation_networks.api.node.NodeType;
 import com.circulation.circulation_networks.manager.NetworkManager;
 import com.circulation.circulation_networks.network.nodes.NodeFactory;
 import com.circulation.circulation_networks.tiles.BaseTileEntity;
@@ -15,7 +14,7 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import org.jetbrains.annotations.NotNull;
 
-public abstract class BaseNodeTileEntity<N extends INode> extends BaseTileEntity implements INodeBlockEntity {
+public abstract class BaseNodeTileEntity<N extends INode> extends BaseTileEntity implements INodeBlockEntity<N> {
 
     private N node;
 
@@ -23,9 +22,6 @@ public abstract class BaseNodeTileEntity<N extends INode> extends BaseTileEntity
     public @NotNull N getNode() {
         return node;
     }
-
-    @NotNull
-    protected abstract NodeType<? extends N> getNodeType();
 
     protected @NotNull NodeContext createNodeContext() {
         return NodeContext.fromWorld(world, pos);

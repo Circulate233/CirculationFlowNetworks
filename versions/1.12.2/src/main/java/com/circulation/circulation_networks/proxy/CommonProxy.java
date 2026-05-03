@@ -8,6 +8,7 @@ import com.circulation.circulation_networks.energy.manager.MEKHandlerManager;
 import com.circulation.circulation_networks.energy.manager.MMCEHandlerManager;
 import com.circulation.circulation_networks.energy.manager.RFHandlerManager;
 import com.circulation.circulation_networks.events.BlockEntityLifeCycleEvent;
+import com.circulation.circulation_networks.handlers.NodePlacementValidationHandler;
 import com.circulation.circulation_networks.handlers.NodeRescanHandler;
 import com.circulation.circulation_networks.manager.DatPersistenceScheduler;
 import com.circulation.circulation_networks.manager.EnergyMachineManager;
@@ -32,10 +33,10 @@ import com.circulation.circulation_networks.packets.NodeNetworkRendering;
 import com.circulation.circulation_networks.packets.PocketNodeRendering;
 import com.circulation.circulation_networks.packets.RenderingClear;
 import com.circulation.circulation_networks.packets.SpoceRendering;
+import com.circulation.circulation_networks.packets.ToggleItemFunctionMessage;
 import com.circulation.circulation_networks.packets.UpdateHubChannelPermission;
 import com.circulation.circulation_networks.packets.UpdateHubChannelSettings;
 import com.circulation.circulation_networks.packets.UpdateItemModeMessage;
-import com.circulation.circulation_networks.packets.ToggleItemFunctionMessage;
 import com.circulation.circulation_networks.packets.UpdateNodeCustomName;
 import com.circulation.circulation_networks.packets.UpdatePlayerChargingMode;
 import com.circulation.circulation_networks.registry.RegistryBlocks;
@@ -114,6 +115,7 @@ public class CommonProxy implements IGuiHandler {
             RegistryEnergyHandler.registerEnergyHandler(EUHandlerManager.INSTANCE);
             MinecraftForge.EVENT_BUS.register(EUHandlerManager.INSTANCE);
         }
+        MinecraftForge.EVENT_BUS.register(NodePlacementValidationHandler.INSTANCE);
         MinecraftForge.EVENT_BUS.register(NodeRescanHandler.INSTANCE);
     }
 

@@ -8,7 +8,7 @@ import org.jetbrains.annotations.NotNull;
 public final class TileEntityPortNode extends BaseNodeTileEntity<PortNode> {
 
     @Override
-    protected @NotNull NodeType<? extends PortNode> getNodeType() {
+    public @NotNull NodeType<PortNode> getNodeType() {
         return NodeTypes.PORT_NODE;
     }
 }
