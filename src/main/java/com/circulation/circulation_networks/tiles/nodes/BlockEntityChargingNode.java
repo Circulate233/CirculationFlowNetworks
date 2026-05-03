@@ -15,7 +15,7 @@ public final class BlockEntityChargingNode extends BaseNodeBlockEntity<ChargingN
     }
 
     @Override
-    protected @NotNull NodeType<? extends ChargingNode> getNodeType() {
+    public @NotNull NodeType<? extends ChargingNode> getNodeType() {
         return NodeTypes.CHARGING_NODE;
     }
 }

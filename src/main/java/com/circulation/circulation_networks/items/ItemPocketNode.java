@@ -31,7 +31,7 @@ public class ItemPocketNode extends BaseItem {
     }
 
     private static void sendFeedback(ServerPlayer player, String key) {
-        player.sendOverlayMessage(Component.translatable(key));
+        player.sendSystemMessage(Component.translatable(key));
     }
 
     @Override
@@ -62,6 +62,8 @@ public class ItemPocketNode extends BaseItem {
         if (!result.isSuccess()) {
             if (result == RegisterPocketNodeResult.OCCUPIED) {
                 sendFeedback(serverPlayer, "message.circulation_networks.pocket_node_occupied");
+            } else if (result == RegisterPocketNodeResult.HUB_CONFLICT) {
+                sendFeedback(serverPlayer, "message.circulation_networks.hub_conflict");
             }
             return InteractionResult.FAIL;
         }

@@ -1,6 +1,7 @@
 package com.circulation.circulation_networks;
 
 import com.circulation.circulation_networks.energy.manager.FEHandlerManager;
+import com.circulation.circulation_networks.handlers.NodePlacementValidationHandler;
 import com.circulation.circulation_networks.handlers.NodeRescanHandler;
 import com.circulation.circulation_networks.manager.ChargingManager;
 import com.circulation.circulation_networks.manager.DatPersistenceScheduler;
@@ -86,6 +87,7 @@ public final class CirculationFlowNetworks {
         NeoForge.EVENT_BUS.addListener(this::onPlayerChangedDimension);
         NeoForge.EVENT_BUS.addListener(this::onServerTickPre);
         NeoForge.EVENT_BUS.addListener(this::onServerTickPost);
+        NeoForge.EVENT_BUS.register(NodePlacementValidationHandler.INSTANCE);
         NeoForge.EVENT_BUS.register(NodeRescanHandler.INSTANCE);
     }
 

@@ -80,7 +80,7 @@ public class BlockEntityHub extends BaseNodeBlockEntity<IHubNode> implements IHu
     }
 
     @Override
-    protected @NotNull NodeType<? extends IHubNode> getNodeType() {
+    public @NotNull NodeType<? extends IHubNode> getNodeType() {
         return NodeTypes.HUB;
     }
 

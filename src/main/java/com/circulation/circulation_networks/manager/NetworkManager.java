@@ -563,7 +563,11 @@ public final class NetworkManager {
         return addNode(newNode, null);
     }
 
-    public @NotNull AddNodeResult addNode(INode newNode, BlockEntity blockEntity) {
+    public @NotNull AddNodeResult canAddNode(INode newNode) {
+        return canAddNode(newNode, null);
+    }
+
+    public @NotNull AddNodeResult canAddNode(INode newNode, @Nullable BlockEntity blockEntity) {
         if (newNode == null) {
             return AddNodeResult.failure(AddNodeResult.Status.NULL_NODE);
         }
@@ -576,9 +580,29 @@ public final class NetworkManager {
         if (activeNodes.contains(newNode)) {
             return AddNodeResult.failure(AddNodeResult.Status.ALREADY_ACTIVE);
         }
-
         if (NodeEventHooks.postAddNodePre(newNode, blockEntity)) {
             return AddNodeResult.failure(AddNodeResult.Status.EVENT_CANCELED);
+        }
+        if (hasHubConflict(newNode)) {
+            return AddNodeResult.failure(AddNodeResult.Status.HUB_CONFLICT);
+        }
+        return AddNodeResult.success(null);
+    }
+
+    public @NotNull AddNodeResult addNode(INode newNode, BlockEntity blockEntity) {
+        AddNodeResult validation = canAddNode(newNode, blockEntity);
+        if (!validation.isSuccess()) {
+            if (validation.getStatus() == AddNodeResult.Status.HUB_CONFLICT && blockEntity != null) {
+                var world = newNode.getWorld();
+                var pos = newNode.getPos();
+                for (var player : WorldResolveCompat.getPlayers(world)) {
+                    if (player.distanceToSqr(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5) < 36) {
+                        player.sendSystemMessage(Component.translatable("message.circulation_networks.hub_conflict"));
+                    }
+                }
+                WorldResolveCompat.destroyBlock(world, pos);
+            }
+            return validation;
         }
 
         String dimId = getDimensionId(newNode);
@@ -593,47 +617,11 @@ public final class NetworkManager {
         candidates.remove(newNode);
 
         Reference2ObjectMap<INode, INode.LinkType> linkCache = new Reference2ObjectOpenHashMap<>();
-        ReferenceSet<IGrid> linkedGrids = new ReferenceOpenHashSet<>();
         for (INode existing : candidates) {
             if (!existing.isActive()) continue;
             var linkType = newNode.linkScopeCheck(existing);
             if (linkType == INode.LinkType.DISCONNECT) continue;
             linkCache.put(existing, linkType);
-            if (existing.getGrid() != null) {
-                linkedGrids.add(existing.getGrid());
-            }
-        }
-
-        boolean hubConflict = false;
-        {
-            int hubCount = (newNode instanceof IHubNode) ? 1 : 0;
-            for (IGrid g : linkedGrids) {
-                var h = g.getHubNode();
-                if (h != null && h.isActive()) {
-                    hubCount++;
-                    if (hubCount > 1) {
-                        hubConflict = true;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if (hubConflict) {
-            activeNodes.remove(newNode);
-            unregisterNodeIndices(dimId, newNode);
-            newNode.setActive(false);
-            var world = newNode.getWorld();
-            var pos = newNode.getPos();
-            for (var player : WorldResolveCompat.getPlayers(world)) {
-                if (player.distanceToSqr(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5) < 36) {
-                    player.sendSystemMessage(Component.translatable("message.circulation_networks.hub_conflict"));
-                }
-            }
-            if (blockEntity != null) {
-                WorldResolveCompat.destroyBlock(world, pos);
-            }
-            return AddNodeResult.failure(AddNodeResult.Status.HUB_CONFLICT);
         }
 
         for (var entry : linkCache.reference2ObjectEntrySet()) {
@@ -689,6 +677,59 @@ public final class NetworkManager {
 
         NodeEventHooks.postAddNodePost(newNode, blockEntity);
         return AddNodeResult.success(newNode.getGrid());
+    }
+
+    private boolean hasHubConflict(INode newNode) {
+        int hubCount = (newNode instanceof IHubNode) ? 1 : 0;
+        ReferenceSet<IGrid> countedGrids = new ReferenceOpenHashSet<>();
+        for (INode existing : getLinkedNodesForNode(newNode)) {
+            IGrid grid = existing.getGrid();
+            if (grid == null || !countedGrids.add(grid)) {
+                continue;
+            }
+            var hub = grid.getHubNode();
+            if (hub != null && hub.isActive()) {
+                hubCount++;
+                if (hubCount > 1) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private @NotNull ReferenceSet<INode> getLinkedNodesForNode(INode newNode) {
+        String dimId = getDimensionId(newNode);
+        ReferenceSet<INode> linkedNodes = new ReferenceOpenHashSet<>();
+        var scopeMap = scopeNode.get(dimId);
+        if (scopeMap == scopeNode.defaultReturnValue()) {
+            return linkedNodes;
+        }
+        for (long chunkCoord : getCoveredChunks(newNode)) {
+            ReferenceSet<INode> nodes = scopeMap.get(chunkCoord);
+            for (INode existing : nodes) {
+                if (existing.isActive() && newNode.linkScopeCheck(existing) != INode.LinkType.DISCONNECT) {
+                    linkedNodes.add(existing);
+                }
+            }
+        }
+        return linkedNodes;
+    }
+
+    private @NotNull LongSet getCoveredChunks(INode node) {
+        BlockPos pos = node.getPos();
+        int range = (int) node.getLinkScope();
+        int minChunkX = (pos.getX() - range) >> 4;
+        int maxChunkX = (pos.getX() + range) >> 4;
+        int minChunkZ = (pos.getZ() - range) >> 4;
+        int maxChunkZ = (pos.getZ() + range) >> 4;
+        LongSet chunksCovered = new LongOpenHashSet();
+        for (int cx = minChunkX; cx <= maxChunkX; ++cx) {
+            for (int cz = minChunkZ; cz <= maxChunkZ; ++cz) {
+                chunksCovered.add(Functions.mergeChunkCoords(cx, cz));
+            }
+        }
+        return chunksCovered;
     }
 
     private void assignNodeToGrid(INode node, IGrid grid) {

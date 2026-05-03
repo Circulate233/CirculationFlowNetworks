@@ -28,8 +28,9 @@ public abstract class BaseNodeBlockEntity<N extends INode> extends BaseCFNBlockE
         return node;
     }
 
+    @Override
     @NotNull
-    protected abstract NodeType<? extends N> getNodeType();
+    public abstract NodeType<? extends N> getNodeType();
 
     protected @NotNull NodeContext createNodeContext() {
         return NodeContext.fromWorld(level, worldPosition);
