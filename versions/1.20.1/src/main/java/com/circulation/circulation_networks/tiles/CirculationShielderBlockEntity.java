@@ -2,6 +2,7 @@ package com.circulation.circulation_networks.tiles;
 
 import com.circulation.circulation_networks.CFNConfig;
 import com.circulation.circulation_networks.api.ICirculationShielderBlockEntity;
+import com.circulation.circulation_networks.api.ServerTickMachine;
 import com.circulation.circulation_networks.container.ContainerCirculationShielder;
 import com.circulation.circulation_networks.handlers.CirculationShielderRenderingHandler;
 import com.circulation.circulation_networks.manager.CirculationShielderManager;
@@ -20,13 +21,17 @@ import net.minecraftforge.api.distmarker.OnlyIn;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-public class CirculationShielderBlockEntity extends BaseCFNBlockEntity implements ICirculationShielderBlockEntity, MenuProvider {
+public class CirculationShielderBlockEntity extends BaseCFNBlockEntity implements ICirculationShielderBlockEntity, MenuProvider, ServerTickMachine {
+
+    private static final long ACTIVE_CACHE_INTERVAL_TICKS = 10L;
 
     private transient final BlockPos.MutableBlockPos min = new BlockPos.MutableBlockPos();
     private transient final BlockPos.MutableBlockPos max = new BlockPos.MutableBlockPos();
     private int scope = 0;
     private boolean redstoneMode = false;
     private boolean showingRange = false;
+    private boolean cachedActive;
+    private long cachedActiveTick = Long.MIN_VALUE;
 
     public CirculationShielderBlockEntity(BlockPos pos, BlockState state) {
         super(CFNBlockEntityTypes.CIRCULATION_SHIELDER, pos, state);
@@ -80,18 +85,17 @@ public class CirculationShielderBlockEntity extends BaseCFNBlockEntity implement
 
     @Override
     public boolean isActive() {
-        if (level == null) return false;
-        int redstoneState = level.hasNeighborSignal(worldPosition) ? 1 : 0;
-        if (redstoneMode) {
-            return redstoneState == 1;
-        } else {
-            return redstoneState == 0;
-        }
+        return cachedActive;
     }
 
-    public void toggleRedstoneMode() {
-        this.redstoneMode = !this.redstoneMode;
-        setChanged();
+    private void refreshActiveCache() {
+        if (level == null) {
+            cachedActive = false;
+            cachedActiveTick = Long.MIN_VALUE;
+            return;
+        }
+        cachedActive = redstoneMode == level.hasNeighborSignal(worldPosition);
+        cachedActiveTick = level.getGameTime();
     }
 
     public boolean getRedstoneMode() {
@@ -101,6 +105,18 @@ public class CirculationShielderBlockEntity extends BaseCFNBlockEntity implement
     public void setRedstoneMode(boolean mode) {
         this.redstoneMode = mode;
         setChanged();
+        refreshActiveCache();
+    }
+
+    @Override
+    public void serverUpdate() {
+        if (level == null) {
+            return;
+        }
+        long gameTime = level.getGameTime();
+        if (cachedActiveTick == Long.MIN_VALUE || gameTime - cachedActiveTick >= ACTIVE_CACHE_INTERVAL_TICKS) {
+            refreshActiveCache();
+        }
     }
 
     @Override
@@ -110,6 +126,7 @@ public class CirculationShielderBlockEntity extends BaseCFNBlockEntity implement
 
     public void onValidate() {
         if (level != null) {
+            refreshActiveCache();
             if (level.isClientSide) {
                 clientRegister();
             } else {

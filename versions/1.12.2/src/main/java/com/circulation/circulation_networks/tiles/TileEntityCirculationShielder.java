@@ -5,6 +5,7 @@ import com.circulation.circulation_networks.api.ICirculationShielderBlockEntity;
 import com.circulation.circulation_networks.container.CFNBaseContainer;
 import com.circulation.circulation_networks.container.ContainerCirculationShielder;
 import com.circulation.circulation_networks.gui.GuiCirculationShielder;
+import com.circulation.circulation_networks.api.ServerTickMachine;
 import com.circulation.circulation_networks.handlers.CirculationShielderRenderingHandler;
 import com.circulation.circulation_networks.manager.CirculationShielderManager;
 import net.minecraft.client.gui.inventory.GuiContainer;
@@ -15,13 +16,15 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import org.jetbrains.annotations.NotNull;
 
-public class TileEntityCirculationShielder extends BaseTileEntity implements ICirculationShielderBlockEntity {
+public class TileEntityCirculationShielder extends BaseTileEntity implements ICirculationShielderBlockEntity, ServerTickMachine {
 
     private transient final BlockPos.MutableBlockPos min = new BlockPos.MutableBlockPos();
     private transient final BlockPos.MutableBlockPos max = new BlockPos.MutableBlockPos();
     private int scope;
     private boolean redstoneMode = false;
     private boolean showingRange = false;
+    private boolean cachedActive;
+    private long cachedActiveTick = Long.MIN_VALUE;
 
     public int getScope() {
         return scope;
@@ -83,6 +86,7 @@ public class TileEntityCirculationShielder extends BaseTileEntity implements ICi
         super.readFromNBT(compound);
         setScope(compound.getInteger("scope"));
         this.redstoneMode = compound.getBoolean("RedstoneMode");
+        refreshActiveCache();
     }
 
     public boolean checkScope(BlockPos pos) {
@@ -91,17 +95,28 @@ public class TileEntityCirculationShielder extends BaseTileEntity implements ICi
     }
 
     public boolean isActive() {
-        int redstoneState = world.isBlockPowered(pos) ? 1 : 0;
-        if (redstoneMode) {
-            return redstoneState == 1;
-        } else {
-            return redstoneState == 0;
-        }
+        return cachedActive;
     }
 
-    public void toggleRedstoneMode() {
-        this.redstoneMode = !this.redstoneMode;
-        markDirty();
+    private void refreshActiveCache() {
+        if (world == null) {
+            cachedActive = false;
+            cachedActiveTick = Long.MIN_VALUE;
+            return;
+        }
+        cachedActive = redstoneMode == world.isBlockPowered(pos);
+        cachedActiveTick = world.getTotalWorldTime();
+    }
+
+    @Override
+    public void serverUpdate() {
+        if (world == null) {
+            return;
+        }
+        long time = world.getTotalWorldTime();
+        if (cachedActiveTick == Long.MIN_VALUE || time - cachedActiveTick >= 5) {
+            refreshActiveCache();
+        }
     }
 
     public boolean getRedstoneMode() {
@@ -111,12 +126,14 @@ public class TileEntityCirculationShielder extends BaseTileEntity implements ICi
     public void setRedstoneMode(boolean mode) {
         this.redstoneMode = mode;
         markDirty();
+        refreshActiveCache();
     }
 
     @Override
     public void validate() {
         super.validate();
         setScope(scope);
+        refreshActiveCache();
         if (world.isRemote) {
             clientRegister();
         } else {
