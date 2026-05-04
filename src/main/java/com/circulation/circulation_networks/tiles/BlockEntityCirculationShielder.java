@@ -2,6 +2,7 @@ package com.circulation.circulation_networks.tiles;
 
 import com.circulation.circulation_networks.CFNConfig;
 import com.circulation.circulation_networks.api.ICirculationShielderBlockEntity;
+import com.circulation.circulation_networks.api.ServerTickMachine;
 import com.circulation.circulation_networks.container.ContainerCirculationShielder;
 import com.circulation.circulation_networks.handlers.CirculationShielderRenderingHandler;
 import com.circulation.circulation_networks.manager.CirculationShielderManager;
@@ -20,13 +21,17 @@ import net.minecraft.world.level.storage.ValueOutput;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-public class BlockEntityCirculationShielder extends BaseCFNBlockEntity implements ICirculationShielderBlockEntity, MenuProvider {
+public class BlockEntityCirculationShielder extends BaseCFNBlockEntity implements ICirculationShielderBlockEntity, MenuProvider, ServerTickMachine {
 
+    private static final long ACTIVE_CACHE_INTERVAL_TICKS = 10L;
     private transient final BlockPos.MutableBlockPos min = new BlockPos.MutableBlockPos();
     private transient final BlockPos.MutableBlockPos max = new BlockPos.MutableBlockPos();
     private int scope = 0;
     private boolean redstoneMode = false;
     private boolean showingRange = false;
+    private boolean cachedActive = false;
+    private boolean cachedPowered = false;
+    private long cachedActiveTick = Long.MIN_VALUE;
 
     public BlockEntityCirculationShielder(BlockPos pos, BlockState state) {
         super(CFNBlockEntityTypes.CIRCULATION_SHIELDER, pos, state);
@@ -70,6 +75,7 @@ public class BlockEntityCirculationShielder extends BaseCFNBlockEntity implement
         super.loadAdditional(input);
         setScope(input.getIntOr("scope", 0));
         this.redstoneMode = input.getBooleanOr("RedstoneMode", false);
+        refreshActiveCache();
     }
 
     @Override
@@ -80,13 +86,7 @@ public class BlockEntityCirculationShielder extends BaseCFNBlockEntity implement
 
     @Override
     public boolean isActive() {
-        if (level == null) return false;
-        int redstoneState = level.hasNeighborSignal(worldPosition) ? 1 : 0;
-        if (redstoneMode) {
-            return redstoneState == 1;
-        } else {
-            return redstoneState == 0;
-        }
+        return cachedActive;
     }
 
     public boolean getRedstoneMode() {
@@ -96,10 +96,25 @@ public class BlockEntityCirculationShielder extends BaseCFNBlockEntity implement
     public void setRedstoneMode(boolean mode) {
         this.redstoneMode = mode;
         setChanged();
+        refreshActiveCache();
     }
 
     public boolean isReceivingRedstoneSignal() {
-        return level != null && level.hasNeighborSignal(worldPosition);
+        return level != null && level.hasNeighborSignal(this.worldPosition);
+    }
+
+    @Override
+    public void serverUpdate() {
+        if (level == null || level.isClientSide()) {
+            cachedActive = false;
+            cachedPowered = false;
+            cachedActiveTick = Long.MIN_VALUE;
+            return;
+        }
+        long gameTime = level.getGameTime();
+        if (cachedActiveTick == Long.MIN_VALUE || gameTime - cachedActiveTick >= ACTIVE_CACHE_INTERVAL_TICKS) {
+            refreshActiveCache();
+        }
     }
 
     @Override
@@ -109,6 +124,7 @@ public class BlockEntityCirculationShielder extends BaseCFNBlockEntity implement
 
     public void onValidate() {
         if (level != null) {
+            refreshActiveCache();
             if (level.isClientSide()) {
                 clientRegister();
             } else {
@@ -147,6 +163,18 @@ public class BlockEntityCirculationShielder extends BaseCFNBlockEntity implement
 
     private void clientUnregister() {
         CirculationShielderRenderingHandler.INSTANCE.removeShielder(this);
+    }
+
+    private void refreshActiveCache() {
+        if (level == null || level.isClientSide()) {
+            cachedActive = false;
+            cachedPowered = false;
+            cachedActiveTick = Long.MIN_VALUE;
+            return;
+        }
+        cachedPowered = level.hasNeighborSignal(worldPosition);
+        cachedActive = redstoneMode == cachedPowered;
+        cachedActiveTick = level.getGameTime();
     }
 
     @Override
