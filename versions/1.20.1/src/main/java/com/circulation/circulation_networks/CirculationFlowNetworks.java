@@ -1,6 +1,7 @@
 package com.circulation.circulation_networks;
 
 import com.circulation.circulation_networks.energy.manager.DEHandlerManager;
+import com.circulation.circulation_networks.energy.manager.AE2HandlerManager;
 import com.circulation.circulation_networks.energy.manager.FEHandlerManager;
 import com.circulation.circulation_networks.energy.manager.MEKHandlerManager;
 import com.circulation.circulation_networks.handlers.NodePlacementValidationHandler;
@@ -57,6 +58,7 @@ public final class CirculationFlowNetworks {
 
     public static final String MOD_ID = "circulation_networks";
     public static final Logger LOGGER = LogManager.getLogger(MOD_ID);
+    private static final boolean AE2_LOADED = ModList.get().isLoaded("ae2");
 
     public CirculationFlowNetworks() {
         CFNNetwork.register();
@@ -95,6 +97,9 @@ public final class CirculationFlowNetworks {
     }
 
     private void registerEnergyHandlers() {
+        if (AE2_LOADED) {
+            RegistryEnergyHandler.registerEnergyHandler(AE2HandlerManager.INSTANCE);
+        }
         RegistryEnergyHandler.registerEnergyHandler(new FEHandlerManager());
         if (ModList.get().isLoaded("draconicevolution")) {
             RegistryEnergyHandler.registerEnergyHandler(new DEHandlerManager());
@@ -163,6 +168,9 @@ public final class CirculationFlowNetworks {
             EnergyMachineManager.INSTANCE.onServerTick();
         } else {
             MachineNodeBlockEntityManager.INSTANCE.onServerTick();
+            if (AE2_LOADED) {
+                AE2HandlerManager.INSTANCE.clearTickCache();
+            }
             DatPersistenceScheduler.INSTANCE.onServerTick();
         }
     }

@@ -11,4 +11,5 @@ dependencies {
     implementation("com.brandon3055.brandonscore:BrandonsCore:1.21.1-3.2.1.309")
     implementation("io.codechicken:CodeChickenLib:1.21.1-4.6.1.526")
     implementation("curse.maven:draconic-evolution-223565:7584459")
+    implementation "curse.maven:applied-energistics-2-223794:7027323"
 }

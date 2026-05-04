@@ -35,4 +35,5 @@ dependencies {
     deobfRuntimeOnly("curse.maven:CodeChickenLib-242818:2779848")
     deobfCompileOnly("curse.maven:endercore-231868:4671384")
     deobfCompileOnly("curse.maven:EnderIO-64578:4674244")
+    deobfImplementation("curse.maven:ae2-extended-life-570458:6302098")
 }

@@ -1,6 +1,7 @@
 package com.circulation.circulation_networks.proxy;
 
 import com.circulation.circulation_networks.CirculationFlowNetworks;
+import com.circulation.circulation_networks.energy.manager.AE2HandlerManager;
 import com.circulation.circulation_networks.energy.manager.EIOHandlerManager;
 import com.circulation.circulation_networks.energy.manager.EUHandlerManager;
 import com.circulation.circulation_networks.energy.manager.FEHandlerManager;
@@ -84,6 +85,7 @@ import static com.circulation.circulation_networks.CirculationFlowNetworks.NET_C
 @SuppressWarnings("unused")
 public class CommonProxy implements IGuiHandler {
 
+    private static final boolean AE2_LOADED = Loader.isModLoaded("appliedenergistics2");
     private int id = 0;
 
     public CommonProxy() {
@@ -99,6 +101,9 @@ public class CommonProxy implements IGuiHandler {
 
         if (Loader.isModLoaded("enderio")) {
             RegistryEnergyHandler.registerEnergyHandler(new EIOHandlerManager());
+        }
+        if (AE2_LOADED) {
+            RegistryEnergyHandler.registerEnergyHandler(AE2HandlerManager.INSTANCE);
         }
         RegistryEnergyHandler.registerEnergyHandler(new FEHandlerManager());
         try {
@@ -171,6 +176,9 @@ public class CommonProxy implements IGuiHandler {
             EnergyMachineManager.INSTANCE.onServerTick();
         } else {
             MachineNodeBlockEntityManager.INSTANCE.onServerTick();
+            if (AE2_LOADED) {
+                AE2HandlerManager.INSTANCE.clearTickCache();
+            }
             DatPersistenceScheduler.INSTANCE.onServerTick();
         }
     }

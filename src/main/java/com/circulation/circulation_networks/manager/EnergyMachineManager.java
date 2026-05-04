@@ -54,6 +54,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 import net.minecraft.server.MinecraftServer;
 import static com.circulation.circulation_networks.utils.SideCompat.isClientWorld;
@@ -69,7 +71,7 @@ public final class EnergyMachineManager {
     private final Int2ObjectMap<Object2ObjectMap<IEnergySupplyNode, LongSet>> nodeScope = new Int2ObjectOpenHashMap<>();
     //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
     private final Reference2ObjectMap<INode, ReferenceSet<TileEntity>> gridMachineMap = new Reference2ObjectOpenHashMap<>();
-    private final Reference2ObjectMap<TileEntity, ReferenceSet<INode>> machineGridMap = new Reference2ObjectOpenHashMap<>();
+    private final Map<TileEntity, ReferenceSet<INode>> machineGridMap = new ConcurrentHashMap<>();
     private final Reference2ObjectMap<IGrid, Interaction> interaction = new Reference2ObjectOpenHashMap<>();
     private final Reference2ObjectMap<IGrid, GridTickData> tickGridData = new Reference2ObjectOpenHashMap<>();
     private final ObjectList<IGrid> activeTickGrids = new ObjectArrayList<>();
@@ -85,6 +87,8 @@ public final class EnergyMachineManager {
     private final ReferenceSet<TileEntity> cache = new ReferenceOpenHashSet<>();
     private final Int2ObjectMap<Long2LongMap> lastWarningTicks = new Int2ObjectOpenHashMap<>();
     private final LongOpenHashSet visibleWarningsScratch = new LongOpenHashSet();
+    @Nullable
+    private IGrid currentHandlerGrid;
     private long warningTickCounter;
     private long lastWarningCleanupTick;
     private long interactionEpoch;
@@ -244,6 +248,20 @@ public final class EnergyMachineManager {
 
     public Reference2ObjectMap<IGrid, Interaction> getInteraction() {
         return interaction;
+    }
+
+    public @Nullable IGrid getCurrentHandlerGrid() {
+        return currentHandlerGrid;
+    }
+
+    public <T> T withCurrentHandlerGrid(@Nullable IGrid grid, Supplier<T> action) {
+        IGrid previous = currentHandlerGrid;
+        currentHandlerGrid = grid;
+        try {
+            return action.get();
+        } finally {
+            currentHandlerGrid = previous;
+        }
     }
 
     public void onBlockEntityValidate(BlockEntityLifeCycleEvent.Validate event) {
