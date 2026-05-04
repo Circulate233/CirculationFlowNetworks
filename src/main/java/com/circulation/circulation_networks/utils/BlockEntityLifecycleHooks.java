@@ -71,7 +71,7 @@ public final class BlockEntityLifecycleHooks {
         }
         validateLock = true;
         try {
-            if (blockEntity instanceof INodeBlockEntity nodeBlockEntity) {
+            if (blockEntity instanceof INodeBlockEntity<?> nodeBlockEntity) {
                 nodeBlockEntity.nodeValidate();
             }
             BlockEntityLifeCycleEvent.Validate event = new BlockEntityLifeCycleEvent.Validate(world, pos, blockEntity);
@@ -88,7 +88,7 @@ public final class BlockEntityLifecycleHooks {
         }
         invalidateLock = true;
         try {
-            if (blockEntity instanceof INodeBlockEntity nodeBlockEntity) {
+            if (blockEntity instanceof INodeBlockEntity<?> nodeBlockEntity) {
                 nodeBlockEntity.nodeInvalidate();
             }
             BlockEntityLifeCycleEvent.Invalidate event = new BlockEntityLifeCycleEvent.Invalidate(world, pos, blockEntity);

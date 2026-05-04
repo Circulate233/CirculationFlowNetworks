@@ -14,6 +14,7 @@ import ic2.api.item.ElectricItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.WorldServer;
 import net.minecraftforge.fml.common.eventhandler.EventPriority;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 
@@ -67,19 +68,20 @@ public final class EUHandlerManager implements IEnergyHandlerManager {
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public void onEnergyTileLoad(EnergyTileLoadEvent event) {
-        if (event.getWorld().isRemote) return;
+        if (!(event.getWorld() instanceof WorldServer server)) return;
         var tile = event.tile;
-        BlockPos pos;
-        if (tile instanceof TileEntity te && this.isAvailable(te)) {
-            pos = te.getPos();
-        } else if (tile instanceof ILocatable te) {
-            pos = te.getPosition();
-        } else return;
-        var tileEntity = event.getWorld().getTileEntity(pos);
-        if (tileEntity != null) {
-            if (EnergyMachineManager.INSTANCE.getMachineGridMap().containsKey(tileEntity)) return;
-            if (this.isAvailable(tileEntity))
-                EnergyMachineManager.INSTANCE.addMachine(tileEntity);
+        if (tile instanceof TileEntity te && this.isAvailable(te) && !te.isInvalid()) {
+            if (EnergyMachineManager.INSTANCE.getMachineGridMap().containsKey(te)) return;
+            if (this.isAvailable(te))
+                EnergyMachineManager.INSTANCE.addMachine(te);
+        } else if (tile instanceof ILocatable il) {
+            server.addScheduledTask(() -> {
+                var te = il.getWorldObj().getTileEntity(il.getPosition());
+                if (te == null) return;
+                if (EnergyMachineManager.INSTANCE.getMachineGridMap().containsKey(te)) return;
+                if (this.isAvailable(te))
+                    EnergyMachineManager.INSTANCE.addMachine(te);
+            });
         }
     }
 }
