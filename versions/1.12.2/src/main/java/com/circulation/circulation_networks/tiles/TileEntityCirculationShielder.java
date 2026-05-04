@@ -98,6 +98,13 @@ public class TileEntityCirculationShielder extends BaseTileEntity implements ICi
         return cachedActive;
     }
 
+    public boolean isReceivingRedstoneSignal() {
+        if (world == null) {
+            return false;
+        }
+        return world.isBlockPowered(pos);
+    }
+
     private void refreshActiveCache() {
         if (world == null) {
             cachedActive = false;

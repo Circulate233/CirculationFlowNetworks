@@ -184,11 +184,7 @@ public class CirculationShielderPanelComponent extends Component implements Hori
         if (shielder == null) {
             return false;
         }
-        //? if <1.20 {
-        return shielder.getWorld() != null && shielder.getWorld().isBlockPowered(shielder.getPos());
-        //?} else {
-        /*return shielder.getLevel() != null && shielder.getLevel().hasNeighborSignal(shielder.getBlockPos());
-        *///?}
+        return shielder.isReceivingRedstoneSignal();
     }
 
     private String getScopeText() {
