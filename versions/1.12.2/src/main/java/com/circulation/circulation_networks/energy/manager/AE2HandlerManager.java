@@ -8,8 +8,6 @@ import com.circulation.circulation_networks.api.IEnergyHandlerManager;
 import com.circulation.circulation_networks.energy.handler.AE2Handler;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
-import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
-import it.unimi.dsi.fastutil.objects.ReferenceSet;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 
@@ -17,23 +15,22 @@ public final class AE2HandlerManager implements IEnergyHandlerManager {
 
     public static final AE2HandlerManager INSTANCE = new AE2HandlerManager();
 
-    private final Reference2ObjectMap<com.circulation.circulation_networks.api.IGrid, ReferenceSet<IGrid>> seenGrids =
-        new Reference2ObjectOpenHashMap<>();
+    private final Reference2ObjectMap<IGrid, AE2Handler> gridCache = new Reference2ObjectOpenHashMap<>();
 
     private AE2HandlerManager() {
     }
 
     public void clearTickCache() {
-        seenGrids.clear();
+        gridCache.clear();
     }
 
-    public boolean claim(com.circulation.circulation_networks.api.IGrid currentGrid, IGrid aeGrid) {
-        ReferenceSet<IGrid> claimed = seenGrids.get(currentGrid);
-        if (claimed == null) {
-            claimed = new ReferenceOpenHashSet<>();
-            seenGrids.put(currentGrid, claimed);
+    public AE2Handler claim(IGrid grid, AE2Handler aeGrid) {
+        var a = gridCache.get(grid);
+        if (a == null) {
+            gridCache.put(grid, aeGrid);
+            return aeGrid;
         }
-        return claimed.add(aeGrid);
+        return a;
     }
 
     @Override

@@ -48,31 +48,31 @@ final class EnergyTransferParticipant {
     }
 
     IEnergyHandler.EnergyType getType() {
-        return EnergyMachineManager.INSTANCE.withCurrentHandlerGrid(grid, () -> handler.getType(hubMetadata));
+        return handler.getType(hubMetadata);
     }
 
     EnergyAmount canExtractValue() {
-        return EnergyMachineManager.INSTANCE.withCurrentHandlerGrid(grid, () -> handler.canExtractValue(hubMetadata));
+        return handler.canExtractValue(hubMetadata);
     }
 
     EnergyAmount canReceiveValue() {
-        return EnergyMachineManager.INSTANCE.withCurrentHandlerGrid(grid, () -> handler.canReceiveValue(hubMetadata));
+        return handler.canReceiveValue(hubMetadata);
     }
 
     boolean canExtract(EnergyTransferParticipant receiveParticipant) {
-        return EnergyMachineManager.INSTANCE.withCurrentHandlerGrid(grid, () -> handler.canExtract(receiveParticipant.handler, hubMetadata));
+        return handler.canExtract(receiveParticipant.handler, hubMetadata);
     }
 
     boolean canReceive(EnergyTransferParticipant sendParticipant) {
-        return EnergyMachineManager.INSTANCE.withCurrentHandlerGrid(grid, () -> handler.canReceive(sendParticipant.handler, hubMetadata));
+        return handler.canReceive(sendParticipant.handler, hubMetadata);
     }
 
     EnergyAmount extractEnergy(EnergyAmount maxExtract) {
-        return EnergyMachineManager.INSTANCE.withCurrentHandlerGrid(grid, () -> handler.extractEnergy(maxExtract, hubMetadata));
+        return handler.extractEnergy(maxExtract, hubMetadata);
     }
 
     EnergyAmount receiveEnergy(EnergyAmount maxReceive) {
-        return EnergyMachineManager.INSTANCE.withCurrentHandlerGrid(grid, () -> handler.receiveEnergy(maxReceive, hubMetadata));
+        return handler.receiveEnergy(maxReceive, hubMetadata);
     }
 
     @Nullable

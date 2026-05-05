@@ -55,7 +55,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Supplier;
 
 import net.minecraft.server.MinecraftServer;
 import static com.circulation.circulation_networks.utils.SideCompat.isClientWorld;
@@ -87,8 +86,6 @@ public final class EnergyMachineManager {
     private final ReferenceSet<TileEntity> cache = new ReferenceOpenHashSet<>();
     private final Int2ObjectMap<Long2LongMap> lastWarningTicks = new Int2ObjectOpenHashMap<>();
     private final LongOpenHashSet visibleWarningsScratch = new LongOpenHashSet();
-    @Nullable
-    private IGrid currentHandlerGrid;
     private long warningTickCounter;
     private long lastWarningCleanupTick;
     private long interactionEpoch;
@@ -248,20 +245,6 @@ public final class EnergyMachineManager {
 
     public Reference2ObjectMap<IGrid, Interaction> getInteraction() {
         return interaction;
-    }
-
-    public @Nullable IGrid getCurrentHandlerGrid() {
-        return currentHandlerGrid;
-    }
-
-    public <T> T withCurrentHandlerGrid(@Nullable IGrid grid, Supplier<T> action) {
-        IGrid previous = currentHandlerGrid;
-        currentHandlerGrid = grid;
-        try {
-            return action.get();
-        } finally {
-            currentHandlerGrid = previous;
-        }
     }
 
     public void onBlockEntityValidate(BlockEntityLifeCycleEvent.Validate event) {

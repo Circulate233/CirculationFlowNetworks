@@ -78,6 +78,7 @@ public class TileEntityCirculationShielder extends BaseTileEntity implements ICi
         super.writeToNBT(compound);
         compound.setInteger("scope", this.scope);
         compound.setBoolean("RedstoneMode", this.redstoneMode);
+        compound.setBoolean("CachedActive", this.cachedActive);
         return compound;
     }
 
@@ -86,6 +87,7 @@ public class TileEntityCirculationShielder extends BaseTileEntity implements ICi
         super.readFromNBT(compound);
         setScope(compound.getInteger("scope"));
         this.redstoneMode = compound.getBoolean("RedstoneMode");
+        this.cachedActive = compound.getBoolean("CachedActive");
         refreshActiveCache();
     }
 
