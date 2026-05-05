@@ -140,7 +140,6 @@ public class TileEntityCirculationShielder extends BaseTileEntity implements ICi
     public void validate() {
         super.validate();
         setScope(scope);
-        refreshActiveCache();
         if (world.isRemote) {
             clientRegister();
         } else {

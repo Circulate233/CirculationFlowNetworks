@@ -18,7 +18,6 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraft.world.World;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
-import net.minecraftforge.fml.common.eventhandler.Event;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import org.jetbrains.annotations.Nullable;
 
@@ -73,6 +72,7 @@ public final class NodePlacementValidationHandler {
 
     private static @Nullable PlacementData resolvePlacement(World world, BlockPos clickedPos, EnumFacing face, Vec3d hitVec,
                                                             ItemStack stack, ItemBlock itemBlock, EntityPlayer player) {
+        if (hitVec == null) return null;
         IBlockState clickedState = world.getBlockState(clickedPos);
         BlockPos placePos = clickedState.getBlock().isReplaceable(world, clickedPos) ? clickedPos : clickedPos.offset(face);
         if (!player.canPlayerEdit(placePos, face, stack) || !world.mayPlace(itemBlock.getBlock(), placePos, false, face, player)) {
