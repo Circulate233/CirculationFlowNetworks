@@ -81,7 +81,6 @@ public final class EnergyMachineManager {
 
     {
         gridMachineMap.defaultReturnValue(ReferenceSets.emptySet());
-        nodeRescanTicks.defaultReturnValue(Long.MIN_VALUE);
     }
 
     static void transferEnergy(Collection<EnergyTransferParticipant> send,

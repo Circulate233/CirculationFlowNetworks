@@ -146,5 +146,6 @@
   "tooltip.circulation_networks.pocket_node_detach_with_configurator": "§eRight-click with a Circulation Configurator to detach",
   "tooltip.circulation_networks.node_rescan": "§eSneak-right-click with empty hand to rescan nearby energy devices",
   "hud.node.network_data": "Network Data",
-  "hud.node.unnamed": "Unnamed Node"
+  "hud.node.unnamed": "Unnamed Node",
+  "message.circulation_networks.node_rescan_success": "§aRescanned nearby energy devices"
 }

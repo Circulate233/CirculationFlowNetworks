@@ -146,5 +146,6 @@
   "tooltip.circulation_networks.pocket_node_detach_with_configurator": "§e可用环流配置器右键拆下",
   "tooltip.circulation_networks.node_rescan": "§e空手潜行右键可重扫描附近能量设备",
   "hud.node.network_data": "网络数据",
-  "hud.node.unnamed": "未命名节点"
+  "hud.node.unnamed": "未命名节点",
+  "message.circulation_networks.node_rescan_success": "§a已重扫描附近能量设备"
 }

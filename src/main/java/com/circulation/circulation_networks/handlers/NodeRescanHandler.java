@@ -5,6 +5,8 @@ import com.circulation.circulation_networks.api.node.IEnergySupplyNode;
 import com.circulation.circulation_networks.manager.EnergyMachineManager;
 import com.circulation.circulation_networks.tiles.BlockEntityMultiblockShell;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
@@ -48,7 +50,9 @@ public final class NodeRescanHandler {
             return;
         }
 
-        EnergyMachineManager.INSTANCE.rescanMachinesAroundNode(energySupplyNode);
+        if (EnergyMachineManager.INSTANCE.rescanMachinesAroundNode(energySupplyNode) && player instanceof ServerPlayer serverPlayer) {
+            serverPlayer.sendSystemMessage(Component.translatable("message.circulation_networks.node_rescan_success"));
+        }
         event.setCancellationResult(InteractionResult.SUCCESS);
         event.setCanceled(true);
     }
