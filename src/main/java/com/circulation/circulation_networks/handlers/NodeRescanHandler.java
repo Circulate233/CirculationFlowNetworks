@@ -12,22 +12,24 @@ import com.circulation.circulation_networks.tiles.TileEntityMultiblockShell;
 //~ mc_imports
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+import net.minecraft.entity.player.EntityPlayerMP;
 //? if <1.20 {
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.EnumActionResult;
 import net.minecraft.util.EnumHand;
+import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 //?} else if <1.21 {
-/*import net.minecraft.world.InteractionHand;
+/*import net.minecraft.network.chat.Component;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
-import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 *///?} else {
-/*import net.minecraft.world.InteractionHand;
+/*import net.minecraft.network.chat.Component;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
-import net.minecraft.world.entity.player.Player;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 *///?}
@@ -60,7 +62,9 @@ public final class NodeRescanHandler {
             return;
         }
 
-        EnergyMachineManager.INSTANCE.rescanMachinesAroundNode(energySupplyNode);
+        if (EnergyMachineManager.INSTANCE.rescanMachinesAroundNode(energySupplyNode)) {
+            sendRescanSuccess(player);
+        }
         markHandled(event);
     }
 
@@ -95,6 +99,12 @@ public final class NodeRescanHandler {
 
     private static boolean isMainHandEmpty(EntityPlayer player) {
         return player.getHeldItemMainhand().isEmpty();
+    }
+
+    private static void sendRescanSuccess(EntityPlayer player) {
+        if (player instanceof EntityPlayerMP serverPlayer) {
+            serverPlayer.sendMessage(new TextComponentTranslation("message.circulation_networks.node_rescan_success"));
+        }
     }
 
     private static void markHandled(PlayerInteractEvent.RightClickBlock event) {
@@ -132,6 +142,12 @@ public final class NodeRescanHandler {
 
     private static boolean isMainHandEmpty(Player player) {
         return player.getMainHandItem().isEmpty();
+    }
+
+    private static void sendRescanSuccess(Player player) {
+        if (player instanceof ServerPlayer serverPlayer) {
+            serverPlayer.sendSystemMessage(Component.translatable("message.circulation_networks.node_rescan_success"));
+        }
     }
 
     private static void markHandled(PlayerInteractEvent.RightClickBlock event) {

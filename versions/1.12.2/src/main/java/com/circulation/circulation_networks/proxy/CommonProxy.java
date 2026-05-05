@@ -51,6 +51,7 @@ import com.circulation.circulation_networks.utils.HubTeamServices;
 import com.circulation.circulation_networks.utils.Packet;
 import com.feed_the_beast.ftblib.lib.data.ForgePlayer;
 import com.feed_the_beast.ftblib.lib.data.Universe;
+import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.minecraft.block.Block;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -281,7 +282,7 @@ public class CommonProxy implements IGuiHandler {
             if (CirculationFlowNetworks.server == null) {
                 return Collections.emptyList();
             }
-            List<PlayerIdentity> players = new ArrayList<>();
+            List<PlayerIdentity> players = new ObjectArrayList<>();
             for (EntityPlayerMP player : CirculationFlowNetworks.server.getPlayerList().getPlayers()) {
                 players.add(new PlayerIdentity(player.getUniqueID(), player.getName()));
             }

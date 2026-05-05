@@ -1,4 +1,4 @@
-{
+﻿{
   "block.circulation_networks.charging_node": "Circulation Charging Node",
   "block.circulation_networks.circulation_shielder": "Circulation Shielder",
   "block.circulation_networks.circulation_shielder.tooltip.0": "§7Prevents blocks within range from interacting with energy through the network",
@@ -141,4 +141,6 @@
   "tooltip.circulation_networks.node_rescan": "§eSneak-right-click with empty hand to rescan nearby energy devices",
   "hud.node.network_data": "Network Data",
   "hud.node.unnamed": "Unnamed Node"
+,
+  "message.circulation_networks.node_rescan_success": "§aRescanned nearby energy devices"
 }

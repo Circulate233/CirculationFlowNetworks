@@ -94,7 +94,6 @@ public final class EnergyMachineManager {
         scopeNode.defaultReturnValue(Long2ObjectMaps.emptyMap());
         nodeScope.defaultReturnValue(Object2ObjectMaps.emptyMap());
         gridMachineMap.defaultReturnValue(ReferenceSets.emptySet());
-        nodeRescanTicks.defaultReturnValue(Long.MIN_VALUE);
     }
 
     static void transferEnergy(Collection<EnergyTransferParticipant> send,

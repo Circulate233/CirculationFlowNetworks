@@ -19,6 +19,8 @@ stonecutter parameters {
         replace("net.minecraftforge.fml.common.eventhandler.SubscribeEvent;", "net.minecraftforge.eventbus.api.SubscribeEvent;")
         replace("net.minecraftforge.fml.relauncher.Side;", "net.minecraftforge.api.distmarker.Dist;")
         replace("net.minecraftforge.fml.relauncher.SideOnly;", "net.minecraftforge.api.distmarker.OnlyIn;")
+        replace("net.minecraft.entity.player.EntityPlayerMP", "net.minecraft.server.level.ServerPlayer")
+        replace("net.minecraft.entity.player.EntityPlayer", "net.minecraft.world.entity.player.Player")
     }
 
     replacements.string(eval(current.version, ">=1.21"), "neo_imports") {
