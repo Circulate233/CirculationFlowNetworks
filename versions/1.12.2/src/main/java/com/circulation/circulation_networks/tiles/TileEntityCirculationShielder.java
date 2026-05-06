@@ -113,8 +113,12 @@ public class TileEntityCirculationShielder extends BaseTileEntity implements ICi
             cachedActiveTick = Long.MIN_VALUE;
             return;
         }
+        boolean oldActive = cachedActive;
         cachedActive = redstoneMode == world.isBlockPowered(pos);
         cachedActiveTick = world.getTotalWorldTime();
+        if (!world.isRemote && oldActive != cachedActive) {
+            CirculationShielderManager.INSTANCE.refreshActiveState(this, world.provider.getDimension());
+        }
     }
 
     @Override

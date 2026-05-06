@@ -95,8 +95,12 @@ public class CirculationShielderBlockEntity extends BaseCFNBlockEntity implement
             cachedActiveTick = Long.MIN_VALUE;
             return;
         }
+        boolean oldActive = cachedActive;
         cachedActive = redstoneMode == level.hasNeighborSignal(worldPosition);
         cachedActiveTick = level.getGameTime();
+        if (!level.isClientSide && oldActive != cachedActive) {
+            CirculationShielderManager.INSTANCE.refreshActiveState(this, level.dimension().location().hashCode());
+        }
     }
 
     public boolean isReceivingRedstoneSignal() {

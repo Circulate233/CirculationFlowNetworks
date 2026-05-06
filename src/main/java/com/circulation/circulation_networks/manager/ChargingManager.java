@@ -419,14 +419,20 @@ public final class ChargingManager {
         var players = server.getPlayerList().getPlayers();
         prepareChargeTargetScratch();
         processedTransferGrids.clear();
-        playerStates.clear();
         if (playerStates instanceof ObjectArrayList) {
             ((ObjectArrayList<PlayerChargeState>) playerStates).ensureCapacity(players.size());
         }
 
-        for (var player : players) {
-            var playerState = new PlayerChargeState(player);
-            playerStates.add(playerState);
+        for (int i = 0; i < players.size(); i++) {
+            var player = players.get(i);
+            PlayerChargeState playerState;
+            if (i < playerStates.size()) {
+                playerState = playerStates.get(i);
+                playerState.prepare(player);
+            } else {
+                playerState = new PlayerChargeState(player);
+                playerStates.add(playerState);
+            }
             collectPlayerChargeTargets(player, playerState);
         }
 
@@ -461,8 +467,8 @@ public final class ChargingManager {
             handlers.clear();
         }
         activeChargeTargetGrids.clear();
-        for (var playerState : playerStates) {
-            playerState.clear();
+        for (int i = 0; i < players.size(); i++) {
+            playerStates.get(i).clear();
         }
     }
     //~}
@@ -695,8 +701,8 @@ public final class ChargingManager {
 
     private static final class PlayerChargeState {
         final EnumMap<ChargingDefinition, List<EnergyTransferParticipant>> cache = new EnumMap<>(ChargingDefinition.class);
-        final List<ItemStack> inventory;
-        final List<ItemStack> armor;
+        List<ItemStack> inventory;
+        List<ItemStack> armor;
         final ObjectList<EnergyTransferParticipant> scratch = new ObjectArrayList<>();
         final ReferenceSet<IGrid> coveredGrids = new ReferenceOpenHashSet<>();
         final ReferenceSet<IGrid> reachableGrids = new ReferenceOpenHashSet<>();
@@ -705,6 +711,10 @@ public final class ChargingManager {
         //~ if >=1.20 '.inventory.mainInventory' -> '.getInventory().items' {
         //~ if >=1.20 '.inventory.armorInventory' -> '.getInventory().armor' {
         PlayerChargeState(EntityPlayer player) {
+            prepare(player);
+        }
+
+        void prepare(EntityPlayer player) {
             this.inventory = player.inventory.mainInventory;
             this.armor = player.inventory.armorInventory;
         }

@@ -10,22 +10,30 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 
 import org.jetbrains.annotations.Nullable;
+
 public interface IEnergyHandler {
 
     int MAX_POOL_SIZE = 4096;
     Reference2ObjectMap<Class<? extends IEnergyHandler>, ObjectPool<IEnergyHandler>> POOL = new Reference2ObjectOpenHashMap<>();
 
     //~ if >=1.20 '(TileEntity ' -> '(BlockEntity ' {
-    static @org.jetbrains.annotations.Nullable IEnergyHandler release(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
+    static @Nullable IEnergyHandler release(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
         if (tileEntity instanceof IMachineNodeBlockEntity mbe) return mbe.getEnergyHandler();
         var m = RegistryEnergyHandler.getEnergyManager(tileEntity);
         if (m == null) return null;
-        var q = POOL.get(m.getEnergyHandlerClass());
-        var t = q == null ? m.newBlockEntityInstance() : q.obtain();
+        return release(tileEntity, m, hubMetadata);
+    }
+
+    static @Nullable IEnergyHandler release(TileEntity tileEntity,
+                                                                     IEnergyHandlerManager manager,
+                                                                     @Nullable HubNode.HubMetadata hubMetadata) {
+        if (tileEntity instanceof IMachineNodeBlockEntity mbe) return mbe.getEnergyHandler();
+        var q = POOL.get(manager.getEnergyHandlerClass());
+        var t = q == null ? manager.newBlockEntityInstance() : q.obtain();
         return t.init(tileEntity, hubMetadata);
     }
 
-    static @org.jetbrains.annotations.Nullable IEnergyHandler release(ItemStack stack, @Nullable HubNode.HubMetadata hubMetadata) {
+    static @Nullable IEnergyHandler release(ItemStack stack, @Nullable HubNode.HubMetadata hubMetadata) {
         if (stack == null || stack.isEmpty()) return null;
         var m = RegistryEnergyHandler.getEnergyManager(stack);
         if (m == null) return null;
