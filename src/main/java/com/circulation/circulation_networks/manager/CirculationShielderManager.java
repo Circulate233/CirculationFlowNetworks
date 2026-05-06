@@ -10,8 +10,6 @@ import it.unimi.dsi.fastutil.objects.ReferenceSets;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
-import static com.circulation.circulation_networks.utils.SideCompat.isClientWorld;
-
 public final class CirculationShielderManager {
 
     public static final CirculationShielderManager INSTANCE = new CirculationShielderManager();
@@ -106,15 +104,6 @@ public final class CirculationShielderManager {
             return true;
         }
         return false;
-    }
-
-    //~ if >=1.20 ' World ' -> ' Level ' {
-    public boolean isBlockedByShielder(BlockPos tePos, World world) {
-        //~}
-        if (world == null || isClientWorld(world)) return false;
-        int dimId = getDimensionId(world);
-
-        return isBlockedByShielder(tePos, activeDimShielders.get(dimId));
     }
     //~}
     //~}
