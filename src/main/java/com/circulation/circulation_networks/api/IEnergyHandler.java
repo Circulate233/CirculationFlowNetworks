@@ -18,8 +18,15 @@ public interface IEnergyHandler {
         if (tileEntity instanceof IMachineNodeBlockEntity mbe) return mbe.getEnergyHandler();
         var m = RegistryEnergyHandler.getEnergyManager(tileEntity);
         if (m == null) return null;
-        var q = POOL.get(m.getEnergyHandlerClass());
-        var t = q == null ? m.newBlockEntityInstance() : q.obtain();
+        return release(tileEntity, m, hubMetadata);
+    }
+
+    static @Nullable IEnergyHandler release(BlockEntity tileEntity,
+                                            IEnergyHandlerManager manager,
+                                            @Nullable HubNode.HubMetadata hubMetadata) {
+        if (tileEntity instanceof IMachineNodeBlockEntity mbe) return mbe.getEnergyHandler();
+        var q = POOL.get(manager.getEnergyHandlerClass());
+        var t = q == null ? manager.newBlockEntityInstance() : q.obtain();
         return t.init(tileEntity, hubMetadata);
     }
 

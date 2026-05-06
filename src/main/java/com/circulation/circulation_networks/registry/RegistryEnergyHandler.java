@@ -121,6 +121,13 @@ public final class RegistryEnergyHandler {
         return null;
     }
 
+    public static @Nullable IEnergyHandlerManager getEnergyManager(BlockEntity tile, @Nullable IEnergyHandlerManager preferred) {
+        if (preferred != null && preferred.isAvailable(tile)) {
+            return preferred;
+        }
+        return getEnergyManager(tile);
+    }
+
     public static @Nullable IEnergyHandlerManager getEnergyManager(ItemStack stack) {
         for (IEnergyHandlerManager manager : list) {
             if (manager.isAvailable(stack)) return manager;
