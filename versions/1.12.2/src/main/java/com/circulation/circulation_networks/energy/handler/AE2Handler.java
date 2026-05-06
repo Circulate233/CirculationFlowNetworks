@@ -20,7 +20,7 @@ import org.jetbrains.annotations.Nullable;
 public class AE2Handler implements IEnergyHandler {
 
     @Nullable
-    private IGrid grid;
+    private IEnergyGrid energyGrid;
     public final EnergyAmount receivedValue = EnergyAmount.obtain(0);
     public final EnergyAmount acceptableValue = EnergyAmount.obtain(0);
     private boolean init;
@@ -33,6 +33,7 @@ public class AE2Handler implements IEnergyHandler {
         AENetworkPowerTile tile = (AENetworkPowerTile) tileEntity;
         init = true;
         var n = tile.getProxy().getNode();
+        IGrid grid;
         if (n == null) {
             return this;
         } else {
@@ -41,7 +42,8 @@ public class AE2Handler implements IEnergyHandler {
         if (grid == null) {
             return this;
         }
-        var a = AE2HandlerManager.INSTANCE.claim(grid, this);
+        energyGrid = grid.getCache(IEnergyGrid.class);
+        var a = AE2HandlerManager.INSTANCE.claim(energyGrid, this);
         if (a == this) {
             var e = tile.getExternalPowerDemand(PowerUnits.RF, Double.MAX_VALUE);
             EnergyAmountConversionUtils.setFromDoubleFloor(acceptableValue, e);
@@ -60,9 +62,8 @@ public class AE2Handler implements IEnergyHandler {
 
     @Override
     public void clear() {
-        if (grid != null) grid.<IEnergyGrid>getCache(IEnergyGrid.class)
-            .injectPower(receivedValue.doubleValue() / 2, Actionable.MODULATE);
-        grid = null;
+        if (energyGrid != null) energyGrid.injectPower(receivedValue.doubleValue() / 2, Actionable.MODULATE);
+        energyGrid = null;
         init = false;
         acceptableValue.setZero();
         receivedValue.setZero();
@@ -106,7 +107,7 @@ public class AE2Handler implements IEnergyHandler {
 
     @Override
     public boolean canReceive(IEnergyHandler sendHandler, @Nullable HubNode.HubMetadata hubMetadata) {
-        return grid != null;
+        return energyGrid != null;
     }
 
     @Override

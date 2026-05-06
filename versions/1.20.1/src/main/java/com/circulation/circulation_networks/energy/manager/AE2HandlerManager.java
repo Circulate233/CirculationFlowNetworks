@@ -1,6 +1,6 @@
 package com.circulation.circulation_networks.energy.manager;
 
-import appeng.api.networking.IGrid;
+import appeng.api.networking.energy.IEnergyService;
 import appeng.blockentity.networking.ControllerBlockEntity;
 import appeng.blockentity.networking.EnergyAcceptorBlockEntity;
 import com.circulation.circulation_networks.api.IEnergyHandler;
@@ -15,7 +15,7 @@ public final class AE2HandlerManager implements IEnergyHandlerManager {
 
     public static final AE2HandlerManager INSTANCE = new AE2HandlerManager();
 
-    private final Reference2ObjectMap<IGrid, AE2Handler> gridCache = new Reference2ObjectOpenHashMap<>();
+    private final Reference2ObjectMap<IEnergyService, AE2Handler> gridCache = new Reference2ObjectOpenHashMap<>();
 
     private AE2HandlerManager() {
     }
@@ -24,7 +24,7 @@ public final class AE2HandlerManager implements IEnergyHandlerManager {
         gridCache.clear();
     }
 
-    public AE2Handler claim(IGrid grid, AE2Handler aeGrid) {
+    public AE2Handler claim(IEnergyService grid, AE2Handler aeGrid) {
         var a = gridCache.get(grid);
         if (a == null) {
             gridCache.put(grid, aeGrid);
