@@ -22,7 +22,6 @@ import net.minecraftforge.fml.common.SidedProxy;
 import net.minecraftforge.fml.common.event.FMLInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLPostInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
-import net.minecraftforge.fml.common.event.FMLServerStartedEvent;
 import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
 import net.minecraftforge.fml.common.event.FMLServerStoppingEvent;
 import net.minecraftforge.fml.common.network.NetworkRegistry;
@@ -88,14 +87,6 @@ public class CirculationFlowNetworks {
     @Mod.EventHandler
     public void serverStarting(FMLServerStartingEvent event) {
         server = event.getServer();
-    }
-
-    @Mod.EventHandler
-    public void serverStarted(FMLServerStartedEvent event) {
-        server.addScheduledTask(() -> {
-            NetworkManager.INSTANCE.initGrid();
-            PocketNodeManager.INSTANCE.load();
-        });
     }
 
     @Mod.EventHandler

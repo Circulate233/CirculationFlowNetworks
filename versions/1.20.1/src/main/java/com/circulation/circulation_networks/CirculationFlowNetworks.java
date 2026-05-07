@@ -37,7 +37,6 @@ import net.minecraftforge.event.entity.player.PlayerEvent.PlayerChangedDimension
 import net.minecraftforge.event.level.BlockEvent;
 import net.minecraftforge.event.level.ChunkEvent;
 import net.minecraftforge.event.server.ServerAboutToStartEvent;
-import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.common.Mod;
@@ -76,7 +75,6 @@ public final class CirculationFlowNetworks {
         }
         installPlatformServices();
         MinecraftForge.EVENT_BUS.addListener(this::onServerAboutToStart);
-        MinecraftForge.EVENT_BUS.addListener(this::onServerStarted);
         MinecraftForge.EVENT_BUS.addListener(this::onChunkLoad);
         MinecraftForge.EVENT_BUS.addListener(this::onBlockBreak);
         MinecraftForge.EVENT_BUS.addListener(this::onServerStopping);
@@ -156,13 +154,6 @@ public final class CirculationFlowNetworks {
 
     private void onServerAboutToStart(ServerAboutToStartEvent event) {
         HubChannelManager.INSTANCE.load();
-    }
-
-    private void onServerStarted(ServerStartedEvent event) {
-        ServerLifecycleHooks.getCurrentServer().addTickable(() -> {
-            NetworkManager.INSTANCE.initGrid();
-            PocketNodeManager.INSTANCE.load();
-        });
     }
 
     private void onServerTick(TickEvent.ServerTickEvent event) {
