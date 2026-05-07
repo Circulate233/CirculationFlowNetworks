@@ -534,11 +534,11 @@ public final class EnergyMachineManager {
                     }
                     var set2 = gridMachineMap.get(node);
                     for (var tileEntity : chunk.getTileEntityMap().values()) {
-                        if (tileEntity instanceof IMachineNodeBlockEntity) {
+                        if (tileEntity instanceof IMachineNodeBlockEntity mte) {
+                            if (node.linkScopeCheck(mte.getNode()) == INode.LinkType.DISCONNECT) continue;
                             if (set2 == gridMachineMap.defaultReturnValue()) {
                                 gridMachineMap.put(energySupplyNode, set2 = new ReferenceOpenHashSet<>());
                             }
-                            machineHandlerManagerCache.put(tileEntity, null);
                             set2.add(tileEntity);
 
                             var set3 = machineGridMap.get(tileEntity);
@@ -573,11 +573,11 @@ public final class EnergyMachineManager {
                     }
                     var set2 = gridMachineMap.get(node);
                     for (var blockEntity : chunk.getBlockEntities().values()) {
-                        if (blockEntity instanceof IMachineNodeBlockEntity) {
+                        if (blockEntity instanceof IMachineNodeBlockEntity mte) {
+                            if (node.linkScopeCheck(mte.getNode()) == INode.LinkType.DISCONNECT) continue;
                             if (set2 == gridMachineMap.defaultReturnValue()) {
                                 gridMachineMap.put(energySupplyNode, set2 = new ReferenceOpenHashSet<>());
                             }
-                            machineHandlerManagerCache.put(blockEntity, null);
                             set2.add(blockEntity);
 
                             var set3 = machineGridMap.get(blockEntity);
@@ -886,18 +886,21 @@ public final class EnergyMachineManager {
 
     @Nullable
     private IEnergyHandler getOrCreateTickMachineHandler(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
-        if (tileEntity instanceof IMachineNodeBlockEntity mte) return mte.getEnergyHandler().init(tileEntity, hubMetadata);
         IEnergyHandler handler;
-        IEnergyHandlerManager c = machineHandlerManagerCache.get(tileEntity);
-        IEnergyHandlerManager manager = RegistryEnergyHandler.getEnergyManager(tileEntity, c);
-        if (manager == null) {
-            machineHandlerManagerCache.remove(tileEntity);
-            return null;
-        }
-        if (c != manager) machineHandlerManagerCache.put(tileEntity, manager);
-        handler = IEnergyHandler.release(tileEntity, manager, hubMetadata);
-        if (handler == null) {
-            return null;
+        if (tileEntity instanceof IMachineNodeBlockEntity mte) {
+            handler = mte.getEnergyHandler().init(tileEntity, hubMetadata);
+        } else {
+            IEnergyHandlerManager c = machineHandlerManagerCache.get(tileEntity);
+            IEnergyHandlerManager manager = RegistryEnergyHandler.getEnergyManager(tileEntity, c);
+            if (manager == null) {
+                machineHandlerManagerCache.remove(tileEntity);
+                return null;
+            }
+            if (c != manager) machineHandlerManagerCache.put(tileEntity, manager);
+            handler = IEnergyHandler.release(tileEntity, manager, hubMetadata);
+            if (handler == null) {
+                return null;
+            }
         }
         tickSharedHandlers.add(handler);
         return handler;
