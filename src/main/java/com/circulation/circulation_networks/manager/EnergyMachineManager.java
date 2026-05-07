@@ -287,17 +287,34 @@ public final class EnergyMachineManager {
             if (ChunkCoordUtils.isChunkLoaded(world, pos) && (activeShielders.length == 0 || !CirculationShielderManager.INSTANCE.isBlockedByShielder(pos, activeShielders))) {
                 var override = overrideManager == null ? null : overrideManager.getOverride(dimId, pos);
                 WarningTarget warningTarget = null;
-                if (v.size() == 1) {
-                    for (var node : v) {
-                        warningTarget = collectTickMachineParticipant(te, node, override, dimId, warningTarget);
+                tickMachineSeenGrids.clear();
+                for (var node : v) {
+                    var grid = node.getGrid();
+                    if (grid == null) continue;
+                    if (!tickMachineSeenGrids.add(grid)) continue;
+
+                    var hubMetadata = getHubMetadata(grid);
+                    var handler = getOrCreateTickMachineHandler(te, hubMetadata);
+                    if (handler == null) {
+                        continue;
                     }
-                } else {
-                    tickMachineSeenGrids.clear();
-                    for (var node : v) {
-                        var grid = node.getGrid();
-                        if (grid == null) continue;
-                        if (!tickMachineSeenGrids.add(grid)) continue;
-                        warningTarget = collectTickMachineParticipant(te, node, override, dimId, warningTarget);
+                    var participant = EnergyTransferParticipant.obtain(handler, grid, hubMetadata, getOrCreateInteraction(grid), false);
+
+                    final IEnergyHandler.EnergyType type = override != null ? override : stabilizeEnergyType(te, participant.getType());
+                    if (type == IEnergyHandler.EnergyType.INVALID) {
+                        participant.recycle();
+                        continue;
+                    }
+
+                    var gridData = getTickGridData(grid);
+                    gridData.handlers(type).add(participant);
+                    if (type == IEnergyHandler.EnergyType.RECEIVE) {
+                        if (gridData.receiveTargets.get(participant) == null) {
+                            if (warningTarget == null) {
+                                warningTarget = new WarningTarget(dimId, getPackedPos(te));
+                            }
+                            gridData.receiveTargets.put(participant, warningTarget);
+                        }
                     }
                 }
             }
@@ -734,9 +751,7 @@ public final class EnergyMachineManager {
     public @NotNull ReferenceSet<IEnergySupplyNode> getEnergyNodes(World world, BlockPos pos) {
         return getEnergyNodes(world, pos.getX() >> 4, pos.getZ() >> 4);
     }
-    //~}
 
-    //~ if >=1.20 '(World ' -> '(Level ' {
     public @NotNull ReferenceSet<IEnergySupplyNode> getEnergyNodes(World world, int chunkX, int chunkZ) {
         var map = scopeNode.get(getDimensionId(world));
         return map.get(ChunkCoordUtils.mergeChunkCoords(chunkX, chunkZ));
@@ -779,42 +794,6 @@ public final class EnergyMachineManager {
         }
         IHubNode hubNode = grid.getHubNode();
         return hubNode != null ? hubNode.getHubData() : null;
-    }
-
-    @Nullable
-    private WarningTarget collectTickMachineParticipant(TileEntity tileEntity,
-                                                       INode node,
-                                                       @Nullable IEnergyHandler.EnergyType override,
-                                                       int dimId,
-                                                       @Nullable WarningTarget warningTarget) {
-        var grid = node.getGrid();
-        if (grid == null) {
-            return warningTarget;
-        }
-        var hubMetadata = getHubMetadata(grid);
-        var handler = getOrCreateTickMachineHandler(tileEntity, hubMetadata);
-        if (handler == null) {
-            return warningTarget;
-        }
-        var participant = EnergyTransferParticipant.obtain(handler, grid, hubMetadata, getOrCreateInteraction(grid), false);
-
-        final IEnergyHandler.EnergyType type = override != null ? override : stabilizeEnergyType(tileEntity, participant.getType());
-        if (type == IEnergyHandler.EnergyType.INVALID) {
-            participant.recycle();
-            return warningTarget;
-        }
-
-        var gridData = getTickGridData(grid);
-        gridData.handlers(type).add(participant);
-        if (type == IEnergyHandler.EnergyType.RECEIVE && gridData.receiveTargets.get(participant) == null) {
-            WarningTarget target = warningTarget;
-            if (target == null) {
-                target = new WarningTarget(dimId, getPackedPos(tileEntity));
-            }
-            gridData.receiveTargets.put(participant, target);
-            return target;
-        }
-        return warningTarget;
     }
 
     static void recordGridTickTimeNanos(@Nullable IGrid grid, long durationNanos) {

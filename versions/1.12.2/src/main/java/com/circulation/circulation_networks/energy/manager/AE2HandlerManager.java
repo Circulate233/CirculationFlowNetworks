@@ -1,11 +1,15 @@
 package com.circulation.circulation_networks.energy.manager;
 
 import appeng.api.networking.energy.IEnergyGrid;
+import appeng.api.networking.energy.IEnergyGridProvider;
 import appeng.tile.networking.TileController;
 import appeng.tile.networking.TileEnergyAcceptor;
 import com.circulation.circulation_networks.api.IEnergyHandler;
 import com.circulation.circulation_networks.api.IEnergyHandlerManager;
 import com.circulation.circulation_networks.energy.handler.AE2Handler;
+import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
+import it.unimi.dsi.fastutil.objects.ReferenceSet;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
 import net.minecraft.item.ItemStack;
@@ -26,11 +30,23 @@ public final class AE2HandlerManager implements IEnergyHandlerManager {
 
     public AE2Handler claim(IEnergyGrid grid, AE2Handler aeGrid) {
         var a = gridCache.get(grid);
-        if (a == null) {
-            gridCache.put(grid, aeGrid);
-            return aeGrid;
+        if (a != null) {
+            return a;
         }
-        return a;
+        ReferenceSet<IEnergyGridProvider> visited = new ReferenceOpenHashSet<>();
+        ObjectArrayList<IEnergyGridProvider> queue = new ObjectArrayList<>();
+        queue.add(grid);
+        while (!queue.isEmpty()) {
+            IEnergyGridProvider provider = queue.remove(queue.size() - 1);
+            if (!visited.add(provider)) {
+                continue;
+            }
+            if (provider instanceof IEnergyGrid connectedGrid) {
+                gridCache.put(connectedGrid, aeGrid);
+            }
+            queue.addAll(provider.providers());
+        }
+        return aeGrid;
     }
 
     @Override

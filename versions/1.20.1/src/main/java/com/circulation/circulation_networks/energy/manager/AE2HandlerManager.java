@@ -3,11 +3,16 @@ package com.circulation.circulation_networks.energy.manager;
 import appeng.api.networking.energy.IEnergyService;
 import appeng.blockentity.networking.ControllerBlockEntity;
 import appeng.blockentity.networking.EnergyAcceptorBlockEntity;
+import appeng.me.energy.IEnergyOverlayGridConnection;
+import appeng.me.service.EnergyService;
 import com.circulation.circulation_networks.api.IEnergyHandler;
 import com.circulation.circulation_networks.api.IEnergyHandlerManager;
 import com.circulation.circulation_networks.energy.handler.AE2Handler;
+import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
+import it.unimi.dsi.fastutil.objects.ReferenceSet;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
@@ -26,11 +31,25 @@ public final class AE2HandlerManager implements IEnergyHandlerManager {
 
     public AE2Handler claim(IEnergyService grid, AE2Handler aeGrid) {
         var a = gridCache.get(grid);
-        if (a == null) {
-            gridCache.put(grid, aeGrid);
-            return aeGrid;
+        if (a != null) {
+            return a;
         }
-        return a;
+        ReferenceSet<IEnergyService> visited = new ReferenceOpenHashSet<>();
+        ObjectArrayList<IEnergyService> queue = new ObjectArrayList<>();
+        queue.add(grid);
+        while (!queue.isEmpty()) {
+            IEnergyService current = queue.remove(queue.size() - 1);
+            if (!visited.add(current)) {
+                continue;
+            }
+            gridCache.put(current, aeGrid);
+            if (current instanceof EnergyService service) {
+                for (IEnergyOverlayGridConnection connection : service.getOverlayGridConnections()) {
+                    queue.addAll(connection.connectedEnergyServices());
+                }
+            }
+        }
+        return aeGrid;
     }
 
     @Override
