@@ -105,8 +105,8 @@ public final class EnergyMachineManager {
         if (send.isEmpty() || receive.isEmpty()) return;
         var si = send.iterator();
         while (si.hasNext()) {
-            var sender = si.next();
             if (receive.isEmpty()) return;
+            var sender = si.next();
             var ri = receive.iterator();
             EnergyAmount extractable = sender.canExtractValue();
             try {
@@ -288,35 +288,60 @@ public final class EnergyMachineManager {
             int dimId = getDimensionId(world);
             var activeShielders = CirculationShielderManager.INSTANCE.getShieldersForDim(dimId);
             if (ChunkCoordUtils.isChunkLoaded(world, pos) && (activeShielders.length == 0 || !CirculationShielderManager.INSTANCE.isBlockedByShielder(pos, activeShielders))) {
-                var override = overrideManager == null ? null : overrideManager.getOverride(dimId, pos);
                 WarningTarget warningTarget = null;
-                tickMachineSeenGrids.clear();
-                for (var node : v) {
-                    var grid = node.getGrid();
-                    if (grid == null) continue;
-                    if (!tickMachineSeenGrids.add(grid)) continue;
-
+                if (te instanceof IMachineNodeBlockEntity mte) {
+                    var grid = mte.getNode().getGrid();
                     var hubMetadata = getHubMetadata(grid);
-                    var handler = getOrCreateTickMachineHandler(te, hubMetadata);
-                    if (handler == null) {
-                        continue;
-                    }
+                    var handler = mte.getEnergyHandler().init(te, hubMetadata);
+                    tickSharedHandlers.add(handler);
+
                     var participant = EnergyTransferParticipant.obtain(handler, grid, hubMetadata, getOrCreateInteraction(grid), false);
 
-                    final IEnergyHandler.EnergyType type = override != null ? override : stabilizeEnergyType(te, participant.getType());
+                    final IEnergyHandler.EnergyType type = participant.getType();
                     if (type == IEnergyHandler.EnergyType.INVALID) {
                         participant.recycle();
-                        continue;
-                    }
-
-                    var gridData = getTickGridData(grid);
-                    gridData.handlers(type).add(participant);
-                    if (type == IEnergyHandler.EnergyType.RECEIVE) {
-                        if (gridData.receiveTargets.get(participant) == null) {
-                            if (warningTarget == null) {
-                                warningTarget = new WarningTarget(dimId, getPackedPos(te));
+                    } else {
+                        var gridData = getTickGridData(grid);
+                        gridData.handlers(type).add(participant);
+                        if (type == IEnergyHandler.EnergyType.RECEIVE) {
+                            if (gridData.receiveTargets.get(participant) == null) {
+                                if (warningTarget == null) {
+                                    warningTarget = new WarningTarget(dimId, getPackedPos(te));
+                                }
+                                gridData.receiveTargets.put(participant, warningTarget);
                             }
-                            gridData.receiveTargets.put(participant, warningTarget);
+                        }
+                    }
+                } else {
+                    var override = overrideManager == null ? null : overrideManager.getOverride(dimId, pos);
+                    tickMachineSeenGrids.clear();
+                    for (var node : v) {
+                        var grid = node.getGrid();
+                        if (grid == null) continue;
+                        if (!tickMachineSeenGrids.add(grid)) continue;
+
+                        var hubMetadata = getHubMetadata(grid);
+                        var handler = getOrCreateTickMachineHandler(te, hubMetadata);
+                        if (handler == null) {
+                            continue;
+                        }
+                        var participant = EnergyTransferParticipant.obtain(handler, grid, hubMetadata, getOrCreateInteraction(grid), false);
+
+                        final IEnergyHandler.EnergyType type = override != null ? override : stabilizeEnergyType(te, participant.getType());
+                        if (type == IEnergyHandler.EnergyType.INVALID) {
+                            participant.recycle();
+                            continue;
+                        }
+
+                        var gridData = getTickGridData(grid);
+                        gridData.handlers(type).add(participant);
+                        if (type == IEnergyHandler.EnergyType.RECEIVE) {
+                            if (gridData.receiveTargets.get(participant) == null) {
+                                if (warningTarget == null) {
+                                    warningTarget = new WarningTarget(dimId, getPackedPos(te));
+                                }
+                                gridData.receiveTargets.put(participant, warningTarget);
+                            }
                         }
                     }
                 }
@@ -886,21 +911,16 @@ public final class EnergyMachineManager {
 
     @Nullable
     private IEnergyHandler getOrCreateTickMachineHandler(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
-        IEnergyHandler handler;
-        if (tileEntity instanceof IMachineNodeBlockEntity mte) {
-            handler = mte.getEnergyHandler().init(tileEntity, hubMetadata);
-        } else {
-            IEnergyHandlerManager c = machineHandlerManagerCache.get(tileEntity);
-            IEnergyHandlerManager manager = RegistryEnergyHandler.getEnergyManager(tileEntity, c);
-            if (manager == null) {
-                machineHandlerManagerCache.remove(tileEntity);
-                return null;
-            }
-            if (c != manager) machineHandlerManagerCache.put(tileEntity, manager);
-            handler = IEnergyHandler.release(tileEntity, manager, hubMetadata);
-            if (handler == null) {
-                return null;
-            }
+        IEnergyHandlerManager c = machineHandlerManagerCache.get(tileEntity);
+        IEnergyHandlerManager manager = RegistryEnergyHandler.getEnergyManager(tileEntity, c);
+        if (manager == null) {
+            machineHandlerManagerCache.remove(tileEntity);
+            return null;
+        }
+        if (c != manager) machineHandlerManagerCache.put(tileEntity, manager);
+        IEnergyHandler handler = IEnergyHandler.release(tileEntity, manager, hubMetadata);
+        if (handler == null) {
+            return null;
         }
         tickSharedHandlers.add(handler);
         return handler;
