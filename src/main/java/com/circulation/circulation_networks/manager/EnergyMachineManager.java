@@ -283,7 +283,7 @@ public final class EnergyMachineManager {
             //~}
             //~}
             int dimId = getDimensionId(world);
-            var activeShielders = CirculationShielderManager.INSTANCE.getActiveShieldersForDim(dimId);
+            var activeShielders = CirculationShielderManager.INSTANCE.getShieldersForDim(dimId);
             if (ChunkCoordUtils.isChunkLoaded(world, pos) && (activeShielders.length == 0 || !CirculationShielderManager.INSTANCE.isBlockedByShielder(pos, activeShielders))) {
                 var override = overrideManager == null ? null : overrideManager.getOverride(dimId, pos);
                 WarningTarget warningTarget = null;
