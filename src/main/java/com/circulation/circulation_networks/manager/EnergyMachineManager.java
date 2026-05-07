@@ -271,7 +271,7 @@ public final class EnergyMachineManager {
             var pos = te.getBlockPos();
             if (!Functions.isChunkLoaded(world, pos)) continue;
             String dimId = WorldResolveCompat.getDimensionId(world);
-            var activeShielders = CirculationShielderManager.INSTANCE.getActiveShieldersForDim(dimId);
+            var activeShielders = CirculationShielderManager.INSTANCE.getShieldersForDim(dimId);
             if (activeShielders.length != 0 && CirculationShielderManager.INSTANCE.isBlockedByShielder(pos, activeShielders)) continue;
             var override = overrideManager == null ? null : overrideManager.getOverride(dimId, pos);
             WarningTarget warningTarget = null;

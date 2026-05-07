@@ -9,8 +9,7 @@ import it.unimi.dsi.fastutil.objects.ReferenceSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSets;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
-
-import static com.circulation.circulation_networks.utils.WorldResolveCompat.isClientWorld;
+import org.jetbrains.annotations.NotNull;
 
 @SuppressWarnings("unused")
 public final class CirculationShielderManager {
@@ -19,13 +18,10 @@ public final class CirculationShielderManager {
 
     private final Object2ObjectMap<String, ReferenceSet<ICirculationShielderBlockEntity>> dimShielders = new Object2ObjectOpenHashMap<>();
     private final Object2ObjectMap<String, ICirculationShielderBlockEntity[]> dimShielderArrays = new Object2ObjectOpenHashMap<>();
-    private final Object2ObjectMap<String, ICirculationShielderBlockEntity[]> activeDimShielderArrays = new Object2ObjectOpenHashMap<>();
     private static final ICirculationShielderBlockEntity[] EMPTY = new ICirculationShielderBlockEntity[0];
 
     public CirculationShielderManager() {
         dimShielders.defaultReturnValue(ReferenceSets.emptySet());
-        dimShielderArrays.defaultReturnValue(EMPTY);
-        activeDimShielderArrays.defaultReturnValue(EMPTY);
     }
 
     private static String getDimensionId(Level world) {
@@ -36,12 +32,13 @@ public final class CirculationShielderManager {
         return dimShielderArrays;
     }
 
+    @NotNull
     public ICirculationShielderBlockEntity[] getShieldersForDim(String dimId) {
-        return dimShielderArrays.get(dimId);
-    }
-
-    public ICirculationShielderBlockEntity[] getActiveShieldersForDim(String dimId) {
-        return activeDimShielderArrays.get(dimId);
+        var i = dimShielderArrays.get(dimId);
+        if (i == null) {
+            return EMPTY;
+        }
+        return i;
     }
 
     public void register(ICirculationShielderBlockEntity shielder, String dimId) {
@@ -75,34 +72,15 @@ public final class CirculationShielderManager {
     private void refreshDimCache(String dimId, ReferenceSet<ICirculationShielderBlockEntity> shielders) {
         if (shielders.isEmpty()) {
             dimShielderArrays.remove(dimId);
-            activeDimShielderArrays.remove(dimId);
             return;
         }
         dimShielderArrays.put(dimId, shielders.toArray(EMPTY));
-        int activeCount = 0;
-        for (ICirculationShielderBlockEntity shielder : shielders) {
-            if (shielder.isActive()) {
-                activeCount++;
-            }
-        }
-        if (activeCount == 0) {
-            activeDimShielderArrays.remove(dimId);
-            return;
-        }
-        ICirculationShielderBlockEntity[] active = new ICirculationShielderBlockEntity[activeCount];
-        int index = 0;
-        for (ICirculationShielderBlockEntity shielder : shielders) {
-            if (shielder.isActive()) {
-                active[index++] = shielder;
-            }
-        }
-        activeDimShielderArrays.put(dimId, active);
     }
 
     public boolean isBlockedByShielder(BlockPos tePos, ICirculationShielderBlockEntity[] shielders) {
         for (ICirculationShielderBlockEntity shielder : shielders) {
             if (!shielder.checkScope(tePos)) continue;
-            return true;
+            return shielder.isActive();
         }
         return false;
     }
