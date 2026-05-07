@@ -27,7 +27,7 @@ public interface IEnergyHandler {
     static @Nullable IEnergyHandler release(TileEntity tileEntity,
                                                                      IEnergyHandlerManager manager,
                                                                      @Nullable HubNode.HubMetadata hubMetadata) {
-        if (tileEntity instanceof IMachineNodeBlockEntity mbe) return mbe.getEnergyHandler();
+        if (tileEntity instanceof IMachineNodeBlockEntity mbe) return mbe.getEnergyHandler().init(tileEntity, hubMetadata);
         var q = POOL.get(manager.getEnergyHandlerClass());
         var t = q == null ? manager.newBlockEntityInstance() : q.obtain();
         return t.init(tileEntity, hubMetadata);
