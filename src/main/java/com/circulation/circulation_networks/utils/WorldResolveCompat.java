@@ -7,6 +7,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.neoforged.neoforge.server.ServerLifecycleHooks;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -21,12 +22,8 @@ public final class WorldResolveCompat {
     private WorldResolveCompat() {
     }
 
-    private static @Nullable MinecraftServer getCurrentServer() {
-        return net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
-    }
-
-    public static @Nullable MinecraftServer currentServer() {
-        return getCurrentServer();
+    public static @Nullable MinecraftServer getCurrentServer() {
+        return ServerLifecycleHooks.getCurrentServer();
     }
 
     public static @Nullable Level resolveWorld(String dimensionKey) {
@@ -114,6 +111,6 @@ public final class WorldResolveCompat {
     }
 
     public static Path getRootSavePath() {
-        return Objects.requireNonNull(currentServer()).getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT);
+        return Objects.requireNonNull(getCurrentServer()).getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT);
     }
 }

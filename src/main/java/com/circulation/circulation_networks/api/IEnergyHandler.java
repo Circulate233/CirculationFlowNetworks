@@ -15,7 +15,6 @@ public interface IEnergyHandler {
     Map<Class<? extends IEnergyHandler>, ObjectPool<IEnergyHandler>> POOL = new Reference2ObjectOpenHashMap<>();
 
     static @Nullable IEnergyHandler release(BlockEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
-        if (tileEntity instanceof IMachineNodeBlockEntity mbe) return mbe.getEnergyHandler();
         var m = RegistryEnergyHandler.getEnergyManager(tileEntity);
         if (m == null) return null;
         return release(tileEntity, m, hubMetadata);
@@ -24,7 +23,6 @@ public interface IEnergyHandler {
     static @Nullable IEnergyHandler release(BlockEntity tileEntity,
                                             IEnergyHandlerManager manager,
                                             @Nullable HubNode.HubMetadata hubMetadata) {
-        if (tileEntity instanceof IMachineNodeBlockEntity mbe) return mbe.getEnergyHandler();
         var q = POOL.get(manager.getEnergyHandlerClass());
         var t = q == null ? manager.newBlockEntityInstance() : q.obtain();
         return t.init(tileEntity, hubMetadata);
@@ -75,3 +73,4 @@ public interface IEnergyHandler {
         INVALID
     }
 }
+

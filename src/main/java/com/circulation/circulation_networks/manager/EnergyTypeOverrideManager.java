@@ -56,7 +56,7 @@ public final class EnergyTypeOverrideManager {
     }
 
     private static MinecraftServer getServer() {
-        return WorldResolveCompat.currentServer();
+        return WorldResolveCompat.getCurrentServer();
     }
 
     private static String getPlayerDimensionId(ServerPlayer player) {

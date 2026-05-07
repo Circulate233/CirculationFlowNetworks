@@ -44,7 +44,6 @@ import net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerChangedDimen
 import net.neoforged.neoforge.event.level.ChunkEvent;
 import net.neoforged.neoforge.event.level.block.BreakBlockEvent;
 import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
-import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
@@ -78,7 +77,6 @@ public final class CirculationFlowNetworks {
         }
         installPlatformServices();
         NeoForge.EVENT_BUS.addListener(this::onServerAboutToStart);
-        NeoForge.EVENT_BUS.addListener(this::onServerStarted);
         NeoForge.EVENT_BUS.addListener(this::onChunkLoad);
         NeoForge.EVENT_BUS.addListener(this::onBlockBreak);
         NeoForge.EVENT_BUS.addListener(this::onServerStopping);
@@ -167,11 +165,6 @@ public final class CirculationFlowNetworks {
         CFNNetwork.register(event);
     }
 
-    private void onServerStarted(ServerStartedEvent event) {
-        NetworkManager.INSTANCE.initGrid();
-        PocketNodeManager.INSTANCE.load();
-    }
-
     private void onServerTickPre(ServerTickEvent.Pre event) {
         EnergyMachineManager.INSTANCE.onServerTick();
     }
@@ -234,3 +227,4 @@ public final class CirculationFlowNetworks {
         }
     }
 }
+
