@@ -18,7 +18,7 @@ public interface IEnergyHandler {
 
     //~ if >=1.20 '(TileEntity ' -> '(BlockEntity ' {
     static @Nullable IEnergyHandler release(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
-        if (tileEntity instanceof IMachineNodeBlockEntity mbe) return mbe.getEnergyHandler();
+        if (tileEntity instanceof IMachineNodeBlockEntity mbe) return mbe.getEnergyHandler().init(tileEntity, hubMetadata);
         var m = RegistryEnergyHandler.getEnergyManager(tileEntity);
         if (m == null) return null;
         return release(tileEntity, m, hubMetadata);

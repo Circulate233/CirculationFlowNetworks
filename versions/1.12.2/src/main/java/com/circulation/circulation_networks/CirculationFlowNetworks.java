@@ -92,8 +92,10 @@ public class CirculationFlowNetworks {
 
     @Mod.EventHandler
     public void serverStarted(FMLServerStartedEvent event) {
-        NetworkManager.INSTANCE.initGrid();
-        PocketNodeManager.INSTANCE.load();
+        server.addScheduledTask(() -> {
+            NetworkManager.INSTANCE.initGrid();
+            PocketNodeManager.INSTANCE.load();
+        });
     }
 
     @Mod.EventHandler

@@ -176,8 +176,10 @@ public final class CirculationFlowNetworks {
     }
 
     private void onServerStarted(ServerStartedEvent event) {
-        NetworkManager.INSTANCE.initGrid();
-        PocketNodeManager.INSTANCE.load();
+        ServerLifecycleHooks.getCurrentServer().addTickable(() -> {
+            NetworkManager.INSTANCE.initGrid();
+            PocketNodeManager.INSTANCE.load();
+        });
     }
 
     private void onServerTickPre(ServerTickEvent.Pre event) {
