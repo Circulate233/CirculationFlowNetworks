@@ -289,7 +289,7 @@ public final class EnergyMachineManager {
                 WarningTarget warningTarget = null;
                 if (v.size() == 1) {
                     for (var node : v) {
-                        collectTickMachineParticipant(te, node, override, dimId, warningTarget);
+                        warningTarget = collectTickMachineParticipant(te, node, override, dimId, warningTarget);
                     }
                 } else {
                     tickMachineSeenGrids.clear();
