@@ -16,10 +16,8 @@ import net.minecraftforge.fml.common.eventhandler.Event;
 // Shared lifecycle event for block entities across supported loaders and versions.
 public class BlockEntityLifeCycleEvent extends Event {
 
-    //~ if >=1.20 '(World ' -> '(Level ' {
-    //~ if >=1.20 ' World ' -> ' Level ' {
-    //~ if >=1.20 '(TileEntity ' -> '(BlockEntity ' {
-    //~ if >=1.20 ' TileEntity ' -> ' BlockEntity ' {
+    //~ if >=1.20 'World ' -> 'Level ' {
+    //~ if >=1.20 'TileEntity ' -> 'BlockEntity ' {
     private final World world;
     private final BlockPos pos;
     private final TileEntity blockEntity;
@@ -55,8 +53,6 @@ public class BlockEntityLifeCycleEvent extends Event {
             super(world, pos, blockEntity);
         }
     }
-    //~}
-    //~}
     //~}
     //~}
 }

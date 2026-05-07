@@ -429,7 +429,7 @@ public final class HubChannelManager {
             return;
         }
         var te = event.getBlockEntity();
-        if (te instanceof INodeBlockEntity hubTE) {
+        if (te instanceof INodeBlockEntity<?> hubTE) {
             var node = hubTE.getNode();
             if (node instanceof IHubNode hub) {
                 UUID channelId = hub.getChannelId();
@@ -447,7 +447,7 @@ public final class HubChannelManager {
             return;
         }
         var te = event.getBlockEntity();
-        if (te instanceof INodeBlockEntity hubTE) {
+        if (te instanceof INodeBlockEntity<?> hubTE) {
             var node = hubTE.getNode();
             if (node instanceof IHubNode hub) {
                 unregister(hub);
