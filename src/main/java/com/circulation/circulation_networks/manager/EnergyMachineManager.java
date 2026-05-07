@@ -275,18 +275,34 @@ public final class EnergyMachineManager {
             if (activeShielders.length != 0 && CirculationShielderManager.INSTANCE.isBlockedByShielder(pos, activeShielders)) continue;
             var override = overrideManager == null ? null : overrideManager.getOverride(dimId, pos);
             WarningTarget warningTarget = null;
-            var nodes = entry.getValue();
-            if (nodes.size() == 1) {
-                for (var node : nodes) {
-                    collectTickMachineParticipant(te, node, override, dimId, warningTarget);
+            dedupGridScratch.clear();
+            for (var node : entry.getValue()) {
+                var grid = node.getGrid();
+                if (grid == null) continue;
+                if (!dedupGridScratch.add(grid)) continue;
+
+                var hubMetadata = getHubMetadata(grid);
+                var handler = getOrCreateTickMachineHandler(te, hubMetadata);
+                if (handler == null) {
+                    continue;
                 }
-            } else {
-                dedupGridScratch.clear();
-                for (var node : nodes) {
-                    var grid = node.getGrid();
-                    if (grid == null) continue;
-                    if (!dedupGridScratch.add(grid)) continue;
-                    warningTarget = collectTickMachineParticipant(te, node, override, dimId, warningTarget);
+                var participant = EnergyTransferParticipant.obtain(handler, grid, hubMetadata, getOrCreateInteraction(grid), false);
+
+                var type = override != null ? override : stabilizeEnergyType(te, participant.getType());
+                if (type == IEnergyHandler.EnergyType.INVALID) {
+                    participant.recycle();
+                    continue;
+                }
+
+                var gridData = getTickGridData(grid);
+                Objects.requireNonNull(gridData.handlers(type)).add(participant);
+                if (type == IEnergyHandler.EnergyType.RECEIVE) {
+                    if (gridData.receiveTargets.get(participant) == null) {
+                        if (warningTarget == null) {
+                            warningTarget = new WarningTarget(dimId, WorldResolveCompat.getPackedPos(te));
+                        }
+                        gridData.receiveTargets.put(participant, warningTarget);
+                    }
                 }
             }
         }
@@ -701,42 +717,6 @@ public final class EnergyMachineManager {
         }
         machineEnergyTypeCache.put(blockEntity, IEnergyHandler.EnergyType.STORAGE);
         return IEnergyHandler.EnergyType.STORAGE;
-    }
-
-    @Nullable
-    private WarningTarget collectTickMachineParticipant(BlockEntity blockEntity,
-                                                       INode node,
-                                                       @Nullable IEnergyHandler.EnergyType override,
-                                                       String dimId,
-                                                       @Nullable WarningTarget warningTarget) {
-        var grid = node.getGrid();
-        if (grid == null) {
-            return warningTarget;
-        }
-        var hubMetadata = getHubMetadata(grid);
-        var handler = getOrCreateTickMachineHandler(blockEntity, hubMetadata);
-        if (handler == null) {
-            return warningTarget;
-        }
-        var participant = EnergyTransferParticipant.obtain(handler, grid, hubMetadata, getOrCreateInteraction(grid), false);
-
-        var type = override != null ? override : stabilizeEnergyType(blockEntity, participant.getType());
-        if (type == IEnergyHandler.EnergyType.INVALID) {
-            participant.recycle();
-            return warningTarget;
-        }
-
-        var gridData = getTickGridData(grid);
-        Objects.requireNonNull(gridData.handlers(type)).add(participant);
-        if (type == IEnergyHandler.EnergyType.RECEIVE && gridData.receiveTargets.get(participant) == null) {
-            WarningTarget target = warningTarget;
-            if (target == null) {
-                target = new WarningTarget(dimId, WorldResolveCompat.getPackedPos(blockEntity));
-            }
-            gridData.receiveTargets.put(participant, target);
-            return target;
-        }
-        return warningTarget;
     }
 
     @Nullable
