@@ -25,7 +25,7 @@ import com.circulation.circulation_networks.handlers.NodeNetworkRenderingHandler
 import com.circulation.circulation_networks.handlers.PocketNodeRenderingHandler;
 import com.circulation.circulation_networks.handlers.SpoceRenderingHandler;
 import com.circulation.circulation_networks.handlers.SpoceRenderingHandlerGL46L3;
-import com.circulation.circulation_networks.manager.MachineNodeBlockEntityManager;
+import com.circulation.circulation_networks.manager.MachineTickManager;
 import com.circulation.circulation_networks.registry.CFNBlockEntityTypes;
 import com.circulation.circulation_networks.registry.CFNBlocks;
 import com.circulation.circulation_networks.registry.CFNItems;
@@ -74,7 +74,7 @@ final class CirculationFlowNetworksClient {
         });
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post e) -> {
             ClientAnimationTicker.tick();
-            MachineNodeBlockEntityManager.INSTANCE.onClientTick();
+            MachineTickManager.INSTANCE.onClientTick();
         });
         NeoForge.EVENT_BUS.register(NodeNetworkRenderingHandler.INSTANCE);
         NeoForge.EVENT_BUS.register(EnergyWarningRenderingHandler.INSTANCE);
@@ -208,7 +208,7 @@ final class CirculationFlowNetworksClient {
 
     private static void onClientLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
         Minecraft.getInstance().execute(() -> {
-            MachineNodeBlockEntityManager.INSTANCE.clear();
+            MachineTickManager.INSTANCE.clear();
             NodeNetworkRenderingHandler.INSTANCE.clearLinks();
             EnergyWarningRenderingHandler.INSTANCE.clear();
             ConfigOverrideRenderingHandler.INSTANCE.clear();

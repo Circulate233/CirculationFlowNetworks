@@ -27,7 +27,7 @@ import com.circulation.circulation_networks.handlers.SpoceRenderingHandlerGL32L2
 import com.circulation.circulation_networks.handlers.SpoceRenderingHandlerGL32L3;
 import com.circulation.circulation_networks.handlers.SpoceRenderingHandlerGL46L2;
 import com.circulation.circulation_networks.handlers.SpoceRenderingHandlerGL46L3;
-import com.circulation.circulation_networks.manager.MachineNodeBlockEntityManager;
+import com.circulation.circulation_networks.manager.MachineTickManager;
 import com.circulation.circulation_networks.registry.RegistryBlocks;
 import com.circulation.circulation_networks.registry.RegistryItems;
 import com.circulation.circulation_networks.tiles.BaseTileEntity;
@@ -174,7 +174,7 @@ public final class ClientProxy extends CommonProxy {
     @SubscribeEvent
     public void onClientStop(FMLNetworkEvent.ClientDisconnectionFromServerEvent event) {
         Minecraft.getMinecraft().addScheduledTask(() -> {
-            MachineNodeBlockEntityManager.INSTANCE.clear();
+            MachineTickManager.INSTANCE.clear();
             NodeNetworkRenderingHandler.INSTANCE.clearLinks();
             EnergyWarningRenderingHandler.INSTANCE.clear();
             ConfigOverrideRenderingHandler.INSTANCE.clear();
@@ -197,7 +197,7 @@ public final class ClientProxy extends CommonProxy {
     public void onClientTick(TickEvent.ClientTickEvent event) {
         if (event.phase != TickEvent.Phase.START) {
             ClientAnimationTicker.tick();
-            MachineNodeBlockEntityManager.INSTANCE.onClientTick();
+            MachineTickManager.INSTANCE.onClientTick();
         }
     }
 

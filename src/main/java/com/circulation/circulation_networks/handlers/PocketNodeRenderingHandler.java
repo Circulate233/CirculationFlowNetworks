@@ -3,7 +3,7 @@ package com.circulation.circulation_networks.handlers;
 import com.circulation.circulation_networks.api.node.INode;
 import com.circulation.circulation_networks.client.render.PocketNodeModelCache;
 import com.circulation.circulation_networks.client.render.PocketNodeItemStackRenderer;
-import com.circulation.circulation_networks.manager.MachineNodeBlockEntityManager;
+import com.circulation.circulation_networks.manager.MachineTickManager;
 import com.circulation.circulation_networks.pocket.PocketNodeClientHost;
 import com.circulation.circulation_networks.pocket.PocketNodeRecord;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
@@ -68,7 +68,6 @@ public final class PocketNodeRenderingHandler {
     // Keep a visible but tiny bias away from the host face to avoid Z-fighting.
     private static final double FACE_OFFSET = 0.503D;
     private static final float FACE_SCALE = 0.03125F;
-    private static final double MAX_RENDER_DISTANCE_SQ = 96.0D * 96.0D;
     private final Int2ObjectMap<Long2ObjectMap<PocketNodeClientHost>> hosts = new Int2ObjectOpenHashMap<>();
 
     private PocketNodeRenderingHandler() {
@@ -77,7 +76,7 @@ public final class PocketNodeRenderingHandler {
     private static void unregisterHost(PocketNodeClientHost host) {
         if (host != null) {
             host.invalidateNode();
-            MachineNodeBlockEntityManager.INSTANCE.unregisterClientMachine(host);
+            MachineTickManager.INSTANCE.unregisterClientMachine(host);
         }
     }
 
@@ -181,7 +180,7 @@ public final class PocketNodeRenderingHandler {
         long posLong = pack(record.pos());
         Long2ObjectMap<PocketNodeClientHost> dimHosts = getDimHosts(record.dimensionId());
         unregisterHost(dimHosts.put(posLong, new PocketNodeClientHost(record)));
-        MachineNodeBlockEntityManager.INSTANCE.registerClientMachine(dimHosts.get(posLong));
+        MachineTickManager.INSTANCE.registerClientMachine(dimHosts.get(posLong));
     }
 
     public void remove(int dimId, BlockPos pos) {
@@ -215,7 +214,9 @@ public final class PocketNodeRenderingHandler {
     }
 
     //? if >=1.20 {
-    /*@SubscribeEvent
+    /*private static final double MAX_RENDER_DISTANCE_SQ = 96.0D * 96.0D;
+
+    @SubscribeEvent
     public void renderWorldLastEvent(RenderLevelStageEvent event) {
         if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) {
             return;

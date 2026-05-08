@@ -15,7 +15,7 @@ import com.circulation.circulation_networks.manager.DatPersistenceScheduler;
 import com.circulation.circulation_networks.manager.EnergyMachineManager;
 import com.circulation.circulation_networks.manager.EnergyTypeOverrideManager;
 import com.circulation.circulation_networks.manager.HubChannelManager;
-import com.circulation.circulation_networks.manager.MachineNodeBlockEntityManager;
+import com.circulation.circulation_networks.manager.MachineTickManager;
 import com.circulation.circulation_networks.manager.NetworkManager;
 import com.circulation.circulation_networks.manager.PocketNodeManager;
 import com.circulation.circulation_networks.packets.BindHubChannel;
@@ -176,7 +176,7 @@ public class CommonProxy implements IGuiHandler {
         if (event.phase == TickEvent.Phase.START) {
             EnergyMachineManager.INSTANCE.onServerTick();
         } else {
-            MachineNodeBlockEntityManager.INSTANCE.onServerTick();
+            MachineTickManager.INSTANCE.onServerTick();
             if (AE2_LOADED) {
                 AE2HandlerManager.INSTANCE.clearTickCache();
             }

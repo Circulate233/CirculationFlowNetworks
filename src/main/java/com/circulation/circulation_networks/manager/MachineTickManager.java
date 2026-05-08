@@ -7,9 +7,9 @@ import it.unimi.dsi.fastutil.objects.ReferenceLinkedOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
 import static com.circulation.circulation_networks.utils.SideCompat.isClientWorld;
 
-public class MachineNodeBlockEntityManager {
+public class MachineTickManager {
 
-    public static final MachineNodeBlockEntityManager INSTANCE = new MachineNodeBlockEntityManager();
+    public static final MachineTickManager INSTANCE = new MachineTickManager();
 
     private final ReferenceSet<ServerTickMachine> serverTe = new ReferenceLinkedOpenHashSet<>();
     private final ReferenceSet<ClientTickMachine> clientTe = new ReferenceLinkedOpenHashSet<>();
@@ -56,15 +56,21 @@ public class MachineNodeBlockEntityManager {
     }
 
     public void onClientTick() {
+        boolean n = false;
         for (var machine : clientTe) {
-            machine.clientUpdate();
+            if (machine != null) machine.clientUpdate();
+            else n = true;
         }
+        if (n) clientTe.remove(null);
     }
 
     public void onServerTick() {
+        boolean n = false;
         for (var machine : serverTe) {
-            machine.serverUpdate();
+            if (machine != null) machine.serverUpdate();
+            else n = true;
         }
+        if (n) serverTe.remove(null);
     }
 
     public void clear() {

@@ -413,7 +413,13 @@ public final class EnergyMachineManager {
 
     private ReferenceSet<IGrid> collectActiveChannelTickGrids(UUID channelId) {
         channelTickGridsScratch.clear();
-        for (var candidate : activeTickGrids) {
+        var i = activeTickGrids.listIterator();
+        while (i.hasNext()) {
+            var candidate = i.next();
+            if (candidate == null) {
+                i.remove();
+                continue;
+            }
             if (processedTickGrids.contains(candidate)) {
                 continue;
             }
