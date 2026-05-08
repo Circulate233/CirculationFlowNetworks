@@ -8,7 +8,7 @@ import com.circulation.circulation_networks.manager.DatPersistenceScheduler;
 import com.circulation.circulation_networks.manager.EnergyMachineManager;
 import com.circulation.circulation_networks.manager.EnergyTypeOverrideManager;
 import com.circulation.circulation_networks.manager.HubChannelManager;
-import com.circulation.circulation_networks.manager.MachineNodeBlockEntityManager;
+import com.circulation.circulation_networks.manager.MachineTickManager;
 import com.circulation.circulation_networks.manager.NetworkManager;
 import com.circulation.circulation_networks.manager.PocketNodeManager;
 import com.circulation.circulation_networks.network.CFNNetwork;
@@ -170,7 +170,7 @@ public final class CirculationFlowNetworks {
     }
 
     private void onServerTickPost(ServerTickEvent.Post event) {
-        MachineNodeBlockEntityManager.INSTANCE.onServerTick();
+        MachineTickManager.INSTANCE.onServerTick();
         DatPersistenceScheduler.INSTANCE.onServerTick();
     }
 
@@ -199,7 +199,7 @@ public final class CirculationFlowNetworks {
         EnergyTypeOverrideManager.onServerStop();
         ChargingManager.INSTANCE.onServerStop();
         HubChannelManager.INSTANCE.onServerStop();
-        MachineNodeBlockEntityManager.INSTANCE.clear();
+        MachineTickManager.INSTANCE.clear();
         DatPersistenceScheduler.INSTANCE.reset();
     }
 

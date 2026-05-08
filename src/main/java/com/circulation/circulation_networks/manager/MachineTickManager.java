@@ -8,9 +8,9 @@ import it.unimi.dsi.fastutil.objects.ReferenceSet;
 
 import static com.circulation.circulation_networks.utils.WorldResolveCompat.isClientWorld;
 
-public class MachineNodeBlockEntityManager {
+public class MachineTickManager {
 
-    public static final MachineNodeBlockEntityManager INSTANCE = new MachineNodeBlockEntityManager();
+    public static final MachineTickManager INSTANCE = new MachineTickManager();
 
     private final ReferenceSet<ServerTickMachine> serverTe = new ReferenceLinkedOpenHashSet<>();
     private final ReferenceSet<ClientTickMachine> clientTe = new ReferenceLinkedOpenHashSet<>();
