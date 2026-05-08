@@ -287,7 +287,7 @@ public final class EnergyMachineManager {
             //~}
             int dimId = getDimensionId(world);
             var activeShielders = CirculationShielderManager.INSTANCE.getShieldersForDim(dimId);
-            if (ChunkCoordUtils.isChunkLoaded(world, pos) && (activeShielders.length == 0 || !CirculationShielderManager.INSTANCE.isBlockedByShielder(pos, activeShielders))) {
+            if (ChunkCoordUtils.isChunkLoaded(world, pos) && (activeShielders.length == 0 || !CirculationShielderManager.INSTANCE.isBlockedByShielder(dimId, pos))) {
                 WarningTarget warningTarget = null;
                 if (te instanceof IMachineNodeBlockEntity mte) {
                     var grid = mte.getNode().getGrid();
