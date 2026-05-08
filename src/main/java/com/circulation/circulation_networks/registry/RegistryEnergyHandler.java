@@ -4,11 +4,8 @@ import com.circulation.circulation_networks.api.node.IMachineNode;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
-import com.google.common.collect.ImmutableList;
-import com.circulation.circulation_networks.api.IEnergyHandler;
 import com.circulation.circulation_networks.api.IEnergyHandlerManager;
 import com.circulation.circulation_networks.api.IMachineNodeBlockEntity;
-import com.circulation.circulation_networks.utils.ObjectPool;
 import com.circulation.circulation_networks.CFNConfig;
 //~ mc_imports
 //? if <1.20
@@ -20,6 +17,8 @@ import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.NotNull;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @SuppressWarnings("unused")
 public final class RegistryEnergyHandler {
@@ -34,6 +33,10 @@ public final class RegistryEnergyHandler {
     private static String[] blackPrefixArray;
     private static String[] supplyPrefixArray;
     private static List<IEnergyHandlerManager> list = new ObjectArrayList<>();
+    private static IEnergyHandlerManager[] managerArray = new IEnergyHandlerManager[0];
+    private static boolean locked;
+    private static final Map<Class<?>, Boolean> blackClassCache = new ConcurrentHashMap<>();
+    private static final Map<Class<?>, Boolean> supplyBlackClassCache = new ConcurrentHashMap<>();
 
     private static ReferenceSet<Class<?>> registeredBlackClasses = new ReferenceOpenHashSet<>();
     private static ReferenceSet<Class<?>> registeredSupplyBlackClasses = new ReferenceOpenHashSet<>();
@@ -47,8 +50,10 @@ public final class RegistryEnergyHandler {
      * Registers an energy handler manager. Must be called before {@link #lock()}.
      */
     public static void registerEnergyHandler(IEnergyHandlerManager manager) {
+        if (locked) {
+            throw new IllegalStateException("Energy handler registry is already locked");
+        }
         list.add(manager);
-        IEnergyHandler.POOL.put(manager.getEnergyHandlerClass(), new ObjectPool<>(manager::newBlockEntityInstance, IEnergyHandler::clear, IEnergyHandler.MAX_POOL_SIZE));
         referenceSet.add(new Pair(manager.getMultiplying(), manager.getUnit(), manager.getPriority()));
     }
 
@@ -76,53 +81,49 @@ public final class RegistryEnergyHandler {
 
     public static boolean isBlack(TileEntity blockEntity) {
         if (blockEntity instanceof IMachineNodeBlockEntity) return true;
-        if (blackListClass != null) {
-            for (Class<?> listClass : blackListClass) {
-                if (listClass.isInstance(blockEntity)) return true;
-            }
-        }
-        if (blackPrefixArray != null) {
-            String className = blockEntity.getClass().getName();
-            for (String prefix : blackPrefixArray) {
-                if (className.startsWith(prefix)) return true;
-            }
-        }
-        return false;
+        return blackClassCache.computeIfAbsent(blockEntity.getClass(), clazz -> matchesClassRule(clazz, blackListClass, blackPrefixArray));
     }
 
     public static boolean isSupplyBlack(TileEntity blockEntity) {
-        if (supplyBlackListClass != null) {
-            for (Class<?> listClass : supplyBlackListClass) {
-                if (listClass.isInstance(blockEntity)) return true;
-            }
-        }
-        if (supplyPrefixArray != null) {
-            String className = blockEntity.getClass().getName();
-            for (String prefix : supplyPrefixArray) {
-                if (className.startsWith(prefix)) return true;
-            }
-        }
-        return false;
+        return supplyBlackClassCache.computeIfAbsent(blockEntity.getClass(), clazz -> matchesClassRule(clazz, supplyBlackListClass, supplyPrefixArray));
     }
 
     public static boolean isEnergyItemStack(ItemStack stack) {
         if (stack.isEmpty()) return false;
-        for (IEnergyHandlerManager manager : list) {
-            if (manager.isAvailable(stack)) return true;
+        if (locked) {
+            for (IEnergyHandlerManager manager : managerArray) {
+                if (manager.isAvailable(stack)) return true;
+            }
+        } else {
+            for (IEnergyHandlerManager manager : list) {
+                if (manager.isAvailable(stack)) return true;
+            }
         }
         return false;
     }
 
     public static boolean isEnergyTileEntity(TileEntity tile) {
-        for (IEnergyHandlerManager manager : list) {
-            if (manager.isAvailable(tile)) return true;
+        if (locked) {
+            for (IEnergyHandlerManager manager : managerArray) {
+                if (manager.isAvailable(tile)) return true;
+            }
+        } else {
+            for (IEnergyHandlerManager manager : list) {
+                if (manager.isAvailable(tile)) return true;
+            }
         }
         return false;
     }
 
     public static @Nullable IEnergyHandlerManager getEnergyManager(TileEntity tile) {
-        for (IEnergyHandlerManager manager : list) {
-            if (manager.isAvailable(tile)) return manager;
+        if (locked) {
+            for (IEnergyHandlerManager manager : managerArray) {
+                if (manager.isAvailable(tile)) return manager;
+            }
+        } else {
+            for (IEnergyHandlerManager manager : list) {
+                if (manager.isAvailable(tile)) return manager;
+            }
         }
         return null;
     }
@@ -135,15 +136,24 @@ public final class RegistryEnergyHandler {
     }
 
     public static @Nullable IEnergyHandlerManager getEnergyManager(ItemStack stack) {
-        for (IEnergyHandlerManager manager : list) {
-            if (manager.isAvailable(stack)) return manager;
+        if (locked) {
+            for (IEnergyHandlerManager manager : managerArray) {
+                if (manager.isAvailable(stack)) return manager;
+            }
+        } else {
+            for (IEnergyHandlerManager manager : list) {
+                if (manager.isAvailable(stack)) return manager;
+            }
         }
         return null;
     }
 
     public static void lock() {
+        if (locked) return;
         list.sort(Comparator.reverseOrder());
-        list = ImmutableList.copyOf(list);
+        managerArray = list.toArray(new IEnergyHandlerManager[0]);
+        list = null;
+        locked = true;
         var rl = new ObjectArrayList<>(referenceSet);
         referenceSet.clear();
         referenceSet = null;
@@ -167,10 +177,9 @@ public final class RegistryEnergyHandler {
         final ReferenceSet<Class<?>> blackSet = registeredBlackClasses;
         final ReferenceSet<Class<?>> supplySet = registeredSupplyBlackClasses;
 
-        //? if <1.20 {
         collectExactClasses(CFNConfig.classNames, blackSet, blackPrefixes);
         collectExactClasses(CFNConfig.supplyClassNames, supplySet, supplyPrefixes);
-
+        //? if <1.20 {
         if (!blackPrefixes.isEmpty() || !supplyPrefixes.isEmpty()) {
             for (var aClass : TileEntity.REGISTRY) {
                 var className = aClass.getName();
@@ -192,21 +201,36 @@ public final class RegistryEnergyHandler {
                 }
             }
         }
-        //?} else {
-         /*collectExactClasses(CFNConfig.classNames, blackSet, blackPrefixes);
-        collectExactClasses(CFNConfig.supplyClassNames, supplySet, supplyPrefixes);
+        //?}
         blackPrefixArray = blackPrefixes.isEmpty() ? null : blackPrefixes.toArray(new String[0]);
         supplyPrefixArray = supplyPrefixes.isEmpty() ? null : supplyPrefixes.toArray(new String[0]);
-        *///?}
-
         blackListClass = blackSet.isEmpty() ? null : blackSet.toArray(new Class[0]);
         supplyBlackListClass = supplySet.isEmpty() ? null : supplySet.toArray(new Class[0]);
+        blackClassCache.clear();
+        supplyBlackClassCache.clear();
 
         registeredBlackClasses.clear();
         registeredSupplyBlackClasses.clear();
 
         registeredBlackClasses = null;
         registeredSupplyBlackClasses = null;
+    }
+
+    private static boolean matchesClassRule(Class<?> clazz, @Nullable Class<?>[] classRules, @Nullable String[] prefixRules) {
+        if (classRules != null) {
+            for (Class<?> classRule : classRules) {
+                if (classRule == null) continue;
+                if (classRule.isAssignableFrom(clazz)) return true;
+            }
+        }
+        if (prefixRules != null) {
+            String className = clazz.getName();
+            for (String prefix : prefixRules) {
+                if (prefix == null) continue;
+                if (className.startsWith(prefix)) return true;
+            }
+        }
+        return false;
     }
 
     private static void collectExactClasses(String[] names, ReferenceSet<Class<?>> classSet, List<String> prefixes) {
@@ -222,9 +246,8 @@ public final class RegistryEnergyHandler {
         }
     }
 
-    //? if <1.20 {
+    //? if <1.20
     @Desugar
-        //?}
     public record Pair(double multiplying, String unit, int p) implements Comparable<Pair> {
 
         @Override
