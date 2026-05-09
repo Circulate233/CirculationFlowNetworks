@@ -87,7 +87,7 @@ final class EnergyTransferParticipant {
 
     void recycle() {
         if (recycleHandlerOnRecycle) {
-            handler.recycle();
+            handler.clear();
         }
         POOL.recycle(this);
     }

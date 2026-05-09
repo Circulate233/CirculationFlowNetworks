@@ -3,7 +3,6 @@ package com.circulation.circulation_networks.manager;
 import com.circulation.circulation_networks.api.EnergyAmount;
 import com.circulation.circulation_networks.api.IEnergyHandler;
 import com.circulation.circulation_networks.api.IGrid;
-import com.circulation.circulation_networks.api.hub.ChargingDefinition;
 import com.circulation.circulation_networks.api.hub.HubPermissionLevel;
 import com.circulation.circulation_networks.api.node.IChargingNode;
 import com.circulation.circulation_networks.api.node.IHubNode;
@@ -23,7 +22,6 @@ import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.ObjectList;
-import it.unimi.dsi.fastutil.objects.ObjectLists;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
@@ -36,7 +34,6 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.EnumMap;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -54,7 +51,6 @@ public final class ChargingManager {
     private static final byte CHARGE_PREF_ARMOR = 0x10;
     private static final byte CHARGE_PREF_ACCESSORY = 0x20;
     private static final byte CHARGE_PREF_ALL = 0b00111111;
-    private static final List<EnergyTransferParticipant> EMPTY_HANDLERS = ObjectLists.emptyList();
     private final Object2ObjectMap<String, Long2ObjectMap<ReferenceSet<IChargingNode>>> scopeNode = new Object2ObjectOpenHashMap<>();
     private final Object2ObjectMap<String, Object2ObjectMap<IChargingNode, LongSet>> nodeScope = new Object2ObjectOpenHashMap<>();
     private final Object2ObjectMap<String, ReferenceSet<IHubNode>> wideAreaHubs = new Object2ObjectOpenHashMap<>();
@@ -69,7 +65,6 @@ public final class ChargingManager {
                                                   Player player,
                                                   PlayerChargeState state,
                                                   Collection<EnergyTransferParticipant> result) {
-        state.cache.clear();
         byte preferences = resolveChargingPreferenceMask(grid, player);
         if (preferences == 0) {
             return;
@@ -78,23 +73,23 @@ public final class ChargingManager {
         HubNode.HubMetadata hubMetadata = getHubMetadata(grid);
 
         if ((preferences & CHARGE_PREF_INVENTORY) != 0) {
-            collectFromSlots(result, state.cache, ChargingDefinition.INVENTORY, state.inventory, 9, state.inventory.size(), grid, hubMetadata);
+            collectFromSlots(result, state.inventory, 9, state.inventory.size(), grid, hubMetadata);
         }
         if ((preferences & CHARGE_PREF_OFF_HAND) != 0) {
-            collectFromStackWithCache(result, state.cache, ChargingDefinition.OFF_HAND, player.getOffhandItem(), grid, hubMetadata);
+            collectFromStack(result, player.getOffhandItem(), grid, hubMetadata);
         }
         if ((preferences & CHARGE_PREF_HOTBAR) != 0) {
-            collectFromSlots(result, state.cache, ChargingDefinition.HOTBAR, state.inventory, 0, 9, grid, hubMetadata);
+            collectFromSlots(result, state.inventory, 0, 9, grid, hubMetadata);
         } else {
             if ((preferences & CHARGE_PREF_MAIN_HAND) != 0) {
-                collectFromStackWithCache(result, state.cache, ChargingDefinition.MAIN_HAND, player.getMainHandItem(), grid, hubMetadata);
+                collectFromStack(result, player.getMainHandItem(), grid, hubMetadata);
             }
         }
         if ((preferences & CHARGE_PREF_ARMOR) != 0) {
-            collectFromSlots(result, state.cache, ChargingDefinition.ARMOR, state.armor, 0, state.armor.size(), grid, hubMetadata);
+            collectFromSlots(result, state.armor, 0, state.armor.size(), grid, hubMetadata);
         }
         if (loadAccessoryIntegration && (preferences & CHARGE_PREF_ACCESSORY) != 0) {
-            collectAccessoryWithCache(result, state.cache, player, grid, hubMetadata);
+            collectAccessory(result, player, grid, hubMetadata);
         }
     }
 
@@ -119,19 +114,10 @@ public final class ChargingManager {
     }
 
     private static void collectFromSlots(Collection<EnergyTransferParticipant> result,
-                                         EnumMap<ChargingDefinition, List<EnergyTransferParticipant>> cache,
-                                         ChargingDefinition definition,
                                          List<ItemStack> items,
                                          int startIndex, int endIndex,
                                          IGrid grid,
                                          @Nullable HubNode.HubMetadata hubMetadata) {
-        var cached = cache.get(definition);
-        if (cached != null) {
-            result.addAll(cached);
-            return;
-        }
-
-        ObjectList<EnergyTransferParticipant> handlers = null;
         for (int i = startIndex; i < endIndex; i++) {
             if (i >= items.size()) break;
             var stack = items.get(i);
@@ -139,61 +125,36 @@ public final class ChargingManager {
             if (handler != null) {
                 var participant = EnergyTransferParticipant.obtain(handler, grid, hubMetadata, EnergyMachineManager.getOrCreateInteraction(grid));
                 if (canReceiveMore(participant)) {
-                    if (handlers == null) {
-                        handlers = new ObjectArrayList<>();
-                    }
-                    handlers.add(participant);
                     result.add(participant);
                 } else {
                     participant.recycle();
                 }
             }
         }
-        cache.put(definition, handlers == null ? EMPTY_HANDLERS : handlers);
     }
 
-    private static void collectFromStackWithCache(Collection<EnergyTransferParticipant> result,
-                                                  EnumMap<ChargingDefinition, List<EnergyTransferParticipant>> cache,
-                                                  ChargingDefinition definition,
-                                                  ItemStack stack,
-                                                  IGrid grid,
-                                                  @Nullable HubNode.HubMetadata hubMetadata) {
-        var cached = cache.get(definition);
-        if (cached != null) {
-            result.addAll(cached);
-            return;
-        }
-
+    private static void collectFromStack(Collection<EnergyTransferParticipant> result,
+                                         ItemStack stack,
+                                         IGrid grid,
+                                         @Nullable HubNode.HubMetadata hubMetadata) {
         var handler = IEnergyHandler.release(stack, hubMetadata);
         if (handler == null) {
-            cache.put(definition, EMPTY_HANDLERS);
             return;
         }
 
         var participant = EnergyTransferParticipant.obtain(handler, grid, hubMetadata, EnergyMachineManager.getOrCreateInteraction(grid));
         if (canReceiveMore(participant)) {
-            var handlers = ObjectLists.singleton(participant);
-            cache.put(definition, handlers);
             result.add(participant);
             return;
         }
 
         participant.recycle();
-        cache.put(definition, EMPTY_HANDLERS);
     }
 
-    private static void collectAccessoryWithCache(Collection<EnergyTransferParticipant> result,
-                                                  EnumMap<ChargingDefinition, List<EnergyTransferParticipant>> cache,
-                                                  Player player,
-                                                  IGrid grid,
-                                                  @Nullable HubNode.HubMetadata hubMetadata) {
-        var cached = cache.get(ChargingDefinition.ACCESSORY);
-        if (cached != null) {
-            result.addAll(cached);
-            return;
-        }
-
-        var handlers = new ObjectArrayList<EnergyTransferParticipant>();
+    private static void collectAccessory(Collection<EnergyTransferParticipant> result,
+                                         Player player,
+                                         IGrid grid,
+                                         @Nullable HubNode.HubMetadata hubMetadata) {
         AccessoryInventoryCompat.collectAccessoryItems(player, stack -> {
             var energyHandler = IEnergyHandler.release(stack, hubMetadata);
             if (energyHandler == null) {
@@ -201,13 +162,11 @@ public final class ChargingManager {
             }
             var participant = EnergyTransferParticipant.obtain(energyHandler, grid, hubMetadata, EnergyMachineManager.getOrCreateInteraction(grid));
             if (canReceiveMore(participant)) {
-                handlers.add(participant);
+                result.add(participant);
                 return;
             }
             participant.recycle();
         });
-        cache.put(ChargingDefinition.ACCESSORY, handlers.isEmpty() ? EMPTY_HANDLERS : handlers);
-        result.addAll(handlers);
     }
 
     private static boolean canReceiveMore(EnergyTransferParticipant participant) {
@@ -618,7 +577,6 @@ public final class ChargingManager {
     }
 
     private static final class PlayerChargeState {
-        final EnumMap<ChargingDefinition, List<EnergyTransferParticipant>> cache = new EnumMap<>(ChargingDefinition.class);
         final List<ItemStack> inventory;
         final List<ItemStack> armor;
         final ObjectList<EnergyTransferParticipant> scratch = new ObjectArrayList<>();
@@ -631,7 +589,6 @@ public final class ChargingManager {
         }
 
         void clear() {
-            cache.clear();
             scratch.clear();
             coveredGrids.clear();
             reachableGrids.clear();

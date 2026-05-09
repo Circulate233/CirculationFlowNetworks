@@ -1,11 +1,9 @@
 package com.circulation.circulation_networks.registry;
 
 import com.circulation.circulation_networks.CFNConfig;
-import com.circulation.circulation_networks.api.IEnergyHandler;
 import com.circulation.circulation_networks.api.IEnergyHandlerManager;
 import com.circulation.circulation_networks.api.IMachineNodeBlockEntity;
 import com.circulation.circulation_networks.api.node.IMachineNode;
-import com.circulation.circulation_networks.utils.ObjectPool;
 import com.google.common.collect.ImmutableList;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
@@ -42,7 +40,6 @@ public final class RegistryEnergyHandler {
      */
     public static void registerEnergyHandler(IEnergyHandlerManager manager) {
         list.add(manager);
-        IEnergyHandler.POOL.put(manager.getEnergyHandlerClass(), new ObjectPool<>(manager::newBlockEntityInstance, IEnergyHandler::clear, 4096));
         referenceSet.add(new Pair(manager.getMultiplying(), manager.getUnit(), manager.getPriority()));
     }
 

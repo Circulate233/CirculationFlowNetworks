@@ -173,12 +173,8 @@ public class BlockEntityCirculationShielder extends BaseCFNBlockEntity implement
             return;
         }
         cachedPowered = level.hasNeighborSignal(worldPosition);
-        boolean oldActive = cachedActive;
         cachedActive = redstoneMode == cachedPowered;
         cachedActiveTick = level.getGameTime();
-        if (oldActive != cachedActive) {
-            CirculationShielderManager.INSTANCE.refreshActiveState(this, WorldResolveCompat.getDimensionId(level));
-        }
     }
 
     @Override
