@@ -14,10 +14,11 @@ dependencies {
 
     compileOnly("org.lwjgl:lwjgl:3.3.6")
 
+    implementation 'CraftTweaker2:CraftTweaker2-MC1120-Main:1.12-4.1.20.711'
     deobfImplementation "cofh:RedstoneFlux:1.12-2.0.0.1:universal"
     implementation 'com.cleanroommc:configanytime:1.0'
     deobfImplementation("curse.maven:top-245211:2667280")
-    deobfCompileOnly("curse.maven:modularmachinery-community-edition-817377:7372951")
+    deobfImplementation("curse.maven:modularmachinery-community-edition-817377:7372951")
     deobfImplementation("curse.maven:industrialcraft-2-242638:3078604")
     deobfImplementation("curse.maven:baubles-227083:2518667")
     deobfImplementation("curse.maven:ftb-library-237167:2985811")

@@ -278,8 +278,8 @@ public final class ChargingManager {
                 }
 
                 long startNanos = System.nanoTime();
-                transferEnergy(merged.send, merged.targets, EnergyMachineManager.Status.EXTRACT, false);
-                transferEnergy(merged.storage, merged.targets, EnergyMachineManager.Status.EXTRACT, false);
+                transferEnergy(merged.send, merged.targets, EnergyMachineManager.Status.EXTRACT);
+                transferEnergy(merged.storage, merged.targets, EnergyMachineManager.Status.EXTRACT);
                 EnergyMachineManager.recordDistributedGridTickTimeNanos(merged.timedGrids, System.nanoTime() - startNanos);
                 syncBackSenders(merged.send, merged.storage, machineMap);
                 for (var participant : merged.targets) {
@@ -296,8 +296,8 @@ public final class ChargingManager {
         var handlers = machineMap.get(grid);
         if (handlers != null && handlers.activeThisTick) {
             long startNanos = System.nanoTime();
-            transferEnergy(handlers.send, chargingTargets, EnergyMachineManager.Status.EXTRACT, false);
-            transferEnergy(handlers.storage, chargingTargets, EnergyMachineManager.Status.EXTRACT, false);
+            transferEnergy(handlers.send, chargingTargets, EnergyMachineManager.Status.EXTRACT);
+            transferEnergy(handlers.storage, chargingTargets, EnergyMachineManager.Status.EXTRACT);
             EnergyMachineManager.recordGridTickTimeNanos(grid, System.nanoTime() - startNanos);
         }
     }

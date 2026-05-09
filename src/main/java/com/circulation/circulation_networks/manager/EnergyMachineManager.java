@@ -100,7 +100,14 @@ public final class EnergyMachineManager {
 
     static void transferEnergy(Collection<EnergyTransferParticipant> send,
                                Collection<EnergyTransferParticipant> receive,
+                               Status status) {
+        transferEnergy(send, receive, status, false, false);
+    }
+
+    static void transferEnergy(Collection<EnergyTransferParticipant> send,
+                               Collection<EnergyTransferParticipant> receive,
                                Status status,
+                               boolean sendAreStorage,
                                boolean receiversAreStorage) {
         if (send.isEmpty() || receive.isEmpty()) return;
         var si = send.iterator();
@@ -111,7 +118,9 @@ public final class EnergyMachineManager {
             EnergyAmount extractable = sender.canExtractValue();
             try {
                 if (extractable.isZero()) {
-                    si.remove();
+                    if (!sendAreStorage) {
+                        si.remove();
+                    }
                     continue;
                 }
                 while (ri.hasNext()) {
@@ -278,7 +287,7 @@ public final class EnergyMachineManager {
         processedTickGrids.clear();
         tickSharedHandlers.clear();
         clearWarningPositionsScratch();
-        machineGridMap.forEach((te,v) -> {
+        machineGridMap.forEach((te, v) -> {
             //~ if >=1.20 '.getWorld()' -> '.getLevel()' {
             //~ if >=1.20 '.getPos()' -> '.getBlockPos()' {
             var world = te.getWorld();
@@ -374,10 +383,10 @@ public final class EnergyMachineManager {
                             merged.timedGrids.add(cg);
                         }
                         long startNanos = System.nanoTime();
-                        transferEnergy(merged.send, merged.receive, Status.INTERACTION, false);
-                        transferEnergy(merged.storage, merged.receive, Status.EXTRACT, false);
+                        transferEnergy(merged.send, merged.receive, Status.INTERACTION);
+                        transferEnergy(merged.storage, merged.receive, Status.EXTRACT, true, false);
                         collectWarningPositions(merged.receive, merged.receiveTargets, warningPositionsScratch);
-                        transferEnergy(merged.send, merged.storage, Status.RECEIVE, true);
+                        transferEnergy(merged.send, merged.storage, Status.RECEIVE, false, true);
                         recordDistributedGridTickTimeNanos(merged.timedGrids, System.nanoTime() - startNanos);
                         syncBackParticipants(merged.send, merged.storage, merged.receive, tickGridData);
                         continue;
@@ -392,10 +401,10 @@ public final class EnergyMachineManager {
             }
 
             long startNanos = System.nanoTime();
-            transferEnergy(handlers.send, handlers.receive, Status.INTERACTION, false);
-            transferEnergy(handlers.storage, handlers.receive, Status.EXTRACT, false);
+            transferEnergy(handlers.send, handlers.receive, Status.INTERACTION);
+            transferEnergy(handlers.storage, handlers.receive, Status.EXTRACT, true, false);
             collectWarningPositions(handlers.receive, handlers.receiveTargets, warningPositionsScratch);
-            transferEnergy(handlers.send, handlers.storage, Status.RECEIVE, true);
+            transferEnergy(handlers.send, handlers.storage, Status.RECEIVE, false, true);
             recordGridTickTimeNanos(grid, System.nanoTime() - startNanos);
         }
 
