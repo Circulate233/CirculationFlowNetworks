@@ -22,43 +22,134 @@ public class FEHandler implements IEnergyHandler {
     private EnergyHandler send;
     @Nullable
     private EnergyHandler receive;
+    @Nullable
+    private Direction sendDirection;
+    @Nullable
+    private Direction receiveDirection;
     private EnergyType energyType;
+    private boolean initialized;
+    private boolean sendRoleKnown;
+    private boolean receiveRoleKnown;
+    private boolean sendDirty = true;
+    private boolean receiveDirty = true;
 
-    public FEHandler() {
-    }
-
-    private static int simulateExtract(EnergyHandler handler, int amount) {
+    private static boolean simulateExtract(EnergyHandler handler) {
         try (Transaction transaction = Transaction.openRoot()) {
-            return handler.extract(amount, transaction);
+            return handler.extract(1, transaction) > 0;
         }
     }
 
-    private static int simulateInsert(EnergyHandler handler, int amount) {
+    private static boolean simulateInsert(EnergyHandler handler) {
         try (Transaction transaction = Transaction.openRoot()) {
-            return handler.insert(amount, transaction);
+            return handler.insert(1, transaction) > 0;
         }
     }
 
-    private void bindStorage(@Nullable EnergyHandler storage) {
-        if (storage == null) {
+    private static boolean canExtractNow(EnergyHandler handler) {
+        return handler.getAmountAsLong() > 0L;
+    }
+
+    private static boolean canReceiveNow(EnergyHandler handler) {
+        long capacity = handler.getCapacityAsLong();
+        return capacity > 0L && handler.getAmountAsLong() < capacity;
+    }
+
+    private void bindSend(EnergyHandler storage, Direction direction, boolean proveRole) {
+        if (sendRoleKnown) {
+            if (canExtractNow(storage)) {
+                send = storage;
+            }
             return;
         }
-        if (send == null && simulateExtract(storage, 1) > 0) {
+        if (!canExtractNow(storage)) {
+            if (sendDirection == null) {
+                sendDirection = direction;
+            }
+            return;
+        }
+        if (proveRole && simulateExtract(storage)) {
+            sendDirection = direction;
+            sendRoleKnown = true;
+            sendDirty = false;
             send = storage;
         }
-        if (receive == null && simulateInsert(storage, 1) > 0) {
+    }
+
+    private void bindReceive(EnergyHandler storage, Direction direction, boolean proveRole) {
+        if (receiveRoleKnown) {
+            if (canReceiveNow(storage)) {
+                receive = storage;
+            }
+            return;
+        }
+        if (!canReceiveNow(storage)) {
+            if (receiveDirection == null) {
+                receiveDirection = direction;
+            }
+            return;
+        }
+        if (proveRole && simulateInsert(storage)) {
+            receiveDirection = direction;
+            receiveRoleKnown = true;
+            receiveDirty = false;
             receive = storage;
+        }
+    }
+
+    private void bindHintedHandlers(BlockEntity blockEntity) {
+        var level = blockEntity.getLevel();
+        if (level == null) return;
+        var pos = blockEntity.getBlockPos();
+        if (sendDirection != null) {
+            var storage = level.getCapability(Capabilities.Energy.BLOCK, pos, sendDirection);
+            if (storage == null) {
+                sendRoleKnown = false;
+                sendDirty = true;
+            } else {
+                bindSend(storage, sendDirection, sendDirty);
+            }
+        }
+        if (receiveDirection != null) {
+            var storage = level.getCapability(Capabilities.Energy.BLOCK, pos, receiveDirection);
+            if (storage == null) {
+                receiveRoleKnown = false;
+                receiveDirty = true;
+            } else {
+                bindReceive(storage, receiveDirection, receiveDirty);
+            }
+        }
+    }
+
+    private void scanHandlers(BlockEntity blockEntity) {
+        var level = blockEntity.getLevel();
+        if (level == null) return;
+        var pos = blockEntity.getBlockPos();
+        for (Direction direction : DIRECTIONS) {
+            if ((send != null || (!sendDirty && sendRoleKnown)) && (receive != null || (!receiveDirty && receiveRoleKnown))) {
+                break;
+            }
+            var storage = level.getCapability(Capabilities.Energy.BLOCK, pos, direction);
+            if (storage == null) {
+                continue;
+            }
+            if (send == null && (sendDirty || !sendRoleKnown)) {
+                bindSend(storage, direction, true);
+            }
+            if (receive == null && (receiveDirty || !receiveRoleKnown)) {
+                bindReceive(storage, direction, true);
+            }
         }
     }
 
     @Override
     public IEnergyHandler init(BlockEntity blockEntity, @Nullable HubNode.HubMetadata hubMetadata) {
-        var level = blockEntity.getLevel();
-        if (level == null) return this;
-        var pos = blockEntity.getBlockPos();
-        for (Direction direction : DIRECTIONS) {
-            if (send != null && receive != null) break;
-            bindStorage(level.getCapability(Capabilities.Energy.BLOCK, pos, direction));
+        if (initialized) {
+            return this;
+        }
+        initialized = true;
+        bindHintedHandlers(blockEntity);
+        if ((send == null && (sendDirty || !sendRoleKnown)) || (receive == null && (receiveDirty || !receiveRoleKnown))) {
+            scanHandlers(blockEntity);
         }
         return this;
     }
@@ -68,7 +159,8 @@ public class FEHandler implements IEnergyHandler {
         if (itemStack.isEmpty()) return this;
         var ies = ItemAccess.forStack(itemStack).getCapability(Capabilities.Energy.ITEM);
         if (ies == null) return this;
-        if (simulateInsert(ies, 1) > 0) {
+        initialized = true;
+        if (canReceiveNow(ies) && simulateInsert(ies)) {
             this.receive = ies;
         }
         return this;
@@ -79,6 +171,7 @@ public class FEHandler implements IEnergyHandler {
         send = null;
         receive = null;
         energyType = null;
+        initialized = false;
     }
 
     @Override
@@ -88,6 +181,10 @@ public class FEHandler implements IEnergyHandler {
         try (Transaction transaction = Transaction.openRoot()) {
             int extracted = send.extract(amount, transaction);
             transaction.commit();
+            if (amount > 0 && extracted == 0) {
+                sendDirty = true;
+                sendRoleKnown = false;
+            }
             return EnergyAmount.obtain(extracted);
         }
     }
@@ -99,18 +196,24 @@ public class FEHandler implements IEnergyHandler {
         try (Transaction transaction = Transaction.openRoot()) {
             int inserted = receive.insert(amount, transaction);
             transaction.commit();
+            if (amount > 0 && inserted == 0) {
+                receiveDirty = true;
+                receiveRoleKnown = false;
+            }
             return EnergyAmount.obtain(inserted);
         }
     }
 
     @Override
     public EnergyAmount canExtractValue(@Nullable HubNode.HubMetadata hubMetadata) {
-        return send == null ? EnergyAmounts.ZERO : EnergyAmount.obtain(simulateExtract(send, Integer.MAX_VALUE));
+        return send == null ? EnergyAmounts.ZERO : EnergyAmount.obtain(Math.min(send.getAmountAsLong(), Integer.MAX_VALUE));
     }
 
     @Override
     public EnergyAmount canReceiveValue(@Nullable HubNode.HubMetadata hubMetadata) {
-        return receive == null ? EnergyAmounts.ZERO : EnergyAmount.obtain(simulateInsert(receive, Integer.MAX_VALUE));
+        if (receive == null) return EnergyAmounts.ZERO;
+        long receivable = receive.getCapacityAsLong() - receive.getAmountAsLong();
+        return receivable <= 0L ? EnergyAmounts.ZERO : EnergyAmount.obtain(Math.min(receivable, Integer.MAX_VALUE));
     }
 
     @Override

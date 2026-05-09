@@ -66,7 +66,6 @@ public final class EnergyMachineManager {
     private final Reference2ObjectMap<IGrid, GridTickData> tickGridData = new Reference2ObjectOpenHashMap<>();
     private final ObjectList<IGrid> activeTickGrids = new ObjectArrayList<>();
     private final ReferenceSet<IGrid> processedTickGrids = new ReferenceOpenHashSet<>();
-    private final Reference2ObjectMap<BlockEntity, IEnergyHandlerManager> machineHandlerManagerCache = new Reference2ObjectOpenHashMap<>();
     private final Reference2ObjectMap<BlockEntity, IEnergyHandler.EnergyType> machineEnergyTypeCache = new Reference2ObjectOpenHashMap<>();
     private final Reference2ObjectMap<BlockEntity, IEnergyHandler> tileOriginalHandlers = new Reference2ObjectOpenHashMap<>();
     private final Reference2LongMap<IEnergySupplyNode> nodeRescanTicks = new Reference2LongOpenHashMap<>();
@@ -294,7 +293,7 @@ public final class EnergyMachineManager {
                 continue;
             WarningTarget warningTarget = null;
             var override = overrideManager == null ? null : overrideManager.getOverride(dimId, pos);
-            var baseHandler = getOrCreateTickMachineHandler(te);
+            var baseHandler = getTickMachineHandler(te);
             if (baseHandler == null) {
                 continue;
             }
@@ -468,6 +467,16 @@ public final class EnergyMachineManager {
         }
     }
 
+    private void ensureMachineHandler(BlockEntity blockEntity, IEnergyHandlerManager manager) {
+        IEnergyHandler handler = tileOriginalHandlers.get(blockEntity);
+        if (handler == null || !manager.getEnergyHandlerClass().isInstance(handler)) {
+            if (handler != null) {
+                retiredOriginalHandlers.add(handler);
+            }
+            tileOriginalHandlers.put(blockEntity, manager.newBlockEntityInstance());
+        }
+    }
+
     public void addMachine(BlockEntity blockEntity) {
         if (blockEntity instanceof IMachineNodeBlockEntity) {
             machineNodeTiles.add(blockEntity);
@@ -475,9 +484,8 @@ public final class EnergyMachineManager {
         }
         if (RegistryEnergyHandler.isBlack(blockEntity)) return;
 
-        IEnergyHandlerManager handlerManager = RegistryEnergyHandler.getEnergyManager(blockEntity, machineHandlerManagerCache.get(blockEntity));
+        IEnergyHandlerManager handlerManager = RegistryEnergyHandler.getEnergyManager(blockEntity);
         if (handlerManager == null) return;
-        machineHandlerManagerCache.put(blockEntity, handlerManager);
 
         var level = blockEntity.getLevel();
         if (level == null) return;
@@ -540,17 +548,18 @@ public final class EnergyMachineManager {
                 tileGrids.remove(blockEntity);
                 retireMachineHandler(blockEntity);
             } else {
+                ensureMachineHandler(blockEntity, handlerManager);
                 rebuildMachineGrids(blockEntity, nodes);
             }
             return;
         }
+        ensureMachineHandler(blockEntity, handlerManager);
         rebuildMachineGrids(blockEntity, nodes);
     }
 
     public void removeMachine(BlockEntity blockEntity) {
         machineNodeTiles.remove(blockEntity);
         machineEnergyTypeCache.remove(blockEntity);
-        machineHandlerManagerCache.remove(blockEntity);
         retireMachineHandler(blockEntity);
 
         var grids = tileGrids.remove(blockEntity);
@@ -588,7 +597,6 @@ public final class EnergyMachineManager {
     public void removeMachineNode(BlockEntity blockEntity) {
         machineNodeTiles.remove(blockEntity);
         machineEnergyTypeCache.remove(blockEntity);
-        machineHandlerManagerCache.remove(blockEntity);
         retireMachineHandler(blockEntity);
         tileGrids.remove(blockEntity);
         var nodes = machineGridMap.remove(blockEntity);
@@ -646,10 +654,11 @@ public final class EnergyMachineManager {
                         if (RegistryEnergyHandler.isBlack(tileEntity)) continue;
                         if (energySupplyNode.isBlacklisted(tileEntity)) continue;
 
-                        IEnergyHandlerManager handlerManager = RegistryEnergyHandler.getEnergyManager(tileEntity, machineHandlerManagerCache.get(tileEntity));
+                        IEnergyHandlerManager handlerManager = RegistryEnergyHandler.getEnergyManager(tileEntity);
                         if (handlerManager == null) {
                             continue;
                         }
+                        ensureMachineHandler(tileEntity, handlerManager);
 
                         var reverse = gridMachineMap.get(energySupplyNode);
                         if (reverse == gridMachineMap.defaultReturnValue()) {
@@ -674,8 +683,6 @@ public final class EnergyMachineManager {
                         if (nodeGrid != null) {
                             grids.add(nodeGrid);
                         }
-
-                        machineHandlerManagerCache.put(tileEntity, handlerManager);
 
                         var players = NodeNetworkRendering.getPlayers(energySupplyNode.getGrid());
                         if (players != null && !players.isEmpty()) {
@@ -809,7 +816,6 @@ public final class EnergyMachineManager {
                 }
                 if (set.size() == 1) {
                     machineGridMap.remove(te);
-                    machineHandlerManagerCache.remove(te);
                     machineEnergyTypeCache.remove(te);
                     retireMachineHandler(te);
                     tileGrids.remove(te);
@@ -834,7 +840,6 @@ public final class EnergyMachineManager {
         activeTickGrids.clear();
         processedTickGrids.clear();
         channelTickGridsScratch.clear();
-        machineHandlerManagerCache.clear();
         machineEnergyTypeCache.clear();
         for (var handler : tileOriginalHandlers.values()) {
             handler.clear();
@@ -902,24 +907,8 @@ public final class EnergyMachineManager {
     }
 
     @Nullable
-    private IEnergyHandler getOrCreateTickMachineHandler(BlockEntity blockEntity) {
-        IEnergyHandlerManager manager = RegistryEnergyHandler.getEnergyManager(blockEntity, machineHandlerManagerCache.get(blockEntity));
-        if (manager == null) {
-            machineHandlerManagerCache.remove(blockEntity);
-            machineEnergyTypeCache.remove(blockEntity);
-            retireMachineHandler(blockEntity);
-            return null;
-        }
-        machineHandlerManagerCache.put(blockEntity, manager);
-        IEnergyHandler handler = tileOriginalHandlers.get(blockEntity);
-        if (handler == null || !manager.getEnergyHandlerClass().isInstance(handler)) {
-            if (handler != null) {
-                retiredOriginalHandlers.add(handler);
-            }
-            handler = manager.newBlockEntityInstance();
-            tileOriginalHandlers.put(blockEntity, handler);
-        }
-        return handler;
+    private IEnergyHandler getTickMachineHandler(BlockEntity blockEntity) {
+        return tileOriginalHandlers.get(blockEntity);
     }
 
     private void clearTickMachineHandlers() {
