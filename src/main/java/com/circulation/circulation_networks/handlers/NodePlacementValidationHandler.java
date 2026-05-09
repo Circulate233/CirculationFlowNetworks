@@ -30,6 +30,22 @@ public final class NodePlacementValidationHandler {
     private NodePlacementValidationHandler() {
     }
 
+    private static @Nullable PlacementData resolvePlacement(Player player, InteractionHand hand, BlockPos clickedPos,
+                                                            net.minecraft.core.Direction face, BlockHitResult hitResult,
+                                                            BlockItem blockItem) {
+        BlockPlaceContext context = new BlockPlaceContext(
+            new UseOnContext(player, hand, new BlockHitResult(hitResult.getLocation(), face, clickedPos, hitResult.isInside()))
+        );
+        BlockState state = blockItem.getBlock().getStateForPlacement(context);
+        return state == null ? null : new PlacementData(context.getClickedPos(), state);
+    }
+
+    private static void syncPlayerInventory(Player player) {
+        if (player instanceof ServerPlayer serverPlayer) {
+            serverPlayer.containerMenu.broadcastFullState();
+        }
+    }
+
     @SubscribeEvent
     public void onRightClickBlock(PlayerInteractEvent.RightClickBlock event) {
         if (event.getHand() != InteractionHand.MAIN_HAND) {
@@ -69,22 +85,6 @@ public final class NodePlacementValidationHandler {
             }
         } finally {
             node.setActive(false);
-        }
-    }
-
-    private static @Nullable PlacementData resolvePlacement(Player player, InteractionHand hand, BlockPos clickedPos,
-                                                            net.minecraft.core.Direction face, BlockHitResult hitResult,
-                                                            BlockItem blockItem) {
-        BlockPlaceContext context = new BlockPlaceContext(
-            new UseOnContext(player, hand, new BlockHitResult(hitResult.getLocation(), face, clickedPos, hitResult.isInside()))
-        );
-        BlockState state = blockItem.getBlock().getStateForPlacement(context);
-        return state == null ? null : new PlacementData(context.getClickedPos(), state);
-    }
-
-    private static void syncPlayerInventory(Player player) {
-        if (player instanceof ServerPlayer serverPlayer) {
-            serverPlayer.containerMenu.broadcastFullState();
         }
     }
 

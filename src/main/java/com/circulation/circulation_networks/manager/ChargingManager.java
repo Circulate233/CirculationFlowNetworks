@@ -279,8 +279,8 @@ public final class ChargingManager {
                 }
 
                 long startNanos = System.nanoTime();
-                transferEnergy(merged.send, merged.targets, EnergyMachineManager.Status.EXTRACT, false);
-                transferEnergy(merged.storage, merged.targets, EnergyMachineManager.Status.EXTRACT, false);
+                transferEnergy(merged.send, merged.targets, EnergyMachineManager.Status.EXTRACT);
+                transferEnergy(merged.storage, merged.targets, EnergyMachineManager.Status.EXTRACT);
                 EnergyMachineManager.recordDistributedGridTickTimeNanos(merged.timedGrids, System.nanoTime() - startNanos);
                 syncBackSenders(merged.send, merged.storage, machineMap);
                 for (var participant : merged.targets) {
@@ -297,10 +297,27 @@ public final class ChargingManager {
         var handlers = machineMap.get(grid);
         if (handlers != null && handlers.activeThisTick) {
             long startNanos = System.nanoTime();
-            transferEnergy(handlers.send, chargingTargets, EnergyMachineManager.Status.EXTRACT, false);
-            transferEnergy(handlers.storage, chargingTargets, EnergyMachineManager.Status.EXTRACT, false);
+            transferEnergy(handlers.send, chargingTargets, EnergyMachineManager.Status.EXTRACT);
+            transferEnergy(handlers.storage, chargingTargets, EnergyMachineManager.Status.EXTRACT);
             EnergyMachineManager.recordGridTickTimeNanos(grid, System.nanoTime() - startNanos);
         }
+    }
+
+    static ChargingPluginScope getChargingPluginScope(IHubNode hub) {
+        Boolean dimensional = hub.getPluginCapabilityData(HubCapabilitys.CHARGE_CAPABILITY);
+        if (dimensional == null) {
+            return ChargingPluginScope.NONE;
+        }
+        return dimensional ? ChargingPluginScope.DIMENSIONAL : ChargingPluginScope.WIDE_AREA;
+    }
+
+    @Nullable
+    private static HubNode.HubMetadata getHubMetadata(@Nullable IGrid grid) {
+        if (grid == null) {
+            return null;
+        }
+        IHubNode hubNode = grid.getHubNode();
+        return hubNode != null ? hubNode.getHubData() : null;
     }
 
     private ReferenceSet<IGrid> collectActiveChannelTransferGrids(UUID channelId,
@@ -325,23 +342,6 @@ public final class ChargingManager {
         if (candidateHub != null && candidateHub.isActive() && channelId.equals(candidateHub.getChannelId())) {
             channelTransferGridsScratch.add(candidate);
         }
-    }
-
-    static ChargingPluginScope getChargingPluginScope(IHubNode hub) {
-        Boolean dimensional = hub.getPluginCapabilityData(HubCapabilitys.CHARGE_CAPABILITY);
-        if (dimensional == null) {
-            return ChargingPluginScope.NONE;
-        }
-        return dimensional ? ChargingPluginScope.DIMENSIONAL : ChargingPluginScope.WIDE_AREA;
-    }
-
-    @Nullable
-    private static HubNode.HubMetadata getHubMetadata(@Nullable IGrid grid) {
-        if (grid == null) {
-            return null;
-        }
-        IHubNode hubNode = grid.getHubNode();
-        return hubNode != null ? hubNode.getHubData() : null;
     }
 
     void onServerTick(MinecraftServer server, Reference2ObjectMap<IGrid, EnergyMachineManager.GridTickData> machineMap) {

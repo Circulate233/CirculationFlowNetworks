@@ -15,10 +15,9 @@ import org.jetbrains.annotations.NotNull;
 public final class CirculationShielderManager {
 
     public static final CirculationShielderManager INSTANCE = new CirculationShielderManager();
-
+    private static final ICirculationShielderBlockEntity[] EMPTY = new ICirculationShielderBlockEntity[0];
     private final Object2ObjectMap<String, ReferenceSet<ICirculationShielderBlockEntity>> dimShielders = new Object2ObjectOpenHashMap<>();
     private final Object2ObjectMap<String, ICirculationShielderBlockEntity[]> dimShielderArrays = new Object2ObjectOpenHashMap<>();
-    private static final ICirculationShielderBlockEntity[] EMPTY = new ICirculationShielderBlockEntity[0];
 
     public CirculationShielderManager() {
         dimShielders.defaultReturnValue(ReferenceSets.emptySet());
