@@ -37,9 +37,7 @@ public class CirculationFlowNetworks {
     public static final String MOD_ID = Tags.MOD_ID;
     public static final String CLIENT_PROXY = "com.circulation.circulation_networks.proxy.ClientProxy";
     public static final String COMMON_PROXY = "com.circulation.circulation_networks.proxy.CommonProxy";
-
     public static final SimpleNetworkWrapper NET_CHANNEL = NetworkRegistry.INSTANCE.newSimpleChannel(MOD_ID);
-
     public static final Logger LOGGER = LogManager.getLogger(Tags.MOD_NAME);
     public static final CreativeTabs CREATIVE_TAB = new CreativeTabs(CirculationFlowNetworks.MOD_ID) {
         @Override

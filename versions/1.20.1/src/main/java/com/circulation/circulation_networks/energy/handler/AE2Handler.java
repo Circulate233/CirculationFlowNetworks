@@ -49,7 +49,7 @@ public class AE2Handler implements IEnergyHandler {
             EnergyAmountConversionUtils.setFromDoubleFloor(acceptableValue, e);
             return this;
         } else {
-            this.recycle();
+            this.clear();
             return a;
         }
     }
@@ -115,8 +115,4 @@ public class AE2Handler implements IEnergyHandler {
         return EnergyType.INVALID;
     }
 
-    @Override
-    public void recycle() {
-        if (init) IEnergyHandler.super.recycle();
-    }
 }

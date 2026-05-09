@@ -28,6 +28,28 @@ public final class NodePlacementValidationHandler {
     private NodePlacementValidationHandler() {
     }
 
+    private static @Nullable PlacementData resolvePlacement(World world, BlockPos clickedPos, EnumFacing face, Vec3d hitVec,
+                                                            ItemStack stack, ItemBlock itemBlock, EntityPlayer player) {
+        if (hitVec == null) return null;
+        IBlockState clickedState = world.getBlockState(clickedPos);
+        BlockPos placePos = clickedState.getBlock().isReplaceable(world, clickedPos) ? clickedPos : clickedPos.offset(face);
+        if (!player.canPlayerEdit(placePos, face, stack) || !world.mayPlace(itemBlock.getBlock(), placePos, false, face, player)) {
+            return null;
+        }
+        int meta = itemBlock.getMetadata(stack.getMetadata());
+        float hitX = (float) (hitVec.x - clickedPos.getX());
+        float hitY = (float) (hitVec.y - clickedPos.getY());
+        float hitZ = (float) (hitVec.z - clickedPos.getZ());
+        IBlockState state = itemBlock.getBlock().getStateForPlacement(world, placePos, face, hitX, hitY, hitZ, meta, player, EnumHand.MAIN_HAND);
+        return state == null ? null : new PlacementData(placePos, state);
+    }
+
+    private static void syncPlayerInventory(EntityPlayer player) {
+        if (player instanceof net.minecraft.entity.player.EntityPlayerMP serverPlayer) {
+            serverPlayer.sendContainerToPlayer(serverPlayer.openContainer);
+        }
+    }
+
     @SubscribeEvent
     public void onBlockPlace(PlayerInteractEvent.RightClickBlock event) {
         if (event.getHand() != EnumHand.MAIN_HAND) {
@@ -67,28 +89,6 @@ public final class NodePlacementValidationHandler {
             }
         } finally {
             node.setActive(false);
-        }
-    }
-
-    private static @Nullable PlacementData resolvePlacement(World world, BlockPos clickedPos, EnumFacing face, Vec3d hitVec,
-                                                            ItemStack stack, ItemBlock itemBlock, EntityPlayer player) {
-        if (hitVec == null) return null;
-        IBlockState clickedState = world.getBlockState(clickedPos);
-        BlockPos placePos = clickedState.getBlock().isReplaceable(world, clickedPos) ? clickedPos : clickedPos.offset(face);
-        if (!player.canPlayerEdit(placePos, face, stack) || !world.mayPlace(itemBlock.getBlock(), placePos, false, face, player)) {
-            return null;
-        }
-        int meta = itemBlock.getMetadata(stack.getMetadata());
-        float hitX = (float) (hitVec.x - clickedPos.getX());
-        float hitY = (float) (hitVec.y - clickedPos.getY());
-        float hitZ = (float) (hitVec.z - clickedPos.getZ());
-        IBlockState state = itemBlock.getBlock().getStateForPlacement(world, placePos, face, hitX, hitY, hitZ, meta, player, EnumHand.MAIN_HAND);
-        return state == null ? null : new PlacementData(placePos, state);
-    }
-
-    private static void syncPlayerInventory(EntityPlayer player) {
-        if (player instanceof net.minecraft.entity.player.EntityPlayerMP serverPlayer) {
-            serverPlayer.sendContainerToPlayer(serverPlayer.openContainer);
         }
     }
 

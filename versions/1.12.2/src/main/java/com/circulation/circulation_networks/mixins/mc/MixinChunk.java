@@ -18,8 +18,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.Map;
 
-import static com.circulation.circulation_networks.CirculationFlowNetworks.loaderInit;
-
 @Mixin(Chunk.class)
 public class MixinChunk {
 
@@ -33,17 +31,17 @@ public class MixinChunk {
 
     @Inject(method = "addTileEntity(Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/tileentity/TileEntity;)V", at = @At(value = "INVOKE", target = "Ljava/util/Map;put(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;", shift = At.Shift.AFTER, remap = false))
     private void addTileEntity(BlockPos pos, TileEntity tileEntityIn, CallbackInfo ci) {
-        if (loaderInit) BlockEntityLifecycleHooks.postValidate(world, pos, tileEntityIn);
+        BlockEntityLifecycleHooks.postValidate(world, pos, tileEntityIn);
     }
 
     @Inject(method = "addTileEntity(Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/tileentity/TileEntity;)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/tileentity/TileEntity;invalidate()V", shift = At.Shift.AFTER))
     private void addTileEntityRemove(BlockPos pos, TileEntity tileEntityIn, CallbackInfo ci) {
-        if (loaderInit) BlockEntityLifecycleHooks.postInvalidate(world, pos, this.tileEntities.get(pos));
+        BlockEntityLifecycleHooks.postInvalidate(world, pos, this.tileEntities.get(pos));
     }
 
     @Inject(method = "removeTileEntity", at = @At(value = "INVOKE", target = "Lnet/minecraft/tileentity/TileEntity;invalidate()V", shift = At.Shift.AFTER))
     private void removeTileEntity(BlockPos pos, CallbackInfo ci, @Local(name = "tileentity") TileEntity tileentity) {
-        if (loaderInit) BlockEntityLifecycleHooks.postInvalidate(world, pos, tileentity);
+        BlockEntityLifecycleHooks.postInvalidate(world, pos, tileentity);
     }
 
     @Inject(method = "setBlockState", at = @At("TAIL"))

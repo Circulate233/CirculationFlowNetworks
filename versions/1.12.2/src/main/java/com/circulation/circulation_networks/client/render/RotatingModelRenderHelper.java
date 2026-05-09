@@ -417,6 +417,28 @@ public final class RotatingModelRenderHelper {
             minecraft.getTextureManager().bindTexture(TextureMap.LOCATION_BLOCKS_TEXTURE);
         }
 
+        private static void renderWithFullBrightState(@NotNull Runnable renderer) {
+            float savedBrightnessX = OpenGlHelper.lastBrightnessX;
+            float savedBrightnessY = OpenGlHelper.lastBrightnessY;
+            boolean lightingEnabled = GL11.glIsEnabled(GL11.GL_LIGHTING);
+            GlStateManager.disableLighting();
+            GlStateManager.enableDepth();
+            forceTesrDepthFunc();
+            OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, FULL_BRIGHT_LIGHT, FULL_BRIGHT_LIGHT);
+            GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
+            try {
+                renderer.run();
+            } finally {
+                OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, savedBrightnessX, savedBrightnessY);
+                GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
+                if (lightingEnabled) {
+                    GlStateManager.enableLighting();
+                } else {
+                    GlStateManager.disableLighting();
+                }
+            }
+        }
+
         public TileEntity getTileEntity() {
             return tileEntity;
         }
@@ -504,28 +526,6 @@ public final class RotatingModelRenderHelper {
             }
 
             GlStateManager.popMatrix();
-        }
-
-        private static void renderWithFullBrightState(@NotNull Runnable renderer) {
-            float savedBrightnessX = OpenGlHelper.lastBrightnessX;
-            float savedBrightnessY = OpenGlHelper.lastBrightnessY;
-            boolean lightingEnabled = GL11.glIsEnabled(GL11.GL_LIGHTING);
-            GlStateManager.disableLighting();
-            GlStateManager.enableDepth();
-            forceTesrDepthFunc();
-            OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, FULL_BRIGHT_LIGHT, FULL_BRIGHT_LIGHT);
-            GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
-            try {
-                renderer.run();
-            } finally {
-                OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, savedBrightnessX, savedBrightnessY);
-                GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
-                if (lightingEnabled) {
-                    GlStateManager.enableLighting();
-                } else {
-                    GlStateManager.disableLighting();
-                }
-            }
         }
 
         private IBlockAccess resolveLightAccess(boolean fullBright, @NotNull BlockPos lightSamplePos) {

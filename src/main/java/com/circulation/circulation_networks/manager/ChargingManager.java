@@ -77,6 +77,7 @@ public final class ChargingManager {
     private final ChannelTransferScratch channelTransferScratch = new ChannelTransferScratch();
     private final ReferenceSet<IGrid> channelTransferGridsScratch = new ReferenceOpenHashSet<>();
     private final ObjectList<PlayerChargeState> playerStates = new ObjectArrayList<>();
+    private final ReferenceSet<IEnergyHandler> usedHandlersThisTick = new ReferenceOpenHashSet<>();
 
     //? if <1.20 {
     @Optional.Method(modid = "baubles")
@@ -89,6 +90,7 @@ public final class ChargingManager {
             var stack = h.getStackInSlot(i);
             var handler = IEnergyHandler.release(stack, hubMetadata);
             if (handler == null) continue;
+            INSTANCE.usedHandlersThisTick.add(handler);
             var participant = EnergyTransferParticipant.obtain(handler, grid, hubMetadata, EnergyMachineManager.getOrCreateInteraction(grid));
             if (canReceiveMore(participant)) {
                 invs.add(participant);
@@ -108,6 +110,7 @@ public final class ChargingManager {
                 var stack = equippedCurios.getStackInSlot(i);
                 var energyHandler = IEnergyHandler.release(stack, hubMetadata);
                 if (energyHandler == null) continue;
+                INSTANCE.usedHandlersThisTick.add(energyHandler);
                 var participant = EnergyTransferParticipant.obtain(energyHandler, grid, hubMetadata, EnergyMachineManager.getOrCreateInteraction(grid));
                 if (canReceiveMore(participant)) {
                     invs.add(participant);
@@ -199,6 +202,7 @@ public final class ChargingManager {
         if (handler == null) {
             return;
         }
+        INSTANCE.usedHandlersThisTick.add(handler);
 
         var participant = EnergyTransferParticipant.obtain(handler, grid, hubMetadata, EnergyMachineManager.getOrCreateInteraction(grid));
         if (canReceiveMore(participant)) {
@@ -356,6 +360,7 @@ public final class ChargingManager {
         var players = server.getPlayerList().getPlayers();
         prepareChargeTargetScratch();
         processedTransferGrids.clear();
+        usedHandlersThisTick.clear();
         if (playerStates instanceof ObjectArrayList) {
             ((ObjectArrayList<PlayerChargeState>) playerStates).ensureCapacity(players.size());
         }
@@ -399,6 +404,7 @@ public final class ChargingManager {
         for (var grid : activeChargeTargetGrids) {
             var handlers = tickChargeTargetsByGrid.get(grid);
             for (var participant : handlers) {
+                usedHandlersThisTick.add(participant.handler());
                 participant.recycle();
             }
             handlers.clear();
@@ -407,6 +413,10 @@ public final class ChargingManager {
         for (int i = 0; i < players.size(); i++) {
             playerStates.get(i).clear();
         }
+        for (var handler : usedHandlersThisTick) {
+            handler.clear();
+        }
+        usedHandlersThisTick.clear();
     }
     //~}
 
@@ -617,6 +627,7 @@ public final class ChargingManager {
         processedTransferGrids.clear();
         channelTransferGridsScratch.clear();
         playerStates.clear();
+        usedHandlersThisTick.clear();
     }
 
     enum ChargingPluginScope {NONE, WIDE_AREA, DIMENSIONAL}

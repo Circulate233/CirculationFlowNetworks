@@ -21,7 +21,6 @@ final class EnergyTransferParticipant {
     private HubNode.HubMetadata hubMetadata;
     @Nullable
     private EnergyMachineManager.Interaction interaction;
-    private boolean recycleHandlerOnRecycle;
 
     private EnergyTransferParticipant() {
     }
@@ -30,21 +29,16 @@ final class EnergyTransferParticipant {
                                             @Nullable IGrid grid,
                                             @Nullable HubNode.HubMetadata hubMetadata,
                                             @Nullable EnergyMachineManager.Interaction interaction) {
-        return obtain(handler, grid, hubMetadata, interaction, true);
-    }
-
-    static EnergyTransferParticipant obtain(IEnergyHandler handler,
-                                            @Nullable IGrid grid,
-                                            @Nullable HubNode.HubMetadata hubMetadata,
-                                            @Nullable EnergyMachineManager.Interaction interaction,
-                                            boolean recycleHandlerOnRecycle) {
         EnergyTransferParticipant p = POOL.obtain();
         p.handler = handler;
         p.grid = grid;
         p.hubMetadata = hubMetadata;
         p.interaction = interaction;
-        p.recycleHandlerOnRecycle = recycleHandlerOnRecycle;
         return p;
+    }
+
+    IEnergyHandler handler() {
+        return handler;
     }
 
     IEnergyHandler.EnergyType getType() {
@@ -86,9 +80,6 @@ final class EnergyTransferParticipant {
     }
 
     void recycle() {
-        if (recycleHandlerOnRecycle) {
-            handler.recycle();
-        }
         POOL.recycle(this);
     }
 
@@ -97,6 +88,5 @@ final class EnergyTransferParticipant {
         grid = null;
         hubMetadata = null;
         interaction = null;
-        recycleHandlerOnRecycle = false;
     }
 }

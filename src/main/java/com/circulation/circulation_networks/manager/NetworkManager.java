@@ -522,7 +522,7 @@ public final class NetworkManager {
                     }
                     addNode(actual, blockEntity);
                     if (actual instanceof IMachineNode machineNode) {
-                        EnergyMachineManager.INSTANCE.addMachineNode(machineNode, blockEntity);
+                        EnergyMachineManager.INSTANCE.addMachineNode(blockEntity);
                     }
                     mapped = posNodes.get(dimId).get(posLong);
                 }

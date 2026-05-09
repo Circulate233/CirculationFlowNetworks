@@ -34,10 +34,15 @@ public class EIOHandler implements IEnergyHandler {
         return clamped >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) clamped;
     }
 
+    private static IPowerStorage resolveStorage(TileCapBank capBank) {
+        IPowerStorage controller = capBank.getController();
+        return controller != null ? controller : capBank;
+    }
+
     @Override
     public IEnergyHandler init(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
-        if (tileEntity instanceof TileCapBank capBank) {
-            this.capBank = capBank;
+        if (tileEntity instanceof TileCapBank tcapBank) {
+            capBank = tcapBank;
             ICapBankNetwork activeNetwork = capBank.getNetwork();
             storage = activeNetwork != null ? activeNetwork : resolveStorage(capBank);
             if (storage instanceof ICapBankNetwork networkStorage) {
@@ -48,11 +53,6 @@ public class EIOHandler implements IEnergyHandler {
         }
         energyType = EnergyType.INVALID;
         return this;
-    }
-
-    private static IPowerStorage resolveStorage(TileCapBank capBank) {
-        IPowerStorage controller = capBank.getController();
-        return controller != null ? controller : capBank;
     }
 
     private void refreshNetworkStorage() {

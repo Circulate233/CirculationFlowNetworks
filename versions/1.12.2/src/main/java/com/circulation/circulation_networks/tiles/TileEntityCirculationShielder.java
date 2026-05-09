@@ -2,10 +2,10 @@ package com.circulation.circulation_networks.tiles;
 
 import com.circulation.circulation_networks.CFNConfig;
 import com.circulation.circulation_networks.api.ICirculationShielderBlockEntity;
+import com.circulation.circulation_networks.api.ServerTickMachine;
 import com.circulation.circulation_networks.container.CFNBaseContainer;
 import com.circulation.circulation_networks.container.ContainerCirculationShielder;
 import com.circulation.circulation_networks.gui.GuiCirculationShielder;
-import com.circulation.circulation_networks.api.ServerTickMachine;
 import com.circulation.circulation_networks.handlers.CirculationShielderRenderingHandler;
 import com.circulation.circulation_networks.manager.CirculationShielderManager;
 import net.minecraft.client.gui.inventory.GuiContainer;
