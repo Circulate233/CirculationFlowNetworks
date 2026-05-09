@@ -253,7 +253,7 @@ public final class HubChannelManager {
 
         HubChannel currentChannel = getCurrentChannel(hub);
         if (currentChannel != null) {
-            if (!privilegedOverride && !currentChannel.canEditPermissions(playerId)) {
+            if (!privilegedOverride && currentChannel.getPermissionLevel(playerId) == HubPermissionLevel.NONE) {
                 return false;
             }
         }
