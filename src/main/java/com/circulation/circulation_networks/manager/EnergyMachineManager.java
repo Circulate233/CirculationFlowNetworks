@@ -155,7 +155,7 @@ public final class EnergyMachineManager {
                                             receiver.recycle();
                                             ri.remove();
                                         }
-                                        if (!extractable.isPositive()) {
+                                        if (!sendAreStorage && !extractable.isPositive()) {
                                             sender.recycle();
                                             si.remove();
                                             break;
