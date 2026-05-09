@@ -94,6 +94,11 @@ public final class EnergyMachineManager {
     private long warningTickCounter;
     private long lastWarningCleanupTick;
     private long interactionEpoch;
+    private boolean canAddManchine;
+
+    public void setCanAddManchine(boolean canAddManchine) {
+        this.canAddManchine = canAddManchine;
+    }
 
     {
         scopeNode.defaultReturnValue(Long2ObjectMaps.emptyMap());
@@ -263,7 +268,7 @@ public final class EnergyMachineManager {
 
     public void onBlockEntityValidate(BlockEntityLifeCycleEvent.Validate event) {
         if (isClientWorld(event.getWorld())) return;
-        if (NetworkManager.INSTANCE.isInit()) {
+        if (canAddManchine) {
             var blockEntity = event.getBlockEntity();
             if (blockEntity instanceof IMachineNodeBlockEntity) {
                 addMachineNode(blockEntity);
@@ -287,10 +292,10 @@ public final class EnergyMachineManager {
         var server = getServer();
         if (server == null) return;
         if (!NetworkManager.INSTANCE.isInit()) {
-            CirculationFlowNetworks.LOGGER.info("初始化网络");
             NetworkManager.INSTANCE.initGrid();
             PocketNodeManager.INSTANCE.load();
         }
+        loadCache();
         warningTickCounter++;
         interactionEpoch++;
         var overrideManager = EnergyTypeOverrideManager.get();
@@ -819,7 +824,12 @@ public final class EnergyMachineManager {
                 nodeScopeMap.put(energySupplyNode, LongSets.unmodifiable(chunksCovered));
             }
         }
+        loadCache();
+    }
 
+    private void loadCache() {
+        canAddManchine = true;
+        if (cache.isEmpty()) return;
         for (var te : cache) {
             if (te instanceof IMachineNodeBlockEntity) {
                 addMachineNode(te);
