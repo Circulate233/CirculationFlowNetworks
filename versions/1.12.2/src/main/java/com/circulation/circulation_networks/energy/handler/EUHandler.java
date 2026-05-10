@@ -16,7 +16,6 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import org.jetbrains.annotations.Nullable;
 
-@SuppressWarnings("DataFlowIssue")
 public class EUHandler implements IEnergyHandler {
     private static final double MAX_EU_TRANSFER = Long.MAX_VALUE / 4.0D;
 
@@ -102,7 +101,7 @@ public class EUHandler implements IEnergyHandler {
                 receive = (IEnergySink) tile;
             } else energyType = EnergyType.SEND;
             send = (IEnergySource) tile;
-        } else {
+        } else if (i) {
             var receive = (IEnergySink) tile;
             for (var value : EnumFacing.values()) {
                 if (receive.acceptsEnergyFrom(null, value)) {
