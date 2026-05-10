@@ -16,6 +16,7 @@ import com.circulation.circulation_networks.packets.NodeNetworkRendering;
 import com.circulation.circulation_networks.registry.RegistryEnergyHandler;
 import com.circulation.circulation_networks.utils.BlockPosCompat;
 import com.circulation.circulation_networks.utils.Functions;
+import com.circulation.circulation_networks.utils.FastSmallElementSet;
 import com.circulation.circulation_networks.utils.WorldResolveCompat;
 import it.unimi.dsi.fastutil.longs.Long2LongMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
@@ -61,7 +62,7 @@ public final class EnergyMachineManager {
     private final Reference2ObjectMap<INode, Set<BlockEntity>> gridMachineMap = new Reference2ObjectOpenHashMap<>();
     private final Reference2ObjectMap<BlockEntity, ReferenceSet<INode>> machineGridMap = new Reference2ObjectOpenHashMap<>();
     private final Reference2ObjectMap<BlockEntity, ReferenceSet<IGrid>> tileGrids = new Reference2ObjectOpenHashMap<>();
-    private final ReferenceSet<BlockEntity> machineNodeTiles = new ReferenceOpenHashSet<>();
+    private final ReferenceSet<BlockEntity> machineNodeTiles = new FastSmallElementSet<>();
     private final Reference2ObjectMap<IGrid, Interaction> interaction = new Reference2ObjectOpenHashMap<>();
     private final Reference2ObjectMap<IGrid, GridTickData> tickGridData = new Reference2ObjectOpenHashMap<>();
     private final ObjectList<IGrid> activeTickGrids = new ObjectArrayList<>();
@@ -73,7 +74,7 @@ public final class EnergyMachineManager {
     private final ReferenceSet<IEnergyHandler> retiredOriginalHandlers = new ReferenceOpenHashSet<>();
     private final Object2ObjectMap<String, LongSet> warningPositionsScratch = new Object2ObjectOpenHashMap<>();
     private final ChannelMergeScratch channelMergeScratch = new ChannelMergeScratch();
-    private final ReferenceSet<IGrid> channelTickGridsScratch = new ReferenceOpenHashSet<>();
+    private final ReferenceSet<IGrid> channelTickGridsScratch = new FastSmallElementSet<>();
     private final ReferenceSet<BlockEntity> cache = new ReferenceOpenHashSet<>();
     private final Object2ObjectMap<String, Long2LongMap> lastWarningTicks = new Object2ObjectOpenHashMap<>();
     private final LongSet visibleWarningsScratch = new LongOpenHashSet();
@@ -438,7 +439,7 @@ public final class EnergyMachineManager {
             if (nodes == null || nodes.isEmpty()) {
                 return;
             }
-            grids = new ReferenceOpenHashSet<>();
+            grids = new FastSmallElementSet<>();
             tileGrids.put(blockEntity, grids);
         } else {
             grids.clear();
@@ -529,7 +530,7 @@ public final class EnergyMachineManager {
             if (nodeGrid != null) {
                 var grids = tileGrids.get(blockEntity);
                 if (grids == null) {
-                    grids = new ReferenceOpenHashSet<>();
+                    grids = new FastSmallElementSet<>();
                     tileGrids.put(blockEntity, grids);
                 }
                 grids.add(nodeGrid);
@@ -676,7 +677,7 @@ public final class EnergyMachineManager {
 
                         var grids = tileGrids.get(tileEntity);
                         if (grids == null) {
-                            grids = new ReferenceOpenHashSet<>();
+                            grids = new FastSmallElementSet<>();
                             tileGrids.put(tileEntity, grids);
                         }
                         var nodeGrid = energySupplyNode.getGrid();
@@ -1054,9 +1055,9 @@ public final class EnergyMachineManager {
     }
 
     static final class GridTickData {
-        final ReferenceSet<EnergyTransferParticipant> send = new ReferenceOpenHashSet<>();
-        final ReferenceSet<EnergyTransferParticipant> storage = new ReferenceOpenHashSet<>();
-        final ReferenceSet<EnergyTransferParticipant> receive = new ReferenceOpenHashSet<>();
+        final ReferenceSet<EnergyTransferParticipant> send = new FastSmallElementSet<>();
+        final ReferenceSet<EnergyTransferParticipant> storage = new FastSmallElementSet<>();
+        final ReferenceSet<EnergyTransferParticipant> receive = new FastSmallElementSet<>();
         final Reference2ObjectMap<EnergyTransferParticipant, WarningTarget> receiveTargets = new Reference2ObjectOpenHashMap<>();
         boolean activeThisTick;
 
@@ -1096,11 +1097,11 @@ public final class EnergyMachineManager {
     }
 
     private static final class ChannelMergeScratch {
-        final ReferenceSet<EnergyTransferParticipant> send = new ReferenceOpenHashSet<>();
-        final ReferenceSet<EnergyTransferParticipant> storage = new ReferenceOpenHashSet<>();
-        final ReferenceSet<EnergyTransferParticipant> receive = new ReferenceOpenHashSet<>();
+        final ReferenceSet<EnergyTransferParticipant> send = new FastSmallElementSet<>();
+        final ReferenceSet<EnergyTransferParticipant> storage = new FastSmallElementSet<>();
+        final ReferenceSet<EnergyTransferParticipant> receive = new FastSmallElementSet<>();
         final Reference2ObjectMap<EnergyTransferParticipant, WarningTarget> receiveTargets = new Reference2ObjectOpenHashMap<>();
-        final ReferenceSet<IGrid> timedGrids = new ReferenceOpenHashSet<>();
+        final ReferenceSet<IGrid> timedGrids = new FastSmallElementSet<>();
 
         ChannelMergeScratch prepare() {
             send.clear();
