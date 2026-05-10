@@ -17,6 +17,9 @@ import org.jetbrains.annotations.Nullable;
 public class FEHandler implements IEnergyHandler {
 
     private static final Direction[] DIRECTIONS = Direction.values();
+    private static final int ROLE_UNKNOWN = 0;
+    private static final int ROLE_SUPPORTED = 1;
+    private static final int ROLE_UNSUPPORTED = 2;
 
     @Nullable
     private EnergyHandler send;
@@ -28,10 +31,8 @@ public class FEHandler implements IEnergyHandler {
     private Direction receiveDirection;
     private EnergyType energyType;
     private boolean initialized;
-    private boolean sendRoleKnown;
-    private boolean receiveRoleKnown;
-    private boolean sendDirty = true;
-    private boolean receiveDirty = true;
+    private int sendState = ROLE_UNKNOWN;
+    private int receiveState = ROLE_UNKNOWN;
 
     private static boolean simulateExtract(EnergyHandler handler) {
         try (Transaction transaction = Transaction.openRoot()) {
@@ -55,10 +56,13 @@ public class FEHandler implements IEnergyHandler {
     }
 
     private void bindSend(EnergyHandler storage, Direction direction, boolean proveRole) {
-        if (sendRoleKnown) {
+        if (sendState == ROLE_SUPPORTED) {
             if (canExtractNow(storage)) {
                 send = storage;
             }
+            return;
+        }
+        if (sendState == ROLE_UNSUPPORTED) {
             return;
         }
         if (!canExtractNow(storage)) {
@@ -69,17 +73,19 @@ public class FEHandler implements IEnergyHandler {
         }
         if (proveRole && simulateExtract(storage)) {
             sendDirection = direction;
-            sendRoleKnown = true;
-            sendDirty = false;
+            sendState = ROLE_SUPPORTED;
             send = storage;
         }
     }
 
     private void bindReceive(EnergyHandler storage, Direction direction, boolean proveRole) {
-        if (receiveRoleKnown) {
+        if (receiveState == ROLE_SUPPORTED) {
             if (canReceiveNow(storage)) {
                 receive = storage;
             }
+            return;
+        }
+        if (receiveState == ROLE_UNSUPPORTED) {
             return;
         }
         if (!canReceiveNow(storage)) {
@@ -90,8 +96,7 @@ public class FEHandler implements IEnergyHandler {
         }
         if (proveRole && simulateInsert(storage)) {
             receiveDirection = direction;
-            receiveRoleKnown = true;
-            receiveDirty = false;
+            receiveState = ROLE_SUPPORTED;
             receive = storage;
         }
     }
@@ -103,19 +108,17 @@ public class FEHandler implements IEnergyHandler {
         if (sendDirection != null) {
             var storage = level.getCapability(Capabilities.Energy.BLOCK, pos, sendDirection);
             if (storage == null) {
-                sendRoleKnown = false;
-                sendDirty = true;
+                sendState = ROLE_UNKNOWN;
             } else {
-                bindSend(storage, sendDirection, sendDirty);
+                bindSend(storage, sendDirection, sendState == ROLE_UNKNOWN);
             }
         }
         if (receiveDirection != null) {
             var storage = level.getCapability(Capabilities.Energy.BLOCK, pos, receiveDirection);
             if (storage == null) {
-                receiveRoleKnown = false;
-                receiveDirty = true;
+                receiveState = ROLE_UNKNOWN;
             } else {
-                bindReceive(storage, receiveDirection, receiveDirty);
+                bindReceive(storage, receiveDirection, receiveState == ROLE_UNKNOWN);
             }
         }
     }
@@ -124,20 +127,32 @@ public class FEHandler implements IEnergyHandler {
         var level = blockEntity.getLevel();
         if (level == null) return;
         var pos = blockEntity.getBlockPos();
+        boolean attemptedSend = false;
+        boolean attemptedReceive = false;
         for (Direction direction : DIRECTIONS) {
-            if ((send != null || (!sendDirty && sendRoleKnown)) && (receive != null || (!receiveDirty && receiveRoleKnown))) {
+            boolean needSend = send == null && sendState == ROLE_UNKNOWN;
+            boolean needReceive = receive == null && receiveState == ROLE_UNKNOWN;
+            if (!needSend && !needReceive) {
                 break;
             }
             var storage = level.getCapability(Capabilities.Energy.BLOCK, pos, direction);
             if (storage == null) {
                 continue;
             }
-            if (send == null && (sendDirty || !sendRoleKnown)) {
+            if (needSend && canExtractNow(storage)) {
+                attemptedSend = true;
                 bindSend(storage, direction, true);
             }
-            if (receive == null && (receiveDirty || !receiveRoleKnown)) {
+            if (needReceive && canReceiveNow(storage)) {
+                attemptedReceive = true;
                 bindReceive(storage, direction, true);
             }
+        }
+        if (send == null && sendState == ROLE_UNKNOWN && attemptedSend) {
+            sendState = ROLE_UNSUPPORTED;
+        }
+        if (receive == null && receiveState == ROLE_UNKNOWN && attemptedReceive) {
+            receiveState = ROLE_UNSUPPORTED;
         }
     }
 
@@ -148,7 +163,7 @@ public class FEHandler implements IEnergyHandler {
         }
         initialized = true;
         bindHintedHandlers(blockEntity);
-        if ((send == null && (sendDirty || !sendRoleKnown)) || (receive == null && (receiveDirty || !receiveRoleKnown))) {
+        if ((send == null && sendState == ROLE_UNKNOWN) || (receive == null && receiveState == ROLE_UNKNOWN)) {
             scanHandlers(blockEntity);
         }
         return this;
@@ -182,8 +197,7 @@ public class FEHandler implements IEnergyHandler {
             int extracted = send.extract(amount, transaction);
             transaction.commit();
             if (amount > 0 && extracted == 0) {
-                sendDirty = true;
-                sendRoleKnown = false;
+                sendState = ROLE_UNKNOWN;
             }
             return EnergyAmount.obtain(extracted);
         }
@@ -197,8 +211,7 @@ public class FEHandler implements IEnergyHandler {
             int inserted = receive.insert(amount, transaction);
             transaction.commit();
             if (amount > 0 && inserted == 0) {
-                receiveDirty = true;
-                receiveRoleKnown = false;
+                receiveState = ROLE_UNKNOWN;
             }
             return EnergyAmount.obtain(inserted);
         }
