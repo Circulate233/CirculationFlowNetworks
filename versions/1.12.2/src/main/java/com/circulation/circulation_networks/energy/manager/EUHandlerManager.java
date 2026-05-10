@@ -11,6 +11,7 @@ import ic2.api.energy.tile.IEnergySource;
 import ic2.api.energy.tile.IEnergyTile;
 import ic2.api.info.ILocatable;
 import ic2.api.item.ElectricItem;
+import ic2.core.block.wiring.TileEntityCable;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.world.WorldServer;
@@ -27,6 +28,7 @@ public final class EUHandlerManager implements IEnergyHandlerManager {
     @Override
     public boolean isAvailable(TileEntity tileEntity) {
         IEnergyTile tile = EnergyNet.instance.getSubTile(tileEntity.getWorld(), tileEntity.getPos());
+        if (tile instanceof TileEntityCable) return false;
         return tile instanceof IEnergySource || tile instanceof IEnergySink;
     }
 
