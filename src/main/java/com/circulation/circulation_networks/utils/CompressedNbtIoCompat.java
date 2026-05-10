@@ -28,6 +28,7 @@ public final class CompressedNbtIoCompat {
             return true;
         } catch (IOException e) {
             CirculationFlowNetworks.LOGGER.warn("Failed to write {} to {}", context, file.getAbsolutePath(), e);
+            file.delete();
             return false;
         }
     }
