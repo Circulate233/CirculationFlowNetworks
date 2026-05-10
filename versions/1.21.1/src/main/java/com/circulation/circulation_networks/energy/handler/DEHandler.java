@@ -15,6 +15,9 @@ import org.jetbrains.annotations.Nullable;
 public class DEHandler implements IEnergyHandler {
 
     private static final Direction[] DIRECTIONS = Direction.values();
+    private static final int ROLE_UNKNOWN = 0;
+    private static final int ROLE_SUPPORTED = 1;
+    private static final int ROLE_UNSUPPORTED = 2;
 
     @Nullable
     private IOPStorage send;
@@ -24,10 +27,8 @@ public class DEHandler implements IEnergyHandler {
     private Direction sendDirection;
     @Nullable
     private Direction receiveDirection;
-    private boolean sendProven;
-    private boolean receiveProven;
-    private boolean sendDirty = true;
-    private boolean receiveDirty = true;
+    private int sendState = ROLE_UNKNOWN;
+    private int receiveState = ROLE_UNKNOWN;
     private boolean initialized;
     private EnergyType energyType;
 
@@ -47,50 +48,57 @@ public class DEHandler implements IEnergyHandler {
         return hasRoom(storage) && storage.canReceive();
     }
 
-    private void bindRole(IOPStorage storage, @Nullable Direction direction, boolean needSendScan, boolean needReceiveScan) {
+    private int bindRole(IOPStorage storage, @Nullable Direction direction, boolean needSendScan, boolean needReceiveScan) {
+        int attempted = 0;
+        boolean hasEnergy = hasEnergy(storage);
+        boolean hasRoom = hasRoom(storage);
+        if (needSendScan && hasEnergy) {
+            attempted |= 1;
+        }
+        if (needReceiveScan && hasRoom) {
+            attempted |= 2;
+        }
         if (needSendScan && send == null && canExtractNow(storage)) {
             send = storage;
             sendDirection = direction;
-            sendProven = true;
-            sendDirty = false;
+            sendState = ROLE_SUPPORTED;
         }
         if (needReceiveScan && receive == null && canReceiveNow(storage)) {
             receive = storage;
             receiveDirection = direction;
-            receiveProven = true;
-            receiveDirty = false;
+            receiveState = ROLE_SUPPORTED;
         }
+        return attempted;
     }
 
     private void bindHint(BlockEntity blockEntity) {
-        if (sendProven && !sendDirty && sendDirection != null) {
+        if (sendState == ROLE_SUPPORTED && sendDirection != null) {
             IOPStorage storage = CapabilityOP.fromBlockEntity(blockEntity, sendDirection);
             if (storage != null && hasEnergy(storage)) {
                 send = storage;
             } else if (storage == null) {
-                sendDirty = true;
-                sendProven = false;
+                sendState = ROLE_UNKNOWN;
             }
         }
-        if (receiveProven && !receiveDirty && receiveDirection != null) {
+        if (receiveState == ROLE_SUPPORTED && receiveDirection != null) {
             IOPStorage storage = CapabilityOP.fromBlockEntity(blockEntity, receiveDirection);
             if (storage != null && hasRoom(storage)) {
                 receive = storage;
             } else if (storage == null) {
-                receiveDirty = true;
-                receiveProven = false;
+                receiveState = ROLE_UNKNOWN;
             }
         }
     }
 
-    private void bindDirection(BlockEntity blockEntity, Direction direction, boolean needSendScan, boolean needReceiveScan) {
+    private int bindDirection(BlockEntity blockEntity, Direction direction, boolean needSendScan, boolean needReceiveScan) {
         if (!needSendScan && !needReceiveScan) {
-            return;
+            return 0;
         }
         IOPStorage storage = CapabilityOP.fromBlockEntity(blockEntity, direction);
         if (storage != null) {
-            bindRole(storage, direction, needSendScan, needReceiveScan);
+            return bindRole(storage, direction, needSendScan, needReceiveScan);
         }
+        return 0;
     }
 
     @Override
@@ -110,23 +118,31 @@ public class DEHandler implements IEnergyHandler {
                     receive = hasRoom(storage) ? storage : null;
                     sendDirection = direction;
                     receiveDirection = direction;
-                    sendProven = send != null;
-                    receiveProven = receive != null;
-                    sendDirty = send == null;
-                    receiveDirty = receive == null;
+                    sendState = send != null ? ROLE_SUPPORTED : ROLE_UNKNOWN;
+                    receiveState = receive != null ? ROLE_SUPPORTED : ROLE_UNKNOWN;
                     return this;
                 }
             }
             return this;
         }
         bindHint(blockEntity);
-        boolean needSendScan = send == null && (sendDirty || !sendProven);
-        boolean needReceiveScan = receive == null && (receiveDirty || !receiveProven);
+        boolean needSendScan = send == null && sendState == ROLE_UNKNOWN;
+        boolean needReceiveScan = receive == null && receiveState == ROLE_UNKNOWN;
+        boolean attemptedSend = false;
+        boolean attemptedReceive = false;
         for (Direction direction : DIRECTIONS) {
             if (!needSendScan && !needReceiveScan) break;
-            bindDirection(blockEntity, direction, needSendScan, needReceiveScan);
-            needSendScan = send == null && (sendDirty || !sendProven);
-            needReceiveScan = receive == null && (receiveDirty || !receiveProven);
+            int attempted = bindDirection(blockEntity, direction, needSendScan, needReceiveScan);
+            attemptedSend |= (attempted & 1) != 0;
+            attemptedReceive |= (attempted & 2) != 0;
+            needSendScan = send == null && sendState == ROLE_UNKNOWN;
+            needReceiveScan = receive == null && receiveState == ROLE_UNKNOWN;
+        }
+        if (send == null && sendState == ROLE_UNKNOWN && attemptedSend) {
+            sendState = ROLE_UNSUPPORTED;
+        }
+        if (receive == null && receiveState == ROLE_UNKNOWN && attemptedReceive) {
+            receiveState = ROLE_UNSUPPORTED;
         }
         return this;
     }
@@ -155,8 +171,7 @@ public class DEHandler implements IEnergyHandler {
         }
         long extracted = send.extractOP(maxExtract.asLongClamped(), false);
         if (extracted == 0L && maxExtract.isPositive()) {
-            sendDirty = true;
-            sendProven = false;
+            sendState = ROLE_UNKNOWN;
         }
         return EnergyAmount.obtain(extracted);
     }
@@ -168,8 +183,7 @@ public class DEHandler implements IEnergyHandler {
         }
         long received = receive.receiveOP(maxReceive.asLongClamped(), false);
         if (received == 0L && maxReceive.isPositive()) {
-            receiveDirty = true;
-            receiveProven = false;
+            receiveState = ROLE_UNKNOWN;
         }
         return EnergyAmount.obtain(received);
     }

@@ -19,11 +19,10 @@ import org.jetbrains.annotations.Nullable;
 
 public class AE2Handler implements IEnergyHandler {
 
-    @Nullable
-    private IEnergyService energyGrid;
     public final EnergyAmount receivedValue = EnergyAmount.obtain(0);
     public final EnergyAmount acceptableValue = EnergyAmount.obtain(0);
-    private boolean init;
+    @Nullable
+    private IEnergyService energyGrid;
 
     @Override
     public IEnergyHandler init(BlockEntity blockEntity, @Nullable HubNode.HubMetadata hubMetadata) {
@@ -31,7 +30,6 @@ public class AE2Handler implements IEnergyHandler {
             return this;
         }
         AENetworkPowerBlockEntity tile = (AENetworkPowerBlockEntity) blockEntity;
-        init = true;
         var n = tile.getMainNode();
         IGrid grid;
         if (n == null) {
@@ -56,7 +54,6 @@ public class AE2Handler implements IEnergyHandler {
 
     @Override
     public IEnergyHandler init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
-        init = true;
         return this;
     }
 
@@ -64,7 +61,6 @@ public class AE2Handler implements IEnergyHandler {
     public void clear() {
         if (energyGrid != null) energyGrid.injectPower(receivedValue.doubleValue() / 2, Actionable.MODULATE);
         energyGrid = null;
-        init = false;
         acceptableValue.setZero();
         receivedValue.setZero();
     }

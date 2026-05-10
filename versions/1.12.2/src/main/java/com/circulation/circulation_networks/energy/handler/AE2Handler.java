@@ -23,7 +23,6 @@ public class AE2Handler implements IEnergyHandler {
     public final EnergyAmount acceptableValue = EnergyAmount.obtain(0);
     @Nullable
     private IEnergyGrid energyGrid;
-    private boolean init;
 
     @Override
     public IEnergyHandler init(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
@@ -31,7 +30,6 @@ public class AE2Handler implements IEnergyHandler {
             return this;
         }
         AENetworkPowerTile tile = (AENetworkPowerTile) tileEntity;
-        init = true;
         var n = tile.getProxy().getNode();
         IGrid grid;
         if (n == null) {
@@ -56,7 +54,6 @@ public class AE2Handler implements IEnergyHandler {
 
     @Override
     public IEnergyHandler init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
-        init = true;
         return this;
     }
 
@@ -64,7 +61,6 @@ public class AE2Handler implements IEnergyHandler {
     public void clear() {
         if (energyGrid != null) energyGrid.injectPower(receivedValue.doubleValue() / 2, Actionable.MODULATE);
         energyGrid = null;
-        init = false;
         acceptableValue.setZero();
         receivedValue.setZero();
     }

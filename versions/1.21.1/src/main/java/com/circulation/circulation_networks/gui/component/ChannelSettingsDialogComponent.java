@@ -71,6 +71,22 @@ public final class ChannelSettingsDialogComponent extends DraggableComponent {
         return text == null ? "" : text.trim();
     }
 
+    private static String getPermissionModeTitleKey(PermissionMode permissionMode) {
+        return switch (permissionMode) {
+            case PUBLIC -> "gui.channel_settings.mode.public";
+            case TEAM -> "gui.channel_settings.mode.team";
+            case PRIVATE -> "gui.channel_settings.mode.private";
+        };
+    }
+
+    private static String getPermissionModeDescriptionKey(PermissionMode permissionMode) {
+        return switch (permissionMode) {
+            case PUBLIC -> "gui.channel_settings.mode.public.desc";
+            case TEAM -> "gui.channel_settings.mode.team.desc";
+            case PRIVATE -> "gui.channel_settings.mode.private.desc";
+        };
+    }
+
     @Override
     public void update() {
         syncUiState();
@@ -206,22 +222,6 @@ public final class ChannelSettingsDialogComponent extends DraggableComponent {
             }
         }
         return HubPermissionLevel.NONE;
-    }
-
-    private static String getPermissionModeTitleKey(PermissionMode permissionMode) {
-        return switch (permissionMode) {
-            case PUBLIC -> "gui.channel_settings.mode.public";
-            case TEAM -> "gui.channel_settings.mode.team";
-            case PRIVATE -> "gui.channel_settings.mode.private";
-        };
-    }
-
-    private static String getPermissionModeDescriptionKey(PermissionMode permissionMode) {
-        return switch (permissionMode) {
-            case PUBLIC -> "gui.channel_settings.mode.public.desc";
-            case TEAM -> "gui.channel_settings.mode.team.desc";
-            case PRIVATE -> "gui.channel_settings.mode.private.desc";
-        };
     }
 
     private void drawCenteredText(String text, int x, int y) {

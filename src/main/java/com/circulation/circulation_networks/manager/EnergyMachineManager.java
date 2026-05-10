@@ -464,6 +464,12 @@ public final class EnergyMachineManager {
 
     //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
     public void addMachine(TileEntity blockEntity) {
+        addMachine(blockEntity, false);
+        //~}
+    }
+
+    //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
+    private void addMachine(TileEntity blockEntity, boolean forceRebind) {
         if (blockEntity instanceof IMachineNodeBlockEntity) {
             return;
         }
@@ -508,7 +514,7 @@ public final class EnergyMachineManager {
             return;
         }
 
-        bindMachineHandler(blockEntity, handlerManager);
+        bindMachineHandler(blockEntity, handlerManager, forceRebind);
         machineEnergyTypeCache.remove(blockEntity);
     }
 
@@ -764,7 +770,7 @@ public final class EnergyMachineManager {
                     continue;
                 }
                 for (var tileEntity : chunk.getTileEntityMap().values()) {
-                    addMachine(tileEntity);
+                    addMachine(tileEntity, true);
                 }
                 //?} else {
                 /*var chunk = node.getWorld().getChunkSource().getChunkNow(cx, cz);
@@ -772,7 +778,7 @@ public final class EnergyMachineManager {
                     continue;
                 }
                 for (var blockEntity : chunk.getBlockEntities().values()) {
-                    addMachine(blockEntity);
+                    addMachine(blockEntity, true);
                 }
                 *///?}
             }
@@ -1057,8 +1063,12 @@ public final class EnergyMachineManager {
     }
 
     private void bindMachineHandler(TileEntity tileEntity, IEnergyHandlerManager manager) {
+        bindMachineHandler(tileEntity, manager, false);
+    }
+
+    private void bindMachineHandler(TileEntity tileEntity, IEnergyHandlerManager manager, boolean forceRebind) {
         IEnergyHandler original = machineOriginalHandlerCache.get(tileEntity);
-        if (original != null && manager.getEnergyHandlerClass().isInstance(original)) {
+        if (!forceRebind && original != null && manager.getEnergyHandlerClass().isInstance(original)) {
             return;
         }
         retireMachineHandler(tileEntity);

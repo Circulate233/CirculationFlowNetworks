@@ -1,7 +1,7 @@
 package com.circulation.circulation_networks;
 
-import com.circulation.circulation_networks.energy.manager.DEHandlerManager;
 import com.circulation.circulation_networks.energy.manager.AE2HandlerManager;
+import com.circulation.circulation_networks.energy.manager.DEHandlerManager;
 import com.circulation.circulation_networks.energy.manager.FEHandlerManager;
 import com.circulation.circulation_networks.energy.manager.MEKHandlerManager;
 import com.circulation.circulation_networks.handlers.NodePlacementValidationHandler;

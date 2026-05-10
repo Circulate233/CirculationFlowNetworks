@@ -24,6 +24,9 @@ public class MEKHandler implements IEnergyHandler {
 
     private static final Direction[] DIRECTIONS = Direction.values();
     private static final double FE_TO_MEK_RATIO = 2.5D;
+    private static final int ROLE_UNKNOWN = 0;
+    private static final int ROLE_SUPPORTED = 1;
+    private static final int ROLE_UNSUPPORTED = 2;
     private static final BigInteger MAX_DIRECT_DOUBLE_TRANSFER = BigDecimal.valueOf(Double.MAX_VALUE).toBigInteger();
     private static final BigInteger MAX_SCALED_DOUBLE_TRANSFER = BigDecimal.valueOf(Double.MAX_VALUE / FE_TO_MEK_RATIO).toBigInteger();
 
@@ -37,9 +40,12 @@ public class MEKHandler implements IEnergyHandler {
     private boolean isItem;
     private EnergyType energyType = EnergyType.INVALID;
     private boolean initialized;
-
-    public MEKHandler() {
-    }
+    @Nullable
+    private Direction sendDirection;
+    @Nullable
+    private Direction receiveDirection;
+    private int sendState = ROLE_UNKNOWN;
+    private int receiveState = ROLE_UNKNOWN;
 
     private static void clampToMaximum(EnergyAmount amount) {
         if (amount == null || !amount.isInitialized() || amount.isNegative()) {
@@ -70,15 +76,60 @@ public class MEKHandler implements IEnergyHandler {
         return total;
     }
 
-    private void bindHandler(@Nullable IStrictEnergyHandler handler) {
+    private static boolean hasEnergy(IStrictEnergyHandler handler) {
+        return getStoredEnergy(handler) >= FE_TO_MEK_RATIO;
+    }
+
+    private static boolean hasRoom(IStrictEnergyHandler handler) {
+        return (getMaxStoredEnergy(handler) - getStoredEnergy(handler)) * 0.4D > 0.0D;
+    }
+
+    private int bindHandler(@Nullable IStrictEnergyHandler handler, Direction direction, boolean needSendScan, boolean needReceiveScan) {
         if (handler == null) {
-            return;
+            return 0;
         }
-        if (send == null && !handler.extractEnergy(FloatingLong.ONE, Action.SIMULATE).isZero()) {
+        int attempted = 0;
+        if (needSendScan && hasEnergy(handler)) {
+            attempted |= 1;
+        }
+        if (needReceiveScan && hasRoom(handler)) {
+            attempted |= 2;
+        }
+        if (needSendScan && send == null && !handler.extractEnergy(FloatingLong.ONE, Action.SIMULATE).isZero()) {
             send = handler;
+            sendDirection = direction;
+            sendState = ROLE_SUPPORTED;
         }
-        if (receive == null && !handler.insertEnergy(FloatingLong.ONE, Action.SIMULATE).equals(FloatingLong.ONE)) {
+        if (needReceiveScan && receive == null && !handler.insertEnergy(FloatingLong.ONE, Action.SIMULATE).equals(FloatingLong.ONE)) {
             receive = handler;
+            receiveDirection = direction;
+            receiveState = ROLE_SUPPORTED;
+        }
+        return attempted;
+    }
+
+    private void bindHint(BlockEntity blockEntity) {
+        if (sendState == ROLE_SUPPORTED && sendDirection != null) {
+            var optional = blockEntity.getCapability(Capabilities.STRICT_ENERGY, sendDirection);
+            if (optional.isPresent()) {
+                IStrictEnergyHandler handler = optional.orElse(null);
+                if (handler != null && hasEnergy(handler)) {
+                    send = handler;
+                }
+            } else {
+                sendState = ROLE_UNKNOWN;
+            }
+        }
+        if (receiveState == ROLE_SUPPORTED && receiveDirection != null) {
+            var optional = blockEntity.getCapability(Capabilities.STRICT_ENERGY, receiveDirection);
+            if (optional.isPresent()) {
+                IStrictEnergyHandler handler = optional.orElse(null);
+                if (handler != null && hasRoom(handler)) {
+                    receive = handler;
+                }
+            } else {
+                receiveState = ROLE_UNKNOWN;
+            }
         }
     }
 
@@ -99,15 +150,30 @@ public class MEKHandler implements IEnergyHandler {
             receive = port;
             energyType = EnergyType.STORAGE;
         } else {
+            bindHint(blockEntity);
+            boolean needSendScan = send == null && sendState == ROLE_UNKNOWN;
+            boolean needReceiveScan = receive == null && receiveState == ROLE_UNKNOWN;
+            boolean attemptedSend = false;
+            boolean attemptedReceive = false;
             for (Direction direction : DIRECTIONS) {
-                if (send != null && receive != null) {
+                if (!needSendScan && !needReceiveScan) {
                     break;
                 }
                 var optional = blockEntity.getCapability(Capabilities.STRICT_ENERGY, direction);
                 if (!optional.isPresent()) {
                     continue;
                 }
-                bindHandler(optional.orElse(null));
+                int attempted = bindHandler(optional.orElse(null), direction, needSendScan, needReceiveScan);
+                attemptedSend |= (attempted & 1) != 0;
+                attemptedReceive |= (attempted & 2) != 0;
+                needSendScan = send == null && sendState == ROLE_UNKNOWN;
+                needReceiveScan = receive == null && receiveState == ROLE_UNKNOWN;
+            }
+            if (send == null && sendState == ROLE_UNKNOWN && attemptedSend) {
+                sendState = ROLE_UNSUPPORTED;
+            }
+            if (receive == null && receiveState == ROLE_UNKNOWN && attemptedReceive) {
+                receiveState = ROLE_UNSUPPORTED;
             }
         }
         if (send != null) {
@@ -176,6 +242,7 @@ public class MEKHandler implements IEnergyHandler {
             double inserted = requestedJoules - remainder.doubleValue();
             if (inserted <= 0.0D) {
                 accepted.recycle();
+                receiveState = ROLE_UNKNOWN;
                 return EnergyAmounts.ZERO;
             }
             needEnergy.subtract(accepted);
@@ -185,6 +252,9 @@ public class MEKHandler implements IEnergyHandler {
         double requestJoules = EnergyAmountConversionUtils.toDoubleClamped(maxReceive) * FE_TO_MEK_RATIO;
         FloatingLong remainder = receive.insertEnergy(FloatingLong.create(requestJoules), Action.EXECUTE);
         double insertedJoules = requestJoules - remainder.doubleValue();
+        if (insertedJoules <= 0.0D && maxReceive.isPositive()) {
+            receiveState = ROLE_UNKNOWN;
+        }
         return EnergyAmountConversionUtils.obtainFromDoubleFloor(insertedJoules / FE_TO_MEK_RATIO);
     }
 
@@ -193,6 +263,9 @@ public class MEKHandler implements IEnergyHandler {
         if (send == null) return EnergyAmounts.ZERO;
         double requestJoules = EnergyAmountConversionUtils.toDoubleClamped(maxExtract) * FE_TO_MEK_RATIO;
         FloatingLong extracted = send.extractEnergy(FloatingLong.create(requestJoules), Action.EXECUTE);
+        if (extracted.isZero() && maxExtract.isPositive()) {
+            sendState = ROLE_UNKNOWN;
+        }
         return EnergyAmountConversionUtils.obtainFromDoubleFloor(extracted.doubleValue() / FE_TO_MEK_RATIO);
     }
 

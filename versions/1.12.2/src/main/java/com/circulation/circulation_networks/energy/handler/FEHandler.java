@@ -14,7 +14,9 @@ import org.jetbrains.annotations.Nullable;
 
 public class FEHandler implements IEnergyHandler {
 
-    private static final int PROBE_AMOUNT = 1;
+    private static final int ROLE_UNKNOWN = 0;
+    private static final int ROLE_SUPPORTED = 1;
+    private static final int ROLE_UNSUPPORTED = 2;
 
     @Nullable
     private IEnergyStorage send;
@@ -24,15 +26,10 @@ public class FEHandler implements IEnergyHandler {
     private EnumFacing sendFacing;
     @Nullable
     private EnumFacing receiveFacing;
-    private boolean sendProven;
-    private boolean receiveProven;
-    private boolean sendDirty = true;
-    private boolean receiveDirty = true;
+    private int sendState = ROLE_UNKNOWN;
+    private int receiveState = ROLE_UNKNOWN;
     private boolean initialized;
     private EnergyType energyType;
-
-    public FEHandler() {
-    }
 
     private static boolean hasEnergy(IEnergyStorage storage) {
         return storage.getEnergyStored() > 0;
@@ -43,54 +40,60 @@ public class FEHandler implements IEnergyHandler {
     }
 
     private static boolean canExtractEffectively(IEnergyStorage storage) {
-        return storage.extractEnergy(PROBE_AMOUNT, true) > 0;
+        return storage.extractEnergy(1, true) > 0;
     }
 
     private static boolean canReceiveEffectively(IEnergyStorage storage) {
-        return storage.receiveEnergy(PROBE_AMOUNT, true) > 0;
+        return storage.receiveEnergy(1, true) > 0;
     }
 
     private void bindHint(TileEntity tileEntity) {
-        if (sendProven && !sendDirty && sendFacing != null) {
+        if (sendState == ROLE_SUPPORTED && sendFacing != null) {
             IEnergyStorage storage = tileEntity.getCapability(CapabilityEnergy.ENERGY, sendFacing);
             if (storage != null && hasEnergy(storage)) {
                 send = storage;
             } else if (storage == null) {
-                sendDirty = true;
-                sendProven = false;
+                sendState = ROLE_UNKNOWN;
             }
         }
-        if (receiveProven && !receiveDirty && receiveFacing != null) {
+        if (receiveState == ROLE_SUPPORTED && receiveFacing != null) {
             IEnergyStorage storage = tileEntity.getCapability(CapabilityEnergy.ENERGY, receiveFacing);
             if (storage != null && hasRoom(storage)) {
                 receive = storage;
             } else if (storage == null) {
-                receiveDirty = true;
-                receiveProven = false;
+                receiveState = ROLE_UNKNOWN;
             }
         }
     }
 
-    private void bindSide(TileEntity tileEntity, EnumFacing facing, boolean needSendScan, boolean needReceiveScan) {
+    private int bindSide(TileEntity tileEntity, EnumFacing facing, boolean needSendScan, boolean needReceiveScan) {
         if (!needSendScan && !needReceiveScan) {
-            return;
+            return 0;
         }
         IEnergyStorage storage = tileEntity.getCapability(CapabilityEnergy.ENERGY, facing);
         if (storage == null) {
-            return;
+            return 0;
+        }
+        int attempted = 0;
+        boolean hasEnergy = hasEnergy(storage);
+        boolean hasRoom = hasRoom(storage);
+        if (needSendScan && hasEnergy) {
+            attempted |= 1;
+        }
+        if (needReceiveScan && hasRoom) {
+            attempted |= 2;
         }
         if (needSendScan && send == null && hasEnergy(storage) && canExtractEffectively(storage)) {
             send = storage;
             sendFacing = facing;
-            sendProven = true;
-            sendDirty = false;
+            sendState = ROLE_SUPPORTED;
         }
         if (needReceiveScan && receive == null && hasRoom(storage) && canReceiveEffectively(storage)) {
             receive = storage;
             receiveFacing = facing;
-            receiveProven = true;
-            receiveDirty = false;
+            receiveState = ROLE_SUPPORTED;
         }
+        return attempted;
     }
 
     @Override
@@ -100,13 +103,23 @@ public class FEHandler implements IEnergyHandler {
         }
         initialized = true;
         bindHint(tileEntity);
-        boolean needSendScan = send == null && (sendDirty || !sendProven);
-        boolean needReceiveScan = receive == null && (receiveDirty || !receiveProven);
+        boolean needSendScan = send == null && sendState == ROLE_UNKNOWN;
+        boolean needReceiveScan = receive == null && receiveState == ROLE_UNKNOWN;
+        boolean attemptedSend = false;
+        boolean attemptedReceive = false;
         for (int i = 0; i < EnumFacing.VALUES.length; i++) {
             if (!needSendScan && !needReceiveScan) break;
-            bindSide(tileEntity, EnumFacing.VALUES[i], needSendScan, needReceiveScan);
-            needSendScan = send == null && (sendDirty || !sendProven);
-            needReceiveScan = receive == null && (receiveDirty || !receiveProven);
+            int attempted = bindSide(tileEntity, EnumFacing.VALUES[i], needSendScan, needReceiveScan);
+            attemptedSend |= (attempted & 1) != 0;
+            attemptedReceive |= (attempted & 2) != 0;
+            needSendScan = send == null && sendState == ROLE_UNKNOWN;
+            needReceiveScan = receive == null && receiveState == ROLE_UNKNOWN;
+        }
+        if (send == null && sendState == ROLE_UNKNOWN && attemptedSend) {
+            sendState = ROLE_UNSUPPORTED;
+        }
+        if (receive == null && receiveState == ROLE_UNKNOWN && attemptedReceive) {
+            receiveState = ROLE_UNSUPPORTED;
         }
         return this;
     }
@@ -135,8 +148,7 @@ public class FEHandler implements IEnergyHandler {
         if (send == null) return EnergyAmounts.ZERO;
         int extracted = send.extractEnergy((int) maxExtract.asLongClamped(), false);
         if (extracted == 0 && maxExtract.isPositive()) {
-            sendDirty = true;
-            sendProven = false;
+            sendState = ROLE_UNKNOWN;
         }
         return EnergyAmount.obtain(extracted);
     }
@@ -146,8 +158,7 @@ public class FEHandler implements IEnergyHandler {
         if (receive == null) return EnergyAmounts.ZERO;
         int received = receive.receiveEnergy((int) maxReceive.asLongClamped(), false);
         if (received == 0 && maxReceive.isPositive()) {
-            receiveDirty = true;
-            receiveProven = false;
+            receiveState = ROLE_UNKNOWN;
         }
         return EnergyAmount.obtain(received);
     }
