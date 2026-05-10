@@ -55,7 +55,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 import net.minecraft.server.MinecraftServer;
 import static com.circulation.circulation_networks.utils.SideCompat.isClientWorld;
@@ -71,11 +70,11 @@ public final class EnergyMachineManager {
     private final Int2ObjectMap<Object2ObjectMap<IEnergySupplyNode, LongSet>> nodeScope = new Int2ObjectOpenHashMap<>();
     //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
     private final Reference2ObjectMap<INode, ReferenceSet<TileEntity>> gridMachineMap = new Reference2ObjectOpenHashMap<>();
-    private final Map<TileEntity, ReferenceSet<INode>> machineGridMap = new ConcurrentHashMap<>();
-    private final Map<TileEntity, ReferenceSet<IEnergySupplyNode>> machineSupplyNodes = new ConcurrentHashMap<>();
+    private final Reference2ObjectMap<TileEntity, ReferenceSet<INode>> machineGridMap = new Reference2ObjectOpenHashMap<>();
+    private final Reference2ObjectMap<TileEntity, ReferenceSet<IEnergySupplyNode>> machineSupplyNodes = new Reference2ObjectOpenHashMap<>();
     private final Reference2ObjectMap<IEnergySupplyNode, ReferenceSet<TileEntity>> supplyNodeMachines = new Reference2ObjectOpenHashMap<>();
-    private final Map<TileEntity, ReferenceSet<IGrid>> machineGrids = new ConcurrentHashMap<>();
-    private final Set<TileEntity> machineNodeTiles = ConcurrentHashMap.newKeySet();
+    private final Reference2ObjectMap<TileEntity, ReferenceSet<IGrid>> machineGrids = new Reference2ObjectOpenHashMap<>();
+    private final ReferenceSet<TileEntity> machineNodeTiles = new ReferenceOpenHashSet<>();
     private final Reference2ObjectMap<IGrid, Interaction> interaction = new Reference2ObjectOpenHashMap<>();
     private final Reference2ObjectMap<IGrid, GridTickData> tickGridData = new Reference2ObjectOpenHashMap<>();
     private final ObjectList<IGrid> activeTickGrids = new ObjectArrayList<>();
@@ -303,7 +302,7 @@ public final class EnergyMachineManager {
         processedTickGrids.clear();
         usedHandlersThisTick.clear();
         clearWarningPositionsScratch();
-        machineNodeTiles.forEach(te -> {
+        for (var te : machineNodeTiles) {
             //~ if >=1.20 '.getWorld()' -> '.getLevel()' {
             //~ if >=1.20 '.getPos()' -> '.getBlockPos()' {
             var world = te.getWorld();
@@ -338,8 +337,10 @@ public final class EnergyMachineManager {
             if (type == IEnergyHandler.EnergyType.RECEIVE && gridData.receiveTargets.get(participant) == null) {
                 gridData.receiveTargets.put(participant, new WarningTarget(dimId, getPackedPos(te)));
             }
-        });
-        machineGrids.forEach((te, grids) -> {
+        }
+        for (var entry : machineGrids.reference2ObjectEntrySet())  {
+            var te = entry.getKey();
+            var grids = entry.getValue();
             //~ if >=1.20 '.getWorld()' -> '.getLevel()' {
             //~ if >=1.20 '.getPos()' -> '.getBlockPos()' {
             var world = te.getWorld();
@@ -378,7 +379,7 @@ public final class EnergyMachineManager {
                     }
                 }
             }
-        });
+        }
 
         for (var grid : activeTickGrids) {
             if (processedTickGrids.contains(grid)) continue;
@@ -1238,12 +1239,13 @@ public final class EnergyMachineManager {
         final Reference2ObjectMap<EnergyTransferParticipant, WarningTarget> receiveTargets = new Reference2ObjectOpenHashMap<>();
         boolean activeThisTick;
 
+        @NotNull
         ReferenceSet<EnergyTransferParticipant> handlers(IEnergyHandler.EnergyType type) {
             return switch (type) {
                 case SEND -> send;
                 case STORAGE -> storage;
                 case RECEIVE -> receive;
-                case INVALID -> null;
+                case INVALID -> throw new IllegalArgumentException(String.valueOf(type));
             };
         }
 

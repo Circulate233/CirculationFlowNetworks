@@ -167,6 +167,7 @@ public final class NetworkManager {
             return readCompressedNbt(file);
         } catch (IOException e) {
             CirculationFlowNetworks.LOGGER.warn("Failed to read {} from {}", context, file.getAbsolutePath(), e);
+            file.delete();
             return null;
         }
     }
