@@ -558,6 +558,7 @@ dependencies {
     if (propertyBool("enable_junit_testing")) {
         testImplementation("org.junit.jupiter:junit-jupiter:5.7.1")
         testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+        testImplementation("it.unimi.dsi:fastutil:8.5.9")
     }
 
     compileOnlyApi("org.jetbrains:annotations:24.1.0")
