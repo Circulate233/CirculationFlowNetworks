@@ -30,6 +30,7 @@ public class EUHandler implements IEnergyHandler {
     @Nullable
     private IEnergySink receive;
     private EnumFacing receiveFacing = EnumFacing.NORTH;
+    private boolean initialized;
 
     static EnergyAmount positiveFeAmountFromEu(double valueEu) {
         if (!(valueEu > 0.0D)) {
@@ -87,6 +88,10 @@ public class EUHandler implements IEnergyHandler {
 
     @Override
     public IEnergyHandler init(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
+        if (initialized) {
+            return this;
+        }
+        initialized = true;
         isItem = false;
         IEnergyTile tile = EnergyNet.instance.getSubTile(tileEntity.getWorld(), tileEntity.getPos());
         boolean o = tile instanceof IEnergySource;
@@ -128,6 +133,7 @@ public class EUHandler implements IEnergyHandler {
         this.receive = null;
         this.itemStack = ItemStack.EMPTY;
         this.isItem = false;
+        this.initialized = false;
     }
 
     @Override

@@ -18,6 +18,7 @@ public class MMCEHandler implements IEnergyHandler {
     private long remainingExtractBudget;
     private long remainingReceiveBudget;
     private EnergyType energyType = EnergyType.INVALID;
+    private boolean initialized;
 
     public MMCEHandler() {
     }
@@ -41,6 +42,10 @@ public class MMCEHandler implements IEnergyHandler {
 
     @Override
     public IEnergyHandler init(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
+        if (initialized) {
+            return this;
+        }
+        initialized = true;
         if (tileEntity instanceof TileEnergyInputHatch inputHatch) {
             hatch = inputHatch;
             remainingReceiveBudget = getTransferLimit(inputHatch);
@@ -75,6 +80,7 @@ public class MMCEHandler implements IEnergyHandler {
         remainingExtractBudget = 0L;
         remainingReceiveBudget = 0L;
         energyType = EnergyType.INVALID;
+        initialized = false;
     }
 
     @Override

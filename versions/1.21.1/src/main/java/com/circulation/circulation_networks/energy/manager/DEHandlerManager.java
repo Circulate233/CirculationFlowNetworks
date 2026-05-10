@@ -17,9 +17,6 @@ public final class DEHandlerManager implements IEnergyHandlerManager {
         if (blockEntity.getLevel() == null) {
             return false;
         }
-        if (CapabilityOP.fromBlockEntity(blockEntity) != null) {
-            return true;
-        }
         for (Direction direction : DIRECTIONS) {
             if (CapabilityOP.fromBlockEntity(blockEntity, direction) != null) {
                 return true;

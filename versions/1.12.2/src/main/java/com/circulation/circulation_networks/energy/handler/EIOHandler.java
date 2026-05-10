@@ -22,13 +22,14 @@ public class EIOHandler implements IEnergyHandler {
     private TileCapBank capBank;
     @Nullable
     private EnergyType energyType;
+    private boolean initialized;
 
     private static int clampPositive(long requested, long... limits) {
         long clamped = Math.max(0L, requested);
         for (long limit : limits) {
             clamped = Math.min(clamped, Math.max(0L, limit));
         }
-        if (clamped <= 0L) {
+        if (clamped == 0L) {
             return 0;
         }
         return clamped >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) clamped;
@@ -41,6 +42,10 @@ public class EIOHandler implements IEnergyHandler {
 
     @Override
     public IEnergyHandler init(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
+        if (initialized) {
+            return this;
+        }
+        initialized = true;
         if (tileEntity instanceof TileCapBank tcapBank) {
             capBank = tcapBank;
             ICapBankNetwork activeNetwork = capBank.getNetwork();
@@ -86,6 +91,7 @@ public class EIOHandler implements IEnergyHandler {
         capBankNetwork = null;
         capBank = null;
         energyType = null;
+        initialized = false;
     }
 
     @Nullable

@@ -65,6 +65,7 @@ public class MEKHandler implements IEnergyHandler {
     private ItemStack stack = ItemStack.EMPTY;
     private EnergyType energyType = EnergyType.INVALID;
     private boolean creative;
+    private boolean initialized;
 
     public MEKHandler() {
     }
@@ -80,6 +81,10 @@ public class MEKHandler implements IEnergyHandler {
 
     @Override
     public IEnergyHandler init(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
+        if (initialized) {
+            return this;
+        }
+        initialized = true;
         if (tileEntity instanceof TileEntityEnergyCube te) {
             creative = te.tier == EnergyCubeTier.CREATIVE;
             send = (IStrictEnergyStorage) tileEntity;
@@ -154,6 +159,7 @@ public class MEKHandler implements IEnergyHandler {
         energyType = EnergyType.INVALID;
         creative = false;
         isItem = false;
+        initialized = false;
         needEnergy.setZero();
         stack = ItemStack.EMPTY;
     }

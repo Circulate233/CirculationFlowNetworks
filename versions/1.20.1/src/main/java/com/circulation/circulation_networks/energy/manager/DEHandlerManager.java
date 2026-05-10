@@ -14,9 +14,6 @@ public final class DEHandlerManager implements IEnergyHandlerManager {
 
     @Override
     public boolean isAvailable(BlockEntity blockEntity) {
-        if (blockEntity.getCapability(CapabilityOP.OP, null).isPresent()) {
-            return true;
-        }
         for (Direction direction : DIRECTIONS) {
             if (blockEntity.getCapability(CapabilityOP.OP, direction).isPresent()) {
                 return true;

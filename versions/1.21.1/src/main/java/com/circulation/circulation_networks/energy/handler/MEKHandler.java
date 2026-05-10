@@ -35,16 +35,17 @@ public class MEKHandler implements IEnergyHandler {
     private IStrictEnergyHandler receive;
     private boolean isItem;
     private EnergyType energyType = EnergyType.INVALID;
+    private boolean initialized;
 
     public MEKHandler() {
     }
 
-    private static void clampToMaximum(EnergyAmount amount, BigInteger maximum) {
+    private static void clampToMaximum(EnergyAmount amount) {
         if (amount == null || !amount.isInitialized() || amount.isNegative()) {
             return;
         }
-        if (amount.asBigInteger().compareTo(maximum) > 0) {
-            amount.init(maximum);
+        if (amount.asBigInteger().compareTo(MEKHandler.MAX_DIRECT_DOUBLE_TRANSFER) > 0) {
+            amount.init(MEKHandler.MAX_DIRECT_DOUBLE_TRANSFER);
         }
     }
 
@@ -82,6 +83,10 @@ public class MEKHandler implements IEnergyHandler {
 
     @Override
     public IEnergyHandler init(BlockEntity blockEntity, @Nullable HubNode.HubMetadata hubMetadata) {
+        if (initialized) {
+            return this;
+        }
+        initialized = true;
         maxExtract.setZero();
         maxReceive.setZero();
         var level = blockEntity.getLevel();
@@ -107,16 +112,6 @@ public class MEKHandler implements IEnergyHandler {
                     continue;
                 }
                 bindHandler(handler);
-            }
-            if (send == null && receive == null) {
-                IStrictEnergyHandler fallback = level.getCapability(Capabilities.STRICT_ENERGY.block(), pos, null);
-                if (fallback != null) {
-                    bindHandler(fallback);
-                    if (send == null && receive == null) {
-                        send = fallback;
-                        receive = fallback;
-                    }
-                }
             }
         }
         if (send != null) {
@@ -161,6 +156,7 @@ public class MEKHandler implements IEnergyHandler {
         receive = null;
         energyType = EnergyType.INVALID;
         isItem = false;
+        initialized = false;
         needEnergy.setZero();
     }
 
@@ -169,7 +165,7 @@ public class MEKHandler implements IEnergyHandler {
         if (isItem) {
             if (receive == null) return EnergyAmounts.ZERO;
             EnergyAmount accepted = EnergyAmount.obtain(needEnergy).min(maxReceive);
-            clampToMaximum(accepted, MAX_DIRECT_DOUBLE_TRANSFER);
+            clampToMaximum(accepted);
             if (accepted.isZero()) {
                 return accepted;
             }

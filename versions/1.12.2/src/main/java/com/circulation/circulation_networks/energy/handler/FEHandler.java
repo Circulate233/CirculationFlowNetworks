@@ -20,9 +20,26 @@ public class FEHandler implements IEnergyHandler {
     private IEnergyStorage send;
     @Nullable
     private IEnergyStorage receive;
+    @Nullable
+    private EnumFacing sendFacing;
+    @Nullable
+    private EnumFacing receiveFacing;
+    private boolean sendProven;
+    private boolean receiveProven;
+    private boolean sendDirty = true;
+    private boolean receiveDirty = true;
+    private boolean initialized;
     private EnergyType energyType;
 
     public FEHandler() {
+    }
+
+    private static boolean hasEnergy(IEnergyStorage storage) {
+        return storage.getEnergyStored() > 0;
+    }
+
+    private static boolean hasRoom(IEnergyStorage storage) {
+        return storage.getEnergyStored() < storage.getMaxEnergyStored();
     }
 
     private static boolean canExtractEffectively(IEnergyStorage storage) {
@@ -33,23 +50,63 @@ public class FEHandler implements IEnergyHandler {
         return storage.receiveEnergy(PROBE_AMOUNT, true) > 0;
     }
 
-    private void bindStorage(@Nullable IEnergyStorage storage) {
+    private void bindHint(TileEntity tileEntity) {
+        if (sendProven && !sendDirty && sendFacing != null) {
+            IEnergyStorage storage = tileEntity.getCapability(CapabilityEnergy.ENERGY, sendFacing);
+            if (storage != null && hasEnergy(storage)) {
+                send = storage;
+            } else if (storage == null) {
+                sendDirty = true;
+                sendProven = false;
+            }
+        }
+        if (receiveProven && !receiveDirty && receiveFacing != null) {
+            IEnergyStorage storage = tileEntity.getCapability(CapabilityEnergy.ENERGY, receiveFacing);
+            if (storage != null && hasRoom(storage)) {
+                receive = storage;
+            } else if (storage == null) {
+                receiveDirty = true;
+                receiveProven = false;
+            }
+        }
+    }
+
+    private void bindSide(TileEntity tileEntity, EnumFacing facing, boolean needSendScan, boolean needReceiveScan) {
+        if (!needSendScan && !needReceiveScan) {
+            return;
+        }
+        IEnergyStorage storage = tileEntity.getCapability(CapabilityEnergy.ENERGY, facing);
         if (storage == null) {
             return;
         }
-        if (send == null && canExtractEffectively(storage)) {
+        if (needSendScan && send == null && hasEnergy(storage) && canExtractEffectively(storage)) {
             send = storage;
+            sendFacing = facing;
+            sendProven = true;
+            sendDirty = false;
         }
-        if (receive == null && canReceiveEffectively(storage)) {
+        if (needReceiveScan && receive == null && hasRoom(storage) && canReceiveEffectively(storage)) {
             receive = storage;
+            receiveFacing = facing;
+            receiveProven = true;
+            receiveDirty = false;
         }
     }
 
     @Override
     public IEnergyHandler init(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
-        for (int i = 0; i < 6 && (this.send == null || this.receive == null); i++) {
-            EnumFacing facing = EnumFacing.VALUES[i];
-            bindStorage(tileEntity.getCapability(CapabilityEnergy.ENERGY, facing));
+        if (initialized) {
+            return this;
+        }
+        initialized = true;
+        bindHint(tileEntity);
+        boolean needSendScan = send == null && (sendDirty || !sendProven);
+        boolean needReceiveScan = receive == null && (receiveDirty || !receiveProven);
+        for (int i = 0; i < EnumFacing.VALUES.length; i++) {
+            if (!needSendScan && !needReceiveScan) break;
+            bindSide(tileEntity, EnumFacing.VALUES[i], needSendScan, needReceiveScan);
+            needSendScan = send == null && (sendDirty || !sendProven);
+            needReceiveScan = receive == null && (receiveDirty || !receiveProven);
         }
         return this;
     }
@@ -58,7 +115,7 @@ public class FEHandler implements IEnergyHandler {
     public IEnergyHandler init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
         var ies = itemStack.getCapability(CapabilityEnergy.ENERGY, null);
         if (ies == null) return this;
-        if (canReceiveEffectively(ies)) {
+        if (hasRoom(ies) && canReceiveEffectively(ies)) {
             this.receive = ies;
         }
         energyType = EnergyType.RECEIVE;
@@ -70,28 +127,39 @@ public class FEHandler implements IEnergyHandler {
         send = null;
         receive = null;
         energyType = null;
+        initialized = false;
     }
 
     @Override
     public EnergyAmount extractEnergy(EnergyAmount maxExtract, @Nullable HubNode.HubMetadata hubMetadata) {
         if (send == null) return EnergyAmounts.ZERO;
-        return EnergyAmount.obtain(send.extractEnergy((int) maxExtract.asLongClamped(), false));
+        int extracted = send.extractEnergy((int) maxExtract.asLongClamped(), false);
+        if (extracted == 0 && maxExtract.isPositive()) {
+            sendDirty = true;
+            sendProven = false;
+        }
+        return EnergyAmount.obtain(extracted);
     }
 
     @Override
     public EnergyAmount receiveEnergy(EnergyAmount maxReceive, @Nullable HubNode.HubMetadata hubMetadata) {
         if (receive == null) return EnergyAmounts.ZERO;
-        return EnergyAmount.obtain(receive.receiveEnergy((int) maxReceive.asLongClamped(), false));
+        int received = receive.receiveEnergy((int) maxReceive.asLongClamped(), false);
+        if (received == 0 && maxReceive.isPositive()) {
+            receiveDirty = true;
+            receiveProven = false;
+        }
+        return EnergyAmount.obtain(received);
     }
 
     @Override
     public EnergyAmount canExtractValue(@Nullable HubNode.HubMetadata hubMetadata) {
-        return send == null ? EnergyAmounts.ZERO : EnergyAmount.obtain(send.extractEnergy(Integer.MAX_VALUE, true));
+        return send == null ? EnergyAmounts.ZERO : EnergyAmount.obtain(send.getEnergyStored());
     }
 
     @Override
     public EnergyAmount canReceiveValue(@Nullable HubNode.HubMetadata hubMetadata) {
-        return receive == null ? EnergyAmounts.ZERO : EnergyAmount.obtain(receive.receiveEnergy(Integer.MAX_VALUE, true));
+        return receive == null ? EnergyAmounts.ZERO : EnergyAmount.obtain(Math.max(0, receive.getMaxEnergyStored() - receive.getEnergyStored()));
     }
 
     @Override
