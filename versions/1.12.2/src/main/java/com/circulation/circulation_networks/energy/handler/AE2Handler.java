@@ -23,12 +23,14 @@ public class AE2Handler implements IEnergyHandler {
     public final EnergyAmount acceptableValue = EnergyAmount.obtain(0);
     @Nullable
     private IEnergyGrid energyGrid;
+    private boolean init;
 
     @Override
     public IEnergyHandler init(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
         if (!(tileEntity instanceof TileController) && !(tileEntity instanceof TileEnergyAcceptor)) {
             return this;
         }
+        init = true;
         AENetworkPowerTile tile = (AENetworkPowerTile) tileEntity;
         var n = tile.getProxy().getNode();
         IGrid grid;
@@ -40,9 +42,10 @@ public class AE2Handler implements IEnergyHandler {
         if (grid == null) {
             return this;
         }
-        energyGrid = grid.getCache(IEnergyGrid.class);
+        IEnergyGrid energyGrid = grid.getCache(IEnergyGrid.class);
         var a = AE2HandlerManager.INSTANCE.claim(energyGrid, this);
         if (a == this) {
+            this.energyGrid = energyGrid;
             var e = tile.getExternalPowerDemand(PowerUnits.RF, Double.MAX_VALUE);
             EnergyAmountConversionUtils.setFromDoubleFloor(acceptableValue, e);
             return this;
@@ -54,15 +57,18 @@ public class AE2Handler implements IEnergyHandler {
 
     @Override
     public IEnergyHandler init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
+        init = true;
         return this;
     }
 
     @Override
     public void clear() {
+        if (!init) return;
         if (energyGrid != null) energyGrid.injectPower(receivedValue.doubleValue() / 2, Actionable.MODULATE);
         energyGrid = null;
         acceptableValue.setZero();
         receivedValue.setZero();
+        init = false;
     }
 
     @Override

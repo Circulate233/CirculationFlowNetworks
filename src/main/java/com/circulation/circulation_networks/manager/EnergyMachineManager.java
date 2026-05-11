@@ -930,6 +930,7 @@ public final class EnergyMachineManager {
         warningTickCounter = 0L;
         lastWarningCleanupTick = 0L;
         interactionEpoch = 0L;
+        cache.clear();
     }
 
     //~ if >=1.20 '(World ' -> '(Level ' {
@@ -1233,9 +1234,9 @@ public final class EnergyMachineManager {
     }
 
     static final class GridTickData {
-        final ReferenceSet<EnergyTransferParticipant> send = new FastSmallElementSet<>();
-        final ReferenceSet<EnergyTransferParticipant> storage = new FastSmallElementSet<>();
-        final ReferenceSet<EnergyTransferParticipant> receive = new FastSmallElementSet<>();
+        final ReferenceSet<EnergyTransferParticipant> send = new ReferenceOpenHashSet<>();
+        final ReferenceSet<EnergyTransferParticipant> storage = new ReferenceOpenHashSet<>();
+        final ReferenceSet<EnergyTransferParticipant> receive = new ReferenceOpenHashSet<>();
         final Reference2ObjectMap<EnergyTransferParticipant, WarningTarget> receiveTargets = new Reference2ObjectOpenHashMap<>();
         boolean activeThisTick;
 
@@ -1276,9 +1277,9 @@ public final class EnergyMachineManager {
     }
 
     private static final class ChannelMergeScratch {
-        final ReferenceSet<EnergyTransferParticipant> send = new FastSmallElementSet<>();
-        final ReferenceSet<EnergyTransferParticipant> storage = new FastSmallElementSet<>();
-        final ReferenceSet<EnergyTransferParticipant> receive = new FastSmallElementSet<>();
+        final ReferenceSet<EnergyTransferParticipant> send = new ReferenceOpenHashSet<>();
+        final ReferenceSet<EnergyTransferParticipant> storage = new ReferenceOpenHashSet<>();
+        final ReferenceSet<EnergyTransferParticipant> receive = new ReferenceOpenHashSet<>();
         final Reference2ObjectMap<EnergyTransferParticipant, WarningTarget> receiveTargets = new Reference2ObjectOpenHashMap<>();
         final ReferenceSet<IGrid> timedGrids = new FastSmallElementSet<>();
 
@@ -1292,7 +1293,6 @@ public final class EnergyMachineManager {
         }
     }
 
-    @SuppressWarnings("unused")
     public static class Interaction {
         private final EnergyAmount input = EnergyAmount.obtain(0L);
         private final EnergyAmount output = EnergyAmount.obtain(0L);
