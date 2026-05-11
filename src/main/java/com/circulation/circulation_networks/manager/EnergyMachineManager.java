@@ -55,6 +55,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import net.minecraft.server.MinecraftServer;
 import static com.circulation.circulation_networks.utils.SideCompat.isClientWorld;
@@ -87,7 +88,7 @@ public final class EnergyMachineManager {
     private final Int2ObjectMap<LongSet> warningPositionsScratch = new Int2ObjectOpenHashMap<>();
     private final ChannelMergeScratch channelMergeScratch = new ChannelMergeScratch();
     private final ReferenceSet<IGrid> channelTickGridsScratch = new FastSmallElementSet<>();
-    private final ReferenceSet<TileEntity> cache = new ReferenceOpenHashSet<>();
+    private final Set<TileEntity> cache = ConcurrentHashMap.newKeySet();
     private final Int2ObjectMap<Long2LongMap> lastWarningTicks = new Int2ObjectOpenHashMap<>();
     private final LongOpenHashSet visibleWarningsScratch = new LongOpenHashSet();
     private long warningTickCounter;
@@ -280,6 +281,7 @@ public final class EnergyMachineManager {
     public void onBlockEntityInvalidate(BlockEntityLifeCycleEvent.Invalidate event) {
         if (isClientWorld(event.getWorld())) return;
         var blockEntity = event.getBlockEntity();
+        cache.remove(blockEntity);
         if (blockEntity instanceof IMachineNodeBlockEntity) {
             removeMachineNode(blockEntity);
         } else {
@@ -294,6 +296,7 @@ public final class EnergyMachineManager {
             NetworkManager.INSTANCE.initGrid();
             PocketNodeManager.INSTANCE.load();
         }
+        canAddManchine = false;
         loadCache();
         warningTickCounter++;
         interactionEpoch++;
@@ -442,6 +445,7 @@ public final class EnergyMachineManager {
         }
         clearTickMachineHandlers();
         activeTickGrids.clear();
+        canAddManchine = true;
     }
 
     private ReferenceSet<IGrid> collectActiveChannelTickGrids(UUID channelId) {
@@ -818,11 +822,9 @@ public final class EnergyMachineManager {
                 nodeScopeMap.put(energySupplyNode, LongSets.unmodifiable(chunksCovered));
             }
         }
-        loadCache();
     }
 
     private void loadCache() {
-        canAddManchine = true;
         if (cache.isEmpty()) return;
         for (var te : cache) {
             if (te instanceof IMachineNodeBlockEntity) {
