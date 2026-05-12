@@ -3,7 +3,6 @@ package com.circulation.circulation_networks.handlers;
 import com.circulation.circulation_networks.api.node.INode;
 import com.circulation.circulation_networks.client.render.PocketNodeModelCache;
 import com.circulation.circulation_networks.client.render.PocketNodeItemStackRenderer;
-import com.circulation.circulation_networks.manager.MachineTickManager;
 import com.circulation.circulation_networks.pocket.PocketNodeClientHost;
 import com.circulation.circulation_networks.pocket.PocketNodeRecord;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
@@ -76,7 +75,6 @@ public final class PocketNodeRenderingHandler {
     private static void unregisterHost(PocketNodeClientHost host) {
         if (host != null) {
             host.invalidateNode();
-            MachineTickManager.INSTANCE.unregisterClientMachine(host);
         }
     }
 
@@ -180,7 +178,6 @@ public final class PocketNodeRenderingHandler {
         long posLong = pack(record.pos());
         Long2ObjectMap<PocketNodeClientHost> dimHosts = getDimHosts(record.dimensionId());
         unregisterHost(dimHosts.put(posLong, new PocketNodeClientHost(record)));
-        MachineTickManager.INSTANCE.registerClientMachine(dimHosts.get(posLong));
     }
 
     public void remove(int dimId, BlockPos pos) {

@@ -24,7 +24,6 @@ import com.circulation.circulation_networks.handlers.NodeNetworkRenderingHandler
 import com.circulation.circulation_networks.handlers.PocketNodeRenderingHandler;
 import com.circulation.circulation_networks.handlers.SpoceRenderingHandler;
 import com.circulation.circulation_networks.handlers.SpoceRenderingHandlerGL46L3;
-import com.circulation.circulation_networks.manager.MachineTickManager;
 import com.circulation.circulation_networks.registry.CFNBlockEntityTypes;
 import com.circulation.circulation_networks.registry.CFNMenuTypes;
 import com.circulation.circulation_networks.utils.CI18n;
@@ -165,7 +164,6 @@ final class CirculationFlowNetworksClient {
 
     private static void onClientLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
         Minecraft.getInstance().execute(() -> {
-            MachineTickManager.INSTANCE.clear();
             NodeNetworkRenderingHandler.INSTANCE.clearLinks();
             EnergyWarningRenderingHandler.INSTANCE.clear();
             ConfigOverrideRenderingHandler.INSTANCE.clear();
@@ -183,7 +181,6 @@ final class CirculationFlowNetworksClient {
     private static void onClientTick(TickEvent.ClientTickEvent event) {
         if (event.phase == TickEvent.Phase.END) {
             ClientAnimationTicker.tick();
-            MachineTickManager.INSTANCE.onClientTick();
         }
     }
 

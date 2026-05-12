@@ -25,7 +25,6 @@ import com.circulation.circulation_networks.handlers.NodeNetworkRenderingHandler
 import com.circulation.circulation_networks.handlers.PocketNodeRenderingHandler;
 import com.circulation.circulation_networks.handlers.SpoceRenderingHandler;
 import com.circulation.circulation_networks.handlers.SpoceRenderingHandlerGL46L3;
-import com.circulation.circulation_networks.manager.MachineTickManager;
 import com.circulation.circulation_networks.registry.CFNBlockEntityTypes;
 import com.circulation.circulation_networks.registry.CFNBlocks;
 import com.circulation.circulation_networks.registry.CFNItems;
@@ -58,24 +57,18 @@ final class CirculationFlowNetworksClient {
     static void init(IEventBus modEventBus) {
         java.io.File modConfigDir = new java.io.File(net.neoforged.fml.loading.FMLPaths.CONFIGDIR.get().toFile(), CirculationFlowNetworks.MOD_ID);
         ComponentAtlas.INSTANCE.configure(modConfigDir);
-        // Defer GL detection to the render thread — GL context is only current on the main thread
         Minecraft.getInstance().execute(() -> {
             registerAtlasReloadListener();
             openGLLevel = detectOpenGLLevel();
             SpoceRenderingHandler.INSTANCE = createSpoceHandler();
         });
-        // Use addListener instead of register() to avoid NeoForge restriction
-        // on @SubscribeEvent methods in superclass when registering a subclass
         NeoForge.EVENT_BUS.addListener((RenderLevelStageEvent e) -> {
             if (SpoceRenderingHandler.INSTANCE != null) SpoceRenderingHandler.INSTANCE.onRenderWorldLast(e);
         });
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Pre e) -> {
             if (SpoceRenderingHandler.INSTANCE != null) SpoceRenderingHandler.INSTANCE.onClientTick(e);
         });
-        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post e) -> {
-            ClientAnimationTicker.tick();
-            MachineTickManager.INSTANCE.onClientTick();
-        });
+        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post e) -> ClientAnimationTicker.tick());
         NeoForge.EVENT_BUS.register(NodeNetworkRenderingHandler.INSTANCE);
         NeoForge.EVENT_BUS.register(EnergyWarningRenderingHandler.INSTANCE);
         NeoForge.EVENT_BUS.register(ConfigOverrideRenderingHandler.INSTANCE);
@@ -208,7 +201,6 @@ final class CirculationFlowNetworksClient {
 
     private static void onClientLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
         Minecraft.getInstance().execute(() -> {
-            MachineTickManager.INSTANCE.clear();
             NodeNetworkRenderingHandler.INSTANCE.clearLinks();
             EnergyWarningRenderingHandler.INSTANCE.clear();
             ConfigOverrideRenderingHandler.INSTANCE.clear();

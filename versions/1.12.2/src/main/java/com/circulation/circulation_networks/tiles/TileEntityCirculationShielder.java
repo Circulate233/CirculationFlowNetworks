@@ -2,7 +2,6 @@ package com.circulation.circulation_networks.tiles;
 
 import com.circulation.circulation_networks.CFNConfig;
 import com.circulation.circulation_networks.api.ICirculationShielderBlockEntity;
-import com.circulation.circulation_networks.api.ServerTickMachine;
 import com.circulation.circulation_networks.container.CFNBaseContainer;
 import com.circulation.circulation_networks.container.ContainerCirculationShielder;
 import com.circulation.circulation_networks.gui.GuiCirculationShielder;
@@ -16,7 +15,7 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import org.jetbrains.annotations.NotNull;
 
-public class TileEntityCirculationShielder extends BaseTileEntity implements ICirculationShielderBlockEntity, ServerTickMachine {
+public class TileEntityCirculationShielder extends BlockTickTileEntity implements ICirculationShielderBlockEntity {
 
     private transient final BlockPos.MutableBlockPos min = new BlockPos.MutableBlockPos();
     private transient final BlockPos.MutableBlockPos max = new BlockPos.MutableBlockPos();
@@ -123,9 +122,6 @@ public class TileEntityCirculationShielder extends BaseTileEntity implements ICi
 
     @Override
     public void serverUpdate() {
-        if (world == null) {
-            return;
-        }
         long time = world.getTotalWorldTime();
         if (cachedActiveTick == Long.MIN_VALUE || time - cachedActiveTick >= 5) {
             refreshActiveCache();

@@ -5,7 +5,6 @@ import com.circulation.circulation_networks.manager.DatPersistenceScheduler;
 import com.circulation.circulation_networks.manager.EnergyMachineManager;
 import com.circulation.circulation_networks.manager.EnergyTypeOverrideManager;
 import com.circulation.circulation_networks.manager.HubChannelManager;
-import com.circulation.circulation_networks.manager.MachineTickManager;
 import com.circulation.circulation_networks.manager.NetworkManager;
 import com.circulation.circulation_networks.manager.PocketNodeManager;
 import com.circulation.circulation_networks.proxy.CommonProxy;
@@ -99,7 +98,6 @@ public class CirculationFlowNetworks {
         EnergyTypeOverrideManager.onServerStop();
         ChargingManager.INSTANCE.onServerStop();
         HubChannelManager.INSTANCE.onServerStop();
-        MachineTickManager.INSTANCE.clear();
         DatPersistenceScheduler.INSTANCE.reset();
         server = null;
     }

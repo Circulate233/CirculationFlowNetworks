@@ -2,7 +2,6 @@ package com.circulation.circulation_networks.tiles;
 
 import com.circulation.circulation_networks.CFNConfig;
 import com.circulation.circulation_networks.api.ICirculationShielderBlockEntity;
-import com.circulation.circulation_networks.api.ServerTickMachine;
 import com.circulation.circulation_networks.container.ContainerCirculationShielder;
 import com.circulation.circulation_networks.handlers.CirculationShielderRenderingHandler;
 import com.circulation.circulation_networks.manager.CirculationShielderManager;
@@ -16,13 +15,14 @@ import net.minecraft.world.MenuProvider;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-public class CirculationShielderBlockEntity extends BaseCFNBlockEntity implements ICirculationShielderBlockEntity, MenuProvider, ServerTickMachine {
+public class CirculationShielderBlockEntity extends BaseCFNBlockEntity implements ICirculationShielderBlockEntity, MenuProvider {
 
     private static final long ACTIVE_CACHE_INTERVAL_TICKS = 10L;
 
@@ -121,11 +121,8 @@ public class CirculationShielderBlockEntity extends BaseCFNBlockEntity implement
     }
 
     @Override
-    public void serverUpdate() {
-        if (level == null) {
-            return;
-        }
-        long gameTime = level.getGameTime();
+    public void serverUpdate(Level world, BlockPos pos, BlockState state, BaseCFNBlockEntity blockEntity) {
+        long gameTime = world.getGameTime();
         if (cachedActiveTick == Long.MIN_VALUE || gameTime - cachedActiveTick >= ACTIVE_CACHE_INTERVAL_TICKS) {
             refreshActiveCache();
         }

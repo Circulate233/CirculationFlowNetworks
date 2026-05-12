@@ -7,8 +7,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.NotNull;
 
-@SuppressWarnings("deprecation")
-public final class BlockCirculationShielder extends BaseBlock {
+public final class BlockCirculationShielder extends BaseTickBlock {
 
     public BlockCirculationShielder() {
         super(metalPropertiesNoOcclusion());

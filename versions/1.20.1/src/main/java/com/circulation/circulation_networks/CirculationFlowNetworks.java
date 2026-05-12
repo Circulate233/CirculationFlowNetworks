@@ -11,7 +11,6 @@ import com.circulation.circulation_networks.manager.DatPersistenceScheduler;
 import com.circulation.circulation_networks.manager.EnergyMachineManager;
 import com.circulation.circulation_networks.manager.EnergyTypeOverrideManager;
 import com.circulation.circulation_networks.manager.HubChannelManager;
-import com.circulation.circulation_networks.manager.MachineTickManager;
 import com.circulation.circulation_networks.manager.NetworkManager;
 import com.circulation.circulation_networks.manager.PocketNodeManager;
 import com.circulation.circulation_networks.network.CFNNetwork;
@@ -160,7 +159,6 @@ public final class CirculationFlowNetworks {
         if (event.phase == TickEvent.Phase.START) {
             EnergyMachineManager.INSTANCE.onServerTick();
         } else {
-            MachineTickManager.INSTANCE.onServerTick();
             if (AE2_LOADED) {
                 AE2HandlerManager.INSTANCE.clearTickCache();
             }
@@ -193,7 +191,6 @@ public final class CirculationFlowNetworks {
         EnergyTypeOverrideManager.onServerStop();
         ChargingManager.INSTANCE.onServerStop();
         HubChannelManager.INSTANCE.onServerStop();
-        MachineTickManager.INSTANCE.clear();
         DatPersistenceScheduler.INSTANCE.reset();
     }
 
