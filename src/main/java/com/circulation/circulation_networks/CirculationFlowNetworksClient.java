@@ -26,7 +26,6 @@ import com.circulation.circulation_networks.handlers.NodeHudRenderingHandler;
 import com.circulation.circulation_networks.handlers.NodeNetworkRenderingHandler;
 import com.circulation.circulation_networks.handlers.PocketNodeRenderingHandler;
 import com.circulation.circulation_networks.handlers.SpoceRenderingHandler;
-import com.circulation.circulation_networks.manager.MachineTickManager;
 import com.circulation.circulation_networks.registry.CFNBlockEntityTypes;
 import com.circulation.circulation_networks.registry.CFNBlocks;
 import com.circulation.circulation_networks.registry.CFNMenuTypes;
@@ -74,10 +73,7 @@ final class CirculationFlowNetworksClient {
             ensureClientBootstrap();
             if (SpoceRenderingHandler.INSTANCE != null) SpoceRenderingHandler.INSTANCE.onClientTick(e);
         });
-        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post e) -> {
-            ClientAnimationTicker.tick();
-            MachineTickManager.INSTANCE.onClientTick();
-        });
+        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post e) -> ClientAnimationTicker.tick());
         NeoForge.EVENT_BUS.register(NodeNetworkRenderingHandler.INSTANCE);
         NeoForge.EVENT_BUS.register(EnergyWarningRenderingHandler.INSTANCE);
         NeoForge.EVENT_BUS.register(ConfigOverrideRenderingHandler.INSTANCE);
@@ -161,7 +157,6 @@ final class CirculationFlowNetworksClient {
 
     private static void onClientLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
         Minecraft.getInstance().execute(() -> {
-            MachineTickManager.INSTANCE.clear();
             NodeNetworkRenderingHandler.INSTANCE.clearLinks();
             EnergyWarningRenderingHandler.INSTANCE.clear();
             ConfigOverrideRenderingHandler.INSTANCE.clear();

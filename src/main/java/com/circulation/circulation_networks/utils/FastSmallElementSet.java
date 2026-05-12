@@ -57,6 +57,15 @@ public class FastSmallElementSet<T> implements ReferenceSet<T> {
     private int size;
     private ReferenceSet<T> overflowSet;
 
+    private static boolean containsReference(Collection<?> collection, Object target) {
+        for (Object element : collection) {
+            if (element == target) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     @Override
     public int size() {
         return size;
@@ -265,15 +274,6 @@ public class FastSmallElementSet<T> implements ReferenceSet<T> {
             }
         }
         return -1;
-    }
-
-    private static boolean containsReference(Collection<?> collection, Object target) {
-        for (Object element : collection) {
-            if (element == target) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private void forEachInline(Consumer<? super T> action) {

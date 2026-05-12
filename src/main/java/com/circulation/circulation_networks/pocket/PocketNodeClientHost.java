@@ -1,6 +1,5 @@
 package com.circulation.circulation_networks.pocket;
 
-import com.circulation.circulation_networks.api.ClientTickMachine;
 import com.circulation.circulation_networks.api.node.INode;
 import com.circulation.circulation_networks.client.render.PocketNodeModelCache;
 import com.circulation.circulation_networks.registry.PocketNodeItems;
@@ -9,7 +8,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
-public final class PocketNodeClientHost implements ClientTickMachine {
+public final class PocketNodeClientHost {
 
     private final PocketNodeRecord record;
     private final ItemStack renderStack;
@@ -60,7 +59,4 @@ public final class PocketNodeClientHost implements ClientTickMachine {
         return gui3d;
     }
 
-    @Override
-    public void clientUpdate() {
-    }
 }

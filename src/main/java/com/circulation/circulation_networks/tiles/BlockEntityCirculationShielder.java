@@ -2,7 +2,6 @@ package com.circulation.circulation_networks.tiles;
 
 import com.circulation.circulation_networks.CFNConfig;
 import com.circulation.circulation_networks.api.ICirculationShielderBlockEntity;
-import com.circulation.circulation_networks.api.ServerTickMachine;
 import com.circulation.circulation_networks.container.ContainerCirculationShielder;
 import com.circulation.circulation_networks.handlers.CirculationShielderRenderingHandler;
 import com.circulation.circulation_networks.manager.CirculationShielderManager;
@@ -15,13 +14,14 @@ import net.minecraft.world.MenuProvider;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-public class BlockEntityCirculationShielder extends BaseCFNBlockEntity implements ICirculationShielderBlockEntity, MenuProvider, ServerTickMachine {
+public class BlockEntityCirculationShielder extends BaseCFNBlockEntity implements ICirculationShielderBlockEntity, MenuProvider {
 
     private static final long ACTIVE_CACHE_INTERVAL_TICKS = 10L;
     private transient final BlockPos.MutableBlockPos min = new BlockPos.MutableBlockPos();
@@ -30,7 +30,6 @@ public class BlockEntityCirculationShielder extends BaseCFNBlockEntity implement
     private boolean redstoneMode = false;
     private boolean showingRange = false;
     private boolean cachedActive = false;
-    private boolean cachedPowered = false;
     private long cachedActiveTick = Long.MIN_VALUE;
 
     public BlockEntityCirculationShielder(BlockPos pos, BlockState state) {
@@ -104,14 +103,8 @@ public class BlockEntityCirculationShielder extends BaseCFNBlockEntity implement
     }
 
     @Override
-    public void serverUpdate() {
-        if (level == null || level.isClientSide()) {
-            cachedActive = false;
-            cachedPowered = false;
-            cachedActiveTick = Long.MIN_VALUE;
-            return;
-        }
-        long gameTime = level.getGameTime();
+    public void serverUpdate(Level world, BlockPos pos, BlockState state, BaseCFNBlockEntity blockEntity) {
+        long gameTime = world.getGameTime();
         if (cachedActiveTick == Long.MIN_VALUE || gameTime - cachedActiveTick >= ACTIVE_CACHE_INTERVAL_TICKS) {
             refreshActiveCache();
         }
@@ -166,9 +159,9 @@ public class BlockEntityCirculationShielder extends BaseCFNBlockEntity implement
     }
 
     private void refreshActiveCache() {
+        boolean cachedPowered;
         if (level == null || level.isClientSide()) {
             cachedActive = false;
-            cachedPowered = false;
             cachedActiveTick = Long.MIN_VALUE;
             return;
         }

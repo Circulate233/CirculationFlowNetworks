@@ -5,7 +5,6 @@ import com.circulation.circulation_networks.events.BlockEntityLifeCycleEvent;
 import com.circulation.circulation_networks.manager.EnergyMachineManager;
 import com.circulation.circulation_networks.manager.EnergyTypeOverrideManager;
 import com.circulation.circulation_networks.manager.HubChannelManager;
-import com.circulation.circulation_networks.manager.MachineTickManager;
 import com.circulation.circulation_networks.manager.NetworkManager;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
@@ -32,7 +31,6 @@ public final class BlockEntityLifecycleHooks {
                 nodeBlockEntity.nodeValidate();
             }
             BlockEntityLifeCycleEvent.Validate event = new BlockEntityLifeCycleEvent.Validate(world, pos, blockEntity);
-            MachineTickManager.INSTANCE.onBlockEntityValidate(event);
             NetworkManager.INSTANCE.onBlockEntityValidate(event);
             EnergyMachineManager.INSTANCE.onBlockEntityValidate(event);
             HubChannelManager.INSTANCE.onBlockEntityValidate(event);
@@ -52,7 +50,6 @@ public final class BlockEntityLifecycleHooks {
                 nodeBlockEntity.nodeInvalidate();
             }
             BlockEntityLifeCycleEvent.Invalidate event = new BlockEntityLifeCycleEvent.Invalidate(world, pos, blockEntity);
-            MachineTickManager.INSTANCE.onBlockEntityInvalidate(event);
             NetworkManager.INSTANCE.onBlockEntityInvalidate(event);
             EnergyMachineManager.INSTANCE.onBlockEntityInvalidate(event);
             HubChannelManager.INSTANCE.onBlockEntityInvalidate(event);
