@@ -40,9 +40,23 @@ public class FEHandler implements IEnergyHandler {
         }
     }
 
+    private static int simulateExtractAmount(EnergyHandler handler) {
+        if (!canExtractNow(handler)) return 0;
+        try (Transaction transaction = Transaction.openRoot()) {
+            return handler.extract(Integer.MAX_VALUE, transaction);
+        }
+    }
+
     private static boolean simulateInsert(EnergyHandler handler) {
         try (Transaction transaction = Transaction.openRoot()) {
             return handler.insert(1, transaction) > 0;
+        }
+    }
+
+    private static int simulateInsertAmount(EnergyHandler handler) {
+        if (!canReceiveNow(handler)) return 0;
+        try (Transaction transaction = Transaction.openRoot()) {
+            return handler.insert(Integer.MAX_VALUE, transaction);
         }
     }
 
@@ -219,14 +233,16 @@ public class FEHandler implements IEnergyHandler {
 
     @Override
     public EnergyAmount canExtractValue(@Nullable HubNode.HubMetadata hubMetadata) {
-        return send == null ? EnergyAmounts.ZERO : EnergyAmount.obtain(Math.min(send.getAmountAsLong(), Integer.MAX_VALUE));
+        if (send == null) return EnergyAmounts.ZERO;
+        int extracted = simulateExtractAmount(send);
+        return extracted <= 0 ? EnergyAmounts.ZERO : EnergyAmount.obtain(extracted);
     }
 
     @Override
     public EnergyAmount canReceiveValue(@Nullable HubNode.HubMetadata hubMetadata) {
         if (receive == null) return EnergyAmounts.ZERO;
-        long receivable = receive.getCapacityAsLong() - receive.getAmountAsLong();
-        return receivable <= 0L ? EnergyAmounts.ZERO : EnergyAmount.obtain(Math.min(receivable, Integer.MAX_VALUE));
+        int inserted = simulateInsertAmount(receive);
+        return inserted <= 0 ? EnergyAmounts.ZERO : EnergyAmount.obtain(inserted);
     }
 
     @Override

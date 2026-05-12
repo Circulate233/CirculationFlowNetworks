@@ -49,6 +49,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class EnergyMachineManager {
 
@@ -75,12 +76,13 @@ public final class EnergyMachineManager {
     private final Object2ObjectMap<String, LongSet> warningPositionsScratch = new Object2ObjectOpenHashMap<>();
     private final ChannelMergeScratch channelMergeScratch = new ChannelMergeScratch();
     private final ReferenceSet<IGrid> channelTickGridsScratch = new FastSmallElementSet<>();
-    private final ReferenceSet<BlockEntity> cache = new ReferenceOpenHashSet<>();
+    private final Set<BlockEntity> cache = ConcurrentHashMap.newKeySet();
     private final Object2ObjectMap<String, Long2LongMap> lastWarningTicks = new Object2ObjectOpenHashMap<>();
     private final LongSet visibleWarningsScratch = new LongOpenHashSet();
     private long warningTickCounter;
     private long lastWarningCleanupTick;
     private long interactionEpoch;
+    private boolean canAddManchine;
 
     {
         gridMachineMap.defaultReturnValue(ReferenceSets.emptySet());
@@ -250,7 +252,7 @@ public final class EnergyMachineManager {
 
     public void onBlockEntityValidate(BlockEntityLifeCycleEvent.Validate event) {
         if (WorldResolveCompat.isClientWorld(event.getWorld())) return;
-        if (NetworkManager.INSTANCE.isInit()) {
+        if (canAddManchine) {
             var blockEntity = event.getBlockEntity();
             if (blockEntity instanceof IMachineNodeBlockEntity) {
                 addMachineNode(blockEntity);
@@ -277,6 +279,8 @@ public final class EnergyMachineManager {
             NetworkManager.INSTANCE.initGrid();
             PocketNodeManager.INSTANCE.load();
         }
+        canAddManchine = false;
+        loadCache();
         warningTickCounter++;
         interactionEpoch++;
         var overrideManager = EnergyTypeOverrideManager.get();
@@ -417,6 +421,7 @@ public final class EnergyMachineManager {
         }
         clearTickMachineHandlers();
         activeTickGrids.clear();
+        canAddManchine = true;
     }
 
     private ReferenceSet<IGrid> collectActiveChannelTickGrids(UUID channelId) {
@@ -775,6 +780,18 @@ public final class EnergyMachineManager {
             }
         }
 
+        for (var te : cache) {
+            if (te instanceof IMachineNodeBlockEntity) {
+                addMachineNode(te);
+            } else {
+                addMachine(te);
+            }
+        }
+        cache.clear();
+    }
+
+    private void loadCache() {
+        if (cache.isEmpty()) return;
         for (var te : cache) {
             if (te instanceof IMachineNodeBlockEntity) {
                 addMachineNode(te);
