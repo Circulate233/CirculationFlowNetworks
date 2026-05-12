@@ -28,10 +28,7 @@ public class MEKHandler implements IEnergyHandler {
     private static final int ROLE_SUPPORTED = 1;
     private static final int ROLE_UNSUPPORTED = 2;
     private static final BigInteger MAX_DIRECT_DOUBLE_TRANSFER = BigDecimal.valueOf(Double.MAX_VALUE).toBigInteger();
-    private static final BigInteger MAX_SCALED_DOUBLE_TRANSFER = BigDecimal.valueOf(Double.MAX_VALUE / FE_TO_MEK_RATIO).toBigInteger();
 
-    private final EnergyAmount maxExtract = EnergyAmount.obtain(0L);
-    private final EnergyAmount maxReceive = EnergyAmount.obtain(0L);
     private final EnergyAmount needEnergy = EnergyAmount.obtain(0L);
     @Nullable
     private IStrictEnergyHandler send;
@@ -139,16 +136,16 @@ public class MEKHandler implements IEnergyHandler {
             return this;
         }
         initialized = true;
-        maxExtract.setZero();
-        maxReceive.setZero();
         if (blockEntity instanceof TileEntityEnergyCube energyCube) {
             send = energyCube;
             receive = energyCube;
             energyType = EnergyType.STORAGE;
+            return this;
         } else if (blockEntity instanceof TileEntityInductionPort port) {
             send = port;
             receive = port;
             energyType = EnergyType.STORAGE;
+            return this;
         } else {
             bindHint(blockEntity);
             boolean needSendScan = send == null && sendState == ROLE_UNKNOWN;
@@ -175,15 +172,6 @@ public class MEKHandler implements IEnergyHandler {
             if (receive == null && receiveState == ROLE_UNKNOWN && attemptedReceive) {
                 receiveState = ROLE_UNSUPPORTED;
             }
-        }
-        if (send != null) {
-            double probe = send.extractEnergy(FloatingLong.MAX_VALUE, Action.SIMULATE).doubleValue();
-            EnergyAmountConversionUtils.setFromDoubleFloor(maxExtract, joulesToFe(probe));
-        }
-        if (receive != null) {
-            FloatingLong remainder = receive.insertEnergy(FloatingLong.MAX_VALUE, Action.SIMULATE);
-            double accepted = FloatingLong.MAX_VALUE.subtract(remainder).doubleValue();
-            EnergyAmountConversionUtils.setFromDoubleFloor(maxReceive, joulesToFe(accepted));
         }
         if (send != null) {
             energyType = receive != null ? EnergyType.STORAGE : EnergyType.SEND;
@@ -215,8 +203,6 @@ public class MEKHandler implements IEnergyHandler {
 
     @Override
     public void clear() {
-        maxExtract.setZero();
-        maxReceive.setZero();
         send = null;
         receive = null;
         energyType = EnergyType.INVALID;
@@ -245,8 +231,11 @@ public class MEKHandler implements IEnergyHandler {
                 receiveState = ROLE_UNKNOWN;
                 return EnergyAmounts.ZERO;
             }
-            needEnergy.subtract(accepted);
-            return accepted;
+            EnergyAmount actual = EnergyAmountConversionUtils.obtainFromDoubleFloor(inserted / FE_TO_MEK_RATIO);
+            actual.min(accepted);
+            needEnergy.subtract(actual);
+            accepted.recycle();
+            return actual;
         }
         if (receive == null) return EnergyAmounts.ZERO;
         double requestJoules = EnergyAmountConversionUtils.toDoubleClamped(maxReceive) * FE_TO_MEK_RATIO;
@@ -272,8 +261,8 @@ public class MEKHandler implements IEnergyHandler {
     @Override
     public EnergyAmount canExtractValue(@Nullable HubNode.HubMetadata hubMetadata) {
         if (send == null) return EnergyAmounts.ZERO;
-        EnergyAmount extractable = EnergyAmountConversionUtils.obtainFromDoubleFloor(getStoredEnergy(send) * 0.4D);
-        return extractable.min(maxExtract);
+        double extracted = send.extractEnergy(FloatingLong.MAX_VALUE, Action.SIMULATE).doubleValue();
+        return EnergyAmountConversionUtils.obtainFromDoubleFloor(joulesToFe(extracted));
     }
 
     @Override
@@ -282,10 +271,9 @@ public class MEKHandler implements IEnergyHandler {
             return EnergyAmount.obtain(needEnergy);
         }
         if (receive == null) return EnergyAmounts.ZERO;
-        EnergyAmount receivable = EnergyAmountConversionUtils.obtainFromDoubleFloor(
-            (getMaxStoredEnergy(receive) - getStoredEnergy(receive)) * 0.4D
-        );
-        return receivable.min(maxReceive);
+        FloatingLong remainder = receive.insertEnergy(FloatingLong.MAX_VALUE, Action.SIMULATE);
+        double accepted = FloatingLong.MAX_VALUE.subtract(remainder).doubleValue();
+        return EnergyAmountConversionUtils.obtainFromDoubleFloor(joulesToFe(accepted));
     }
 
     @Override

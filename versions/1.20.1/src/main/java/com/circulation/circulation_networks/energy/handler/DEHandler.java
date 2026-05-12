@@ -128,9 +128,11 @@ public class DEHandler implements IEnergyHandler {
                     receiveDirection = direction;
                     sendState = send != null ? ROLE_SUPPORTED : ROLE_UNKNOWN;
                     receiveState = receive != null ? ROLE_SUPPORTED : ROLE_UNKNOWN;
+                    energyType = EnergyType.STORAGE;
                     return this;
                 }
             }
+            energyType = EnergyType.INVALID;
             return this;
         }
         bindHint(blockEntity);
@@ -199,12 +201,12 @@ public class DEHandler implements IEnergyHandler {
 
     @Override
     public EnergyAmount canExtractValue(@Nullable HubNode.HubMetadata hubMetadata) {
-        return send == null ? EnergyAmounts.ZERO : EnergyAmount.obtain(send.getOPStored());
+        return send == null ? EnergyAmounts.ZERO : EnergyAmount.obtain(send.extractOP(Long.MAX_VALUE, true));
     }
 
     @Override
     public EnergyAmount canReceiveValue(@Nullable HubNode.HubMetadata hubMetadata) {
-        return receive == null ? EnergyAmounts.ZERO : EnergyAmount.obtain(Math.max(0L, receive.getMaxOPStored() - receive.getOPStored()));
+        return receive == null ? EnergyAmounts.ZERO : EnergyAmount.obtain(Math.max(0L, receive.receiveOP(Long.MAX_VALUE, true)));
     }
 
     @Override

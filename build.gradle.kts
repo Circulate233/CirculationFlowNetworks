@@ -460,6 +460,10 @@ repositories {
         url = uri("https://maven.minecraftforge.net")
     }
     maven {
+        name = "ModMaven" //EnderCore
+        url  = uri("https://modmaven.dev/")
+    }
+    maven {
         name = "NeoForged Releases"
         url = uri("https://maven.neoforged.net/releases")
     }
@@ -639,6 +643,7 @@ tasks.named<ProcessResources>("processResources") {
 
 val syncLegacyForgeResourcesToClasses = if (currentPlatform == "legacyforge") {
     tasks.register<Copy>("syncLegacyForgeResourcesToClasses") {
+        description = ""
         dependsOn(tasks.named("compileJava"))
         from(tasks.named<ProcessResources>("processResources"))
         into(tasks.named<JavaCompile>("compileJava").flatMap { it.destinationDirectory })
@@ -709,6 +714,7 @@ tasks.named<Test>("test") {
 }
 
 val generateMixinJson = tasks.register("generateMixinJson") {
+    description = ""
     group = "cleanroom helpers"
     onlyIf {
         propertyBool("use_mixins") && propertyBool("generate_mixins_json")
@@ -769,6 +775,7 @@ val generateMixinJson = tasks.register("generateMixinJson") {
 }
 
 val generateComponentAtlasRegistration = tasks.register("generateComponentAtlasRegistration") {
+    description = ""
     group = "cleanroom helpers"
 
     inputs.files(componentAtlasInputDirs)
@@ -842,6 +849,7 @@ tasks.withType<Jar>().configureEach { dependsOn(prepareKsp) }
 tasks.withType<AbstractCopyTask>().configureEach { dependsOn(prepareKsp) }
 
 val cleanroomAfterSync = tasks.register("cleanroomAfterSync") {
+    description = ""
     group = "cleanroom helpers"
     dependsOn(generateMixinJson)
     dependsOn(generateComponentAtlasRegistration)
@@ -909,6 +917,7 @@ if (isLegacyRfg) {
 }
 
 tasks.register("prioritizeCoremods") {
+    description = ""
     if (isLegacyRfg) {
         dependsOn("prepareObfModsFolder")
     }

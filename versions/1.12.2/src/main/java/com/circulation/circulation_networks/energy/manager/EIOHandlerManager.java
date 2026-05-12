@@ -3,15 +3,43 @@ package com.circulation.circulation_networks.energy.manager;
 import com.circulation.circulation_networks.api.IEnergyHandler;
 import com.circulation.circulation_networks.api.IEnergyHandlerManager;
 import com.circulation.circulation_networks.energy.handler.EIOHandler;
+import crazypants.enderio.base.machine.base.te.AbstractCapabilityMachineEntity;
+import crazypants.enderio.base.machine.modes.IoMode;
+import crazypants.enderio.base.power.IEnergyTank;
+import crazypants.enderio.base.power.forge.tile.ILegacyPoweredTile;
 import crazypants.enderio.powertools.machine.capbank.TileCapBank;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.EnumFacing;
 
 public final class EIOHandlerManager implements IEnergyHandlerManager {
 
     @Override
     public boolean isAvailable(TileEntity tileEntity) {
-        return tileEntity instanceof TileCapBank;
+        if (tileEntity instanceof TileCapBank) {
+            return true;
+        }
+        if (tileEntity instanceof ILegacyPoweredTile poweredTile) {
+            for (EnumFacing facing : EnumFacing.VALUES) {
+                if (poweredTile.canConnectEnergy(facing)) {
+                    return true;
+                }
+            }
+            return poweredTile.getMaxEnergyStored() > 0;
+        }
+        if (tileEntity instanceof AbstractCapabilityMachineEntity machineEntity) {
+            IEnergyTank tank = machineEntity.getEnergy();
+            if (tank == null || tank.getMaxEnergyStored() <= 0) {
+                return false;
+            }
+            for (EnumFacing facing : EnumFacing.VALUES) {
+                IoMode mode = machineEntity.getIoMode(facing);
+                if (mode != null && mode.canInputOrOutput()) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     @Override

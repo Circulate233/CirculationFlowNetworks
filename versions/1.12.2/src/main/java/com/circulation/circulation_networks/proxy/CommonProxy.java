@@ -7,7 +7,6 @@ import com.circulation.circulation_networks.energy.manager.EUHandlerManager;
 import com.circulation.circulation_networks.energy.manager.FEHandlerManager;
 import com.circulation.circulation_networks.energy.manager.MEKHandlerManager;
 import com.circulation.circulation_networks.energy.manager.MMCEHandlerManager;
-import com.circulation.circulation_networks.energy.manager.RFHandlerManager;
 import com.circulation.circulation_networks.events.BlockEntityLifeCycleEvent;
 import com.circulation.circulation_networks.handlers.NodePlacementValidationHandler;
 import com.circulation.circulation_networks.handlers.NodeRescanHandler;
@@ -111,9 +110,6 @@ public class CommonProxy implements IGuiHandler {
             Class.forName("hellfirepvp.modularmachinery.common.block.BlockBus");
             RegistryEnergyHandler.registerEnergyHandler(new MMCEHandlerManager());
         } catch (ClassNotFoundException ignored) {
-        }
-        if (Loader.isModLoaded("redstoneflux")) {
-            RegistryEnergyHandler.registerEnergyHandler(new RFHandlerManager());
         }
         if (Loader.isModLoaded("mekanism"))
             RegistryEnergyHandler.registerEnergyHandler(new MEKHandlerManager());

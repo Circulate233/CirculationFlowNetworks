@@ -128,10 +128,12 @@ public class FEHandler implements IEnergyHandler {
     public IEnergyHandler init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
         var ies = itemStack.getCapability(CapabilityEnergy.ENERGY, null);
         if (ies == null) return this;
-        if (hasRoom(ies) && canReceiveEffectively(ies)) {
+        if (canReceiveEffectively(ies)) {
             this.receive = ies;
+            energyType = EnergyType.RECEIVE;
+        } else {
+            energyType = EnergyType.INVALID;
         }
-        energyType = EnergyType.RECEIVE;
         return this;
     }
 
@@ -156,7 +158,7 @@ public class FEHandler implements IEnergyHandler {
     @Override
     public EnergyAmount receiveEnergy(EnergyAmount maxReceive, @Nullable HubNode.HubMetadata hubMetadata) {
         if (receive == null) return EnergyAmounts.ZERO;
-        int received = receive.receiveEnergy((int) maxReceive.asLongClamped(), false);
+        int received = receive.receiveEnergy(maxReceive.intValue(), false);
         if (received == 0 && maxReceive.isPositive()) {
             receiveState = ROLE_UNKNOWN;
         }
@@ -165,12 +167,12 @@ public class FEHandler implements IEnergyHandler {
 
     @Override
     public EnergyAmount canExtractValue(@Nullable HubNode.HubMetadata hubMetadata) {
-        return send == null ? EnergyAmounts.ZERO : EnergyAmount.obtain(send.getEnergyStored());
+        return send == null ? EnergyAmounts.ZERO : EnergyAmount.obtain(send.extractEnergy(Integer.MAX_VALUE, true));
     }
 
     @Override
     public EnergyAmount canReceiveValue(@Nullable HubNode.HubMetadata hubMetadata) {
-        return receive == null ? EnergyAmounts.ZERO : EnergyAmount.obtain(Math.max(0, receive.getMaxEnergyStored() - receive.getEnergyStored()));
+        return receive == null ? EnergyAmounts.ZERO : EnergyAmount.obtain(Math.max(0, receive.receiveEnergy(Integer.MAX_VALUE, true)));
     }
 
     @Override
