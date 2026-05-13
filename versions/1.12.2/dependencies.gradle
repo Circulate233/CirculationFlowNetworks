@@ -38,6 +38,8 @@ dependencies {
     implementation("info.loenwind.autoconfig:AutoConfig:1.12.2-1.0.2")
     deobfImplementation("com.enderio.core:EnderCore:1.12.2-0.5.78:core")
     deobfImplementation("com.enderio.core:EnderCore:1.12.2-0.5.78")
-    deobfImplementation("curse.maven:EnderIO-64578:4674244")
+    implementation(rfg.deobf("com.enderio:EnderIO:1.12.2-5.3.72")) {
+        transitive = false
+    }
     deobfImplementation("curse.maven:ae2-extended-life-570458:6302098")
 }

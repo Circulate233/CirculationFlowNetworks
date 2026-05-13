@@ -70,8 +70,14 @@ public class EIOHandler implements IEnergyHandler {
         return mode != null && mode.canInputOrOutput();
     }
 
-    private static boolean canMachineSideUseEnergy(AbstractCapabilityMachineEntity machineEntity, EnumFacing facing) {
-        return isMachineEnergySideEnabled(machineEntity, facing);
+    private static boolean canMachineSideReceiveEnergy(AbstractCapabilityMachineEntity machineEntity, EnumFacing facing) {
+        IoMode mode = machineEntity.getIoMode(facing);
+        return mode != null && mode.canRecieveInput();
+    }
+
+    private static boolean canMachineSideExtractEnergy(AbstractCapabilityMachineEntity machineEntity, EnumFacing facing) {
+        IoMode mode = machineEntity.getIoMode(facing);
+        return mode != null && mode.canOutput();
     }
 
     private static boolean hasEnergy(ILegacyPoweredTile tile) {
@@ -116,18 +122,28 @@ public class EIOHandler implements IEnergyHandler {
 
     private void bindLegacyPoweredTile(ILegacyPoweredTile poweredTile) {
         if (sendState == ROLE_SUPPORTED && sendFacing != null) {
-            if (poweredTile.canConnectEnergy(sendFacing) && hasEnergy(poweredTile)) {
+            if (poweredTile instanceof AbstractGeneratorEntity generator
+                && poweredTile.canConnectEnergy(sendFacing)
+                && hasEnergy(poweredTile)
+                && generator.getMaxEnergySent() > 0) {
                 legacySendTile = poweredTile;
             } else if (!poweredTile.canConnectEnergy(sendFacing)) {
                 sendState = ROLE_UNKNOWN;
+            } else {
+                legacySendTile = null;
             }
         }
         if (receiveState == ROLE_SUPPORTED && receiveFacing != null) {
-            if (poweredTile instanceof ILegacyPoweredTile.Receiver receiver && poweredTile.canConnectEnergy(receiveFacing) && hasRoom(poweredTile)
-                && receiver.getMaxEnergyRecieved(receiveFacing) > 0) {
-                legacyReceiveTile = receiver;
+            if (poweredTile instanceof ILegacyPoweredTile.Receiver receiver && poweredTile.canConnectEnergy(receiveFacing) && hasRoom(poweredTile)) {
+                if (receiver.getMaxEnergyRecieved(receiveFacing) > 0) {
+                    legacyReceiveTile = receiver;
+                } else {
+                    legacyReceiveTile = null;
+                }
             } else if (!poweredTile.canConnectEnergy(receiveFacing)) {
                 receiveState = ROLE_UNKNOWN;
+            } else {
+                legacyReceiveTile = null;
             }
         }
         boolean attemptedSend = false;
@@ -141,11 +157,13 @@ public class EIOHandler implements IEnergyHandler {
             if (!poweredTile.canConnectEnergy(facing)) {
                 continue;
             }
-            if (needSendScan && hasEnergy(poweredTile)) {
+            if (needSendScan && poweredTile instanceof AbstractGeneratorEntity generator && hasEnergy(poweredTile)) {
                 attemptedSend = true;
-                legacySendTile = poweredTile;
-                sendFacing = facing;
-                sendState = ROLE_SUPPORTED;
+                if (generator.getMaxEnergySent() > 0) {
+                    legacySendTile = poweredTile;
+                    sendFacing = facing;
+                    sendState = ROLE_SUPPORTED;
+                }
             }
             if (needReceiveScan && poweredTile instanceof ILegacyPoweredTile.Receiver receiver && hasRoom(poweredTile)) {
                 attemptedReceive = true;
@@ -176,17 +194,24 @@ public class EIOHandler implements IEnergyHandler {
             return;
         }
         if (sendState == ROLE_SUPPORTED && sendFacing != null) {
-            if (canMachineSideUseEnergy(machineEntity, sendFacing) && hasEnergy(energyTank)) {
+            if (machineEntity instanceof AbstractCapabilityGeneratorEntity
+                && canMachineSideExtractEnergy(machineEntity, sendFacing)
+                && hasEnergy(energyTank)
+                && energyTank.getMaxUsage() > 0) {
                 machineSendTank = energyTank;
-            } else if (!canMachineSideUseEnergy(machineEntity, sendFacing)) {
+            } else if (!canMachineSideExtractEnergy(machineEntity, sendFacing)) {
                 sendState = ROLE_UNKNOWN;
+            } else {
+                machineSendTank = null;
             }
         }
         if (receiveState == ROLE_SUPPORTED && receiveFacing != null) {
-            if (canMachineSideUseEnergy(machineEntity, receiveFacing) && hasRoom(energyTank) && energyTank.getMaxEnergyRecieved() > 0) {
+            if (canMachineSideReceiveEnergy(machineEntity, receiveFacing) && hasRoom(energyTank) && energyTank.getMaxEnergyRecieved() > 0) {
                 machineReceiveTank = energyTank;
-            } else if (!canMachineSideUseEnergy(machineEntity, receiveFacing)) {
+            } else if (!canMachineSideReceiveEnergy(machineEntity, receiveFacing)) {
                 receiveState = ROLE_UNKNOWN;
+            } else {
+                machineReceiveTank = null;
             }
         }
         boolean attemptedSend = false;
@@ -197,16 +222,20 @@ public class EIOHandler implements IEnergyHandler {
             if (!needSendScan && !needReceiveScan) {
                 break;
             }
-            if (!canMachineSideUseEnergy(machineEntity, facing)) {
+            if (!isMachineEnergySideEnabled(machineEntity, facing)) {
                 continue;
             }
-            if (needSendScan && machineEntity instanceof AbstractCapabilityGeneratorEntity && hasEnergy(energyTank)) {
+            if (needSendScan && machineEntity instanceof AbstractCapabilityGeneratorEntity
+                && canMachineSideExtractEnergy(machineEntity, facing)
+                && hasEnergy(energyTank)) {
                 attemptedSend = true;
-                machineSendTank = energyTank;
-                sendFacing = facing;
-                sendState = ROLE_SUPPORTED;
+                if (energyTank.getMaxUsage() > 0) {
+                    machineSendTank = energyTank;
+                    sendFacing = facing;
+                    sendState = ROLE_SUPPORTED;
+                }
             }
-            if (needReceiveScan && hasRoom(energyTank)) {
+            if (needReceiveScan && canMachineSideReceiveEnergy(machineEntity, facing) && hasRoom(energyTank)) {
                 attemptedReceive = true;
                 if (energyTank.getMaxEnergyRecieved() > 0) {
                     machineReceiveTank = energyTank;
@@ -299,8 +328,12 @@ public class EIOHandler implements IEnergyHandler {
         legacyReceiveTile = null;
         machineSendTank = null;
         machineReceiveTank = null;
+        sendFacing = null;
+        receiveFacing = null;
         energyType = null;
         initialized = false;
+        sendState = ROLE_UNKNOWN;
+        receiveState = ROLE_UNKNOWN;
     }
 
     @Nullable

@@ -315,13 +315,13 @@ public final class EnergyMachineManager {
             int dimId = getDimensionId(world);
             var activeShielders = CirculationShielderManager.INSTANCE.getShieldersForDim(dimId);
             if (!ChunkCoordUtils.isChunkLoaded(world, pos) || (activeShielders.length > 0 && CirculationShielderManager.INSTANCE.isBlockedByShielder(dimId, pos))) {
-                return;
+                continue;
             }
 
             var mte = (IMachineNodeBlockEntity) te;
             var grid = mte.getNode().getGrid();
             if (grid == null) {
-                return;
+                continue;
             }
 
             var hubMetadata = getHubMetadata(grid);
@@ -332,7 +332,7 @@ public final class EnergyMachineManager {
             final IEnergyHandler.EnergyType type = participant.getType();
             if (type == IEnergyHandler.EnergyType.INVALID) {
                 participant.recycle();
-                return;
+                continue;
             }
 
             var gridData = getTickGridData(grid);
