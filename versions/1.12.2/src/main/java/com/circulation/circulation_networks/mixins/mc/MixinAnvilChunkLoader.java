@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(value = AnvilChunkLoader.class, remap = false)
 public class MixinAnvilChunkLoader {
 
-    @Inject(method = "loadEntities", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/chunk/Chunk;addTileEntity(Lnet/minecraft/tileentity/TileEntity;)V", shift = At.Shift.BEFORE))
+    @Inject(method = "loadEntities", at = @At("HEAD"))
     public void loadEntitiesStart(CallbackInfo ci) {
         EnergyMachineManager.INSTANCE.setCanAddManchine(false);
     }

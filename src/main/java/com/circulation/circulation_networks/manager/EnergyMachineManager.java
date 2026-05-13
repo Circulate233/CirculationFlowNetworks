@@ -16,6 +16,7 @@ import com.circulation.circulation_networks.network.nodes.HubNode;
 import com.circulation.circulation_networks.registry.RegistryEnergyHandler;
 import com.circulation.circulation_networks.utils.ChunkCoordUtils;
 import com.circulation.circulation_networks.utils.FastSmallElementSet;
+import com.circulation.circulation_networks.utils.TombstoneReferenceBag;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongMap;
@@ -54,7 +55,6 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 import net.minecraft.server.MinecraftServer;
@@ -86,8 +86,7 @@ public final class EnergyMachineManager {
     private final ReferenceSet<IEnergyHandler> usedHandlersThisTick = new ReferenceOpenHashSet<>();
     private final ReferenceSet<IEnergyHandler> retiredOriginalHandlers = new ReferenceOpenHashSet<>();
     private final Int2ObjectMap<LongSet> warningPositionsScratch = new Int2ObjectOpenHashMap<>();
-    private final ChannelMergeScratch channelMergeScratch = new ChannelMergeScratch();
-    private final ReferenceSet<IGrid> channelTickGridsScratch = new FastSmallElementSet<>();
+    private final ChannelTransferView channelTransferView = new ChannelTransferView();
     private final Set<TileEntity> cache = ConcurrentHashMap.newKeySet();
     private final Int2ObjectMap<Long2LongMap> lastWarningTicks = new Int2ObjectOpenHashMap<>();
     private final LongOpenHashSet visibleWarningsScratch = new LongOpenHashSet();
@@ -390,32 +389,16 @@ public final class EnergyMachineManager {
             if (hubNode != null && hubNode.isActive()) {
                 var channelId = hubNode.getChannelId();
                 if (!channelId.equals(HubNode.EMPTY)) {
-                    var channelGrids = collectActiveChannelTickGrids(channelId);
+                    var channelGrids = HubChannelManager.INSTANCE.getChannelGrids(channelId);
                     if (channelGrids.size() > 1) {
-                        var merged = channelMergeScratch.prepare();
-                        for (var cg : channelGrids) {
-                            var handlers = tickGridData.get(cg);
-                            if (handlers != null && handlers.activeThisTick) {
-                                merged.send.addAll(handlers.send);
-                                handlers.send.clear();
-                                merged.storage.addAll(handlers.storage);
-                                handlers.storage.clear();
-                                merged.receive.addAll(handlers.receive);
-                                handlers.receive.clear();
-                            }
-                            if (handlers != null && !handlers.receiveTargets.isEmpty()) {
-                                merged.receiveTargets.putAll(handlers.receiveTargets);
-                            }
-                            processedTickGrids.add(cg);
-                            merged.timedGrids.add(cg);
-                        }
+                        var merged = channelTransferView.prepare(channelGrids);
+                        processedTickGrids.addAll(channelGrids);
                         long startNanos = System.nanoTime();
-                        transferEnergy(merged.send, merged.receive, Status.INTERACTION);
-                        transferEnergy(merged.storage, merged.receive, Status.EXTRACT, true, false);
-                        collectWarningPositions(merged.receive, merged.receiveTargets, warningPositionsScratch);
-                        transferEnergy(merged.send, merged.storage, Status.RECEIVE, false, true);
-                        recordDistributedGridTickTimeNanos(merged.timedGrids, System.nanoTime() - startNanos);
-                        syncBackParticipants(merged.send, merged.storage, merged.receive, tickGridData);
+                        transferEnergy(merged.sendView, merged.receiveView, Status.INTERACTION);
+                        transferEnergy(merged.storageView, merged.receiveView, Status.EXTRACT, true, false);
+                        collectWarningPositions(merged.receiveView, merged.receiveTargets, warningPositionsScratch);
+                        transferEnergy(merged.sendView, merged.storageView, Status.RECEIVE, false, true);
+                        recordDistributedGridTickTimeNanos(channelGrids, System.nanoTime() - startNanos);
                         continue;
                     }
                 }
@@ -446,26 +429,6 @@ public final class EnergyMachineManager {
         clearTickMachineHandlers();
         activeTickGrids.clear();
         canAddManchine = true;
-    }
-
-    private ReferenceSet<IGrid> collectActiveChannelTickGrids(UUID channelId) {
-        channelTickGridsScratch.clear();
-        var i = activeTickGrids.listIterator();
-        while (i.hasNext()) {
-            var candidate = i.next();
-            if (candidate == null) {
-                i.remove();
-                continue;
-            }
-            if (processedTickGrids.contains(candidate)) {
-                continue;
-            }
-            var candidateHub = candidate.getHubNode();
-            if (candidateHub != null && candidateHub.isActive() && channelId.equals(candidateHub.getChannelId())) {
-                channelTickGridsScratch.add(candidate);
-            }
-        }
-        return channelTickGridsScratch;
     }
 
     //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
@@ -1092,13 +1055,14 @@ public final class EnergyMachineManager {
         }
     }
 
-    private void collectWarningPositions(ReferenceSet<EnergyTransferParticipant> receiveHandlers,
+    private void collectWarningPositions(TombstoneReferenceBag<EnergyTransferParticipant> receiveHandlers,
                                          Reference2ObjectMap<EnergyTransferParticipant, WarningTarget> receiveTargets,
                                          Int2ObjectMap<LongSet> warningPositions) {
         if (receiveHandlers.isEmpty() || receiveTargets == null || receiveTargets.isEmpty()) {
             return;
         }
-        for (var participant : receiveHandlers) {
+        for (int index = receiveHandlers.firstAliveIndex(); index >= 0; index = receiveHandlers.nextAliveIndex(index)) {
+            var participant = receiveHandlers.elementAt(index);
             var target = receiveTargets.get(participant);
             if (target == null || !isWarningSendDue(target)) {
                 continue;
@@ -1118,6 +1082,14 @@ public final class EnergyMachineManager {
                 warningPositions.put(target.dimId, dimWarnings);
             }
             dimWarnings.add(target.posLong);
+        }
+    }
+
+    private void collectWarningPositions(ObjectList<TombstoneReferenceBag<EnergyTransferParticipant>> receiveViews,
+                                         Reference2ObjectMap<EnergyTransferParticipant, WarningTarget> receiveTargets,
+                                         Int2ObjectMap<LongSet> warningPositions) {
+        for (var receiveView : receiveViews) {
+            collectWarningPositions(receiveView, receiveTargets, warningPositions);
         }
     }
 
@@ -1217,33 +1189,15 @@ public final class EnergyMachineManager {
     private record WarningTarget(int dimId, long posLong) {
     }
 
-    private static void syncBackParticipants(ReferenceSet<EnergyTransferParticipant> send,
-                                             ReferenceSet<EnergyTransferParticipant> storage,
-                                             ReferenceSet<EnergyTransferParticipant> receive,
-                                             Reference2ObjectMap<IGrid, GridTickData> tickGridData) {
-        for (var p : send) {
-            var h = tickGridData.get(p.grid());
-            if (h != null) h.send.add(p);
-        }
-        for (var p : storage) {
-            var h = tickGridData.get(p.grid());
-            if (h != null) h.storage.add(p);
-        }
-        for (var p : receive) {
-            var h = tickGridData.get(p.grid());
-            if (h != null) h.receive.add(p);
-        }
-    }
-
     static final class GridTickData {
-        final ReferenceSet<EnergyTransferParticipant> send = new ReferenceOpenHashSet<>();
-        final ReferenceSet<EnergyTransferParticipant> storage = new ReferenceOpenHashSet<>();
-        final ReferenceSet<EnergyTransferParticipant> receive = new ReferenceOpenHashSet<>();
+        final TombstoneReferenceBag<EnergyTransferParticipant> send = new TombstoneReferenceBag<>();
+        final TombstoneReferenceBag<EnergyTransferParticipant> storage = new TombstoneReferenceBag<>();
+        final TombstoneReferenceBag<EnergyTransferParticipant> receive = new TombstoneReferenceBag<>();
         final Reference2ObjectMap<EnergyTransferParticipant, WarningTarget> receiveTargets = new Reference2ObjectOpenHashMap<>();
         boolean activeThisTick;
 
         @NotNull
-        ReferenceSet<EnergyTransferParticipant> handlers(IEnergyHandler.EnergyType type) {
+        TombstoneReferenceBag<EnergyTransferParticipant> handlers(IEnergyHandler.EnergyType type) {
             return switch (type) {
                 case SEND -> send;
                 case STORAGE -> storage;
@@ -1253,9 +1207,9 @@ public final class EnergyMachineManager {
         }
 
         void prepareForTick() {
-            send.clear();
-            storage.clear();
-            receive.clear();
+            send.clearFast();
+            storage.clearFast();
+            receive.clearFast();
             receiveTargets.clear();
             activeThisTick = true;
         }
@@ -1264,33 +1218,298 @@ public final class EnergyMachineManager {
             recycle(send);
             recycle(storage);
             recycle(receive);
-            send.clear();
-            storage.clear();
-            receive.clear();
+            send.clearAndNullUsed();
+            storage.clearAndNullUsed();
+            receive.clearAndNullUsed();
             receiveTargets.clear();
             activeThisTick = false;
         }
 
-        private static void recycle(ReferenceSet<EnergyTransferParticipant> handlers) {
-            for (var participant : handlers) {
-                participant.recycle();
+        private static void recycle(TombstoneReferenceBag<EnergyTransferParticipant> handlers) {
+            for (int index = handlers.firstAliveIndex(); index >= 0; index = handlers.nextAliveIndex(index)) {
+                handlers.elementAt(index).recycle();
             }
         }
     }
 
-    private static final class ChannelMergeScratch {
-        final ReferenceSet<EnergyTransferParticipant> send = new ReferenceOpenHashSet<>();
-        final ReferenceSet<EnergyTransferParticipant> storage = new ReferenceOpenHashSet<>();
-        final ReferenceSet<EnergyTransferParticipant> receive = new ReferenceOpenHashSet<>();
-        final Reference2ObjectMap<EnergyTransferParticipant, WarningTarget> receiveTargets = new Reference2ObjectOpenHashMap<>();
-        final ReferenceSet<IGrid> timedGrids = new FastSmallElementSet<>();
+    static void transferEnergy(TombstoneReferenceBag<EnergyTransferParticipant> send,
+                               TombstoneReferenceBag<EnergyTransferParticipant> receive,
+                               Status status) {
+        transferEnergy(send, receive, status, false, false);
+    }
 
-        ChannelMergeScratch prepare() {
-            send.clear();
-            storage.clear();
-            receive.clear();
+    static void transferEnergy(ObjectList<TombstoneReferenceBag<EnergyTransferParticipant>> sendView,
+                               ObjectList<TombstoneReferenceBag<EnergyTransferParticipant>> receiveView,
+                               Status status) {
+        transferEnergy(sendView, receiveView, status, false, false);
+    }
+
+    static void transferEnergy(ObjectList<TombstoneReferenceBag<EnergyTransferParticipant>> sendView,
+                               ObjectList<TombstoneReferenceBag<EnergyTransferParticipant>> receiveView,
+                               Status status,
+                               boolean sendAreStorage,
+                               boolean receiversAreStorage) {
+        if (sendView.isEmpty() || receiveView.isEmpty()) {
+            return;
+        }
+        for (var send : sendView) {
+            if (send.isEmpty()) {
+                continue;
+            }
+            for (var receive : receiveView) {
+                if (receive.isEmpty()) {
+                    continue;
+                }
+                transferEnergy(send, receive, status, sendAreStorage, receiversAreStorage);
+                if (!sendAreStorage && send.isEmpty()) {
+                    break;
+                }
+            }
+        }
+    }
+
+    static void transferEnergy(ObjectList<TombstoneReferenceBag<EnergyTransferParticipant>> sendView,
+                               Collection<EnergyTransferParticipant> receive,
+                               Status status) {
+        if (sendView.isEmpty() || receive.isEmpty()) {
+            return;
+        }
+        for (var send : sendView) {
+            if (send.isEmpty()) {
+                continue;
+            }
+            transferEnergy(send, receive, status);
+            if (receive.isEmpty()) {
+                return;
+            }
+        }
+    }
+
+    static void transferEnergy(TombstoneReferenceBag<EnergyTransferParticipant> send,
+                               TombstoneReferenceBag<EnergyTransferParticipant> receive,
+                               Status status,
+                               boolean sendAreStorage,
+                               boolean receiversAreStorage) {
+        if (send.isEmpty() || receive.isEmpty()) {
+            return;
+        }
+        int senderIndex = send.firstAliveIndex();
+        while (senderIndex >= 0) {
+            if (receive.isEmpty()) {
+                return;
+            }
+            var sender = send.elementAt(senderIndex);
+            int currentSenderIndex = senderIndex;
+            EnergyAmount extractable = sender.canExtractValue();
+            try {
+                if (extractable.isZero()) {
+                    senderIndex = advanceOrRemoveSender(send, senderIndex, sendAreStorage);
+                    continue;
+                }
+                int receiverIndex = receive.firstAliveIndex();
+                while (receiverIndex >= 0) {
+                    var receiver = receive.elementAt(receiverIndex);
+                    int currentReceiverIndex = receiverIndex;
+                    if (sender.canExtract(receiver) && receiver.canReceive(sender)) {
+                        EnergyAmount receivable = receiver.canReceiveValue();
+                        try {
+                            if (receivable.isZero()) {
+                                if (!receiversAreStorage) {
+                                    receiver.recycle();
+                                    receive.removeAt(currentReceiverIndex);
+                                    receive.compactIfNeeded();
+                                    receiverIndex = receive.findAliveIndexAtOrAfter(currentReceiverIndex);
+                                } else {
+                                    receiverIndex = receive.nextAliveIndex(currentReceiverIndex);
+                                }
+                                continue;
+                            }
+                            int compare = extractable.compareTo(receivable);
+                            EnergyAmount transferLimit = compare <= 0 ? EnergyAmount.obtain(extractable) : EnergyAmount.obtain(receivable);
+                            try {
+                                EnergyAmount extracted = sender.extractEnergy(transferLimit);
+                                try {
+                                    if (extracted.isZero()) {
+                                        sender.recycle();
+                                        send.removeAt(currentSenderIndex);
+                                        send.compactIfNeeded();
+                                        senderIndex = send.findAliveIndexAtOrAfter(currentSenderIndex);
+                                        break;
+                                    }
+                                    extractable.subtract(extracted);
+                                    EnergyAmount received = receiver.receiveEnergy(extracted);
+                                    try {
+                                        if (!received.isZero()) {
+                                            status.interaction(received, sender.interaction(), receiver.interaction());
+                                        }
+                                        if (!receiversAreStorage && received.compareTo(receivable) >= 0) {
+                                            receiver.recycle();
+                                            receive.removeAt(currentReceiverIndex);
+                                            receive.compactIfNeeded();
+                                            receiverIndex = receive.findAliveIndexAtOrAfter(currentReceiverIndex);
+                                        } else {
+                                            receiverIndex = receive.nextAliveIndex(currentReceiverIndex);
+                                        }
+                                        if (!sendAreStorage && !extractable.isPositive()) {
+                                            sender.recycle();
+                                            send.removeAt(currentSenderIndex);
+                                            send.compactIfNeeded();
+                                            senderIndex = send.findAliveIndexAtOrAfter(currentSenderIndex);
+                                            break;
+                                        }
+                                    } finally {
+                                        received.recycle();
+                                    }
+                                } finally {
+                                    extracted.recycle();
+                                }
+                            } finally {
+                                transferLimit.recycle();
+                            }
+                        } finally {
+                            receivable.recycle();
+                        }
+                    } else {
+                        receiverIndex = receive.nextAliveIndex(currentReceiverIndex);
+                    }
+                }
+                if (receiverIndex < 0) {
+                    senderIndex = send.nextAliveIndex(currentSenderIndex);
+                }
+            } finally {
+                extractable.recycle();
+            }
+        }
+    }
+
+    static void transferEnergy(TombstoneReferenceBag<EnergyTransferParticipant> send,
+                               Collection<EnergyTransferParticipant> receive,
+                               Status status) {
+        if (send.isEmpty() || receive.isEmpty()) {
+            return;
+        }
+        int senderIndex = send.firstAliveIndex();
+        while (senderIndex >= 0) {
+            if (receive.isEmpty()) {
+                return;
+            }
+            var sender = send.elementAt(senderIndex);
+            int currentSenderIndex = senderIndex;
+            EnergyAmount extractable = sender.canExtractValue();
+            try {
+                if (extractable.isZero()) {
+                    sender.recycle();
+                    send.removeAt(currentSenderIndex);
+                    send.compactIfNeeded();
+                    senderIndex = send.findAliveIndexAtOrAfter(currentSenderIndex);
+                    continue;
+                }
+                var receiveIterator = receive.iterator();
+                while (receiveIterator.hasNext()) {
+                    var receiver = receiveIterator.next();
+                    if (!sender.canExtract(receiver) || !receiver.canReceive(sender)) {
+                        continue;
+                    }
+                    EnergyAmount receivable = receiver.canReceiveValue();
+                    try {
+                        if (receivable.isZero()) {
+                            receiver.recycle();
+                            receiveIterator.remove();
+                            continue;
+                        }
+                        int compare = extractable.compareTo(receivable);
+                        EnergyAmount transferLimit = compare <= 0 ? EnergyAmount.obtain(extractable) : EnergyAmount.obtain(receivable);
+                        try {
+                            EnergyAmount extracted = sender.extractEnergy(transferLimit);
+                            try {
+                                if (extracted.isZero()) {
+                                    sender.recycle();
+                                    send.removeAt(currentSenderIndex);
+                                    send.compactIfNeeded();
+                                    senderIndex = send.findAliveIndexAtOrAfter(currentSenderIndex);
+                                    break;
+                                }
+                                extractable.subtract(extracted);
+                                EnergyAmount received = receiver.receiveEnergy(extracted);
+                                try {
+                                    if (!received.isZero()) {
+                                        status.interaction(received, sender.interaction(), receiver.interaction());
+                                    }
+                                    if (received.compareTo(receivable) >= 0) {
+                                        receiver.recycle();
+                                        receiveIterator.remove();
+                                    }
+                                    if (!extractable.isPositive()) {
+                                        sender.recycle();
+                                        send.removeAt(currentSenderIndex);
+                                        send.compactIfNeeded();
+                                        senderIndex = send.findAliveIndexAtOrAfter(currentSenderIndex);
+                                        break;
+                                    }
+                                } finally {
+                                    received.recycle();
+                                }
+                            } finally {
+                                extracted.recycle();
+                            }
+                        } finally {
+                            transferLimit.recycle();
+                        }
+                    } finally {
+                        receivable.recycle();
+                    }
+                }
+                if (extractable.isPositive()) {
+                    senderIndex = send.nextAliveIndex(currentSenderIndex);
+                }
+            } finally {
+                extractable.recycle();
+            }
+        }
+    }
+
+    private static int advanceOrRemoveSender(TombstoneReferenceBag<EnergyTransferParticipant> send,
+                                             int senderIndex,
+                                             boolean sendAreStorage) {
+        if (!sendAreStorage) {
+            var sender = send.elementAt(senderIndex);
+            sender.recycle();
+            send.removeAt(senderIndex);
+            send.compactIfNeeded();
+            return send.findAliveIndexAtOrAfter(senderIndex);
+        }
+        return send.nextAliveIndex(senderIndex);
+    }
+
+    private static final class ChannelTransferView {
+        final ObjectList<TombstoneReferenceBag<EnergyTransferParticipant>> sendView = new ObjectArrayList<>();
+        final ObjectList<TombstoneReferenceBag<EnergyTransferParticipant>> storageView = new ObjectArrayList<>();
+        final ObjectList<TombstoneReferenceBag<EnergyTransferParticipant>> receiveView = new ObjectArrayList<>();
+        final Reference2ObjectMap<EnergyTransferParticipant, WarningTarget> receiveTargets = new Reference2ObjectOpenHashMap<>();
+
+        ChannelTransferView prepare(Collection<IGrid> grids) {
+            sendView.clear();
+            storageView.clear();
+            receiveView.clear();
             receiveTargets.clear();
-            timedGrids.clear();
+            for (var grid : grids) {
+                var handlers = INSTANCE.tickGridData.get(grid);
+                if (handlers == null || !handlers.activeThisTick) {
+                    continue;
+                }
+                if (!handlers.send.isEmpty()) {
+                    sendView.add(handlers.send);
+                }
+                if (!handlers.storage.isEmpty()) {
+                    storageView.add(handlers.storage);
+                }
+                if (!handlers.receive.isEmpty()) {
+                    receiveView.add(handlers.receive);
+                }
+                if (!handlers.receiveTargets.isEmpty()) {
+                    receiveTargets.putAll(handlers.receiveTargets);
+                }
+            }
             return this;
         }
     }
@@ -1314,11 +1533,6 @@ public final class EnergyMachineManager {
         public String getInteractionTimeMicrosString() {
             ensureCurrent();
             return Long.toString(interactionTimeNanos / 1_000L);
-        }
-
-        long getInteractionTimeNanos() {
-            ensureCurrent();
-            return interactionTimeNanos;
         }
 
         void recordGridTickTimeNanos(long durationNanos) {
