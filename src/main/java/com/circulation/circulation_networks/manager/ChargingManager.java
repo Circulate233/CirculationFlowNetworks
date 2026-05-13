@@ -12,6 +12,7 @@ import com.circulation.circulation_networks.network.nodes.HubNode;
 import com.circulation.circulation_networks.utils.AccessoryInventoryCompat;
 import com.circulation.circulation_networks.utils.Functions;
 import com.circulation.circulation_networks.utils.PlayerInventoryCompat;
+import com.circulation.circulation_networks.utils.TombstoneReferenceBag;
 import com.circulation.circulation_networks.utils.WorldResolveCompat;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
@@ -189,19 +190,6 @@ public final class ChargingManager {
         }
     }
 
-    private static void syncBackSenders(ReferenceSet<EnergyTransferParticipant> send,
-                                        ReferenceSet<EnergyTransferParticipant> storage,
-                                        Reference2ObjectMap<IGrid, EnergyMachineManager.GridTickData> machineMap) {
-        for (var p : send) {
-            var h = machineMap.get(p.grid());
-            if (h != null) h.send.add(p);
-        }
-        for (var p : storage) {
-            var h = machineMap.get(p.grid());
-            if (h != null) h.storage.add(p);
-        }
-    }
-
     private static void transferEnergyForGrid(IGrid grid,
                                               Reference2ObjectMap<IGrid, Set<EnergyTransferParticipant>> chargeTargetsByGrid,
                                               Reference2ObjectMap<IGrid, EnergyMachineManager.GridTickData> machineMap,
@@ -217,31 +205,22 @@ public final class ChargingManager {
 
                 for (var channelGrid : channelGrids) {
                     processedGrids.add(channelGrid);
-                    merged.timedGrids.add(channelGrid);
-                    var handlers = machineMap.get(channelGrid);
-                    if (handlers != null && handlers.activeThisTick) {
-                        merged.send.addAll(handlers.send);
-                        handlers.send.clear();
-                        merged.storage.addAll(handlers.storage);
-                        handlers.storage.clear();
-                    }
                     var gridTargets = chargeTargetsByGrid.get(channelGrid);
                     if (gridTargets != null) {
                         merged.targets.addAll(gridTargets);
                         gridTargets.clear();
                     }
                 }
+                merged.bind(channelGrids, machineMap);
 
                 if (merged.targets.isEmpty()) {
-                    syncBackSenders(merged.send, merged.storage, machineMap);
                     return;
                 }
 
                 long startNanos = System.nanoTime();
                 transferEnergy(merged.send, merged.targets, EnergyMachineManager.Status.EXTRACT);
                 transferEnergy(merged.storage, merged.targets, EnergyMachineManager.Status.EXTRACT);
-                EnergyMachineManager.recordDistributedGridTickTimeNanos(merged.timedGrids, System.nanoTime() - startNanos);
-                syncBackSenders(merged.send, merged.storage, machineMap);
+                EnergyMachineManager.recordDistributedGridTickTimeNanos(channelGrids, System.nanoTime() - startNanos);
                 for (var participant : merged.targets) {
                     participant.recycle();
                 }
@@ -562,17 +541,31 @@ public final class ChargingManager {
     enum ChargingPluginScope {NONE, WIDE_AREA, DIMENSIONAL}
 
     private static final class ChannelTransferScratch {
-        final ReferenceSet<EnergyTransferParticipant> send = new ReferenceOpenHashSet<>();
-        final ReferenceSet<EnergyTransferParticipant> storage = new ReferenceOpenHashSet<>();
+        final ObjectList<TombstoneReferenceBag<EnergyTransferParticipant>> send = new ObjectArrayList<>();
+        final ObjectList<TombstoneReferenceBag<EnergyTransferParticipant>> storage = new ObjectArrayList<>();
         final ReferenceSet<EnergyTransferParticipant> targets = new ReferenceOpenHashSet<>();
-        final ReferenceSet<IGrid> timedGrids = new ReferenceOpenHashSet<>();
 
         ChannelTransferScratch prepare() {
             send.clear();
             storage.clear();
             targets.clear();
-            timedGrids.clear();
             return this;
+        }
+
+        void bind(Collection<IGrid> grids,
+                  Reference2ObjectMap<IGrid, EnergyMachineManager.GridTickData> machineMap) {
+            for (var grid : grids) {
+                var handlers = machineMap.get(grid);
+                if (handlers == null || !handlers.activeThisTick) {
+                    continue;
+                }
+                if (!handlers.send.isEmpty()) {
+                    send.add(handlers.send);
+                }
+                if (!handlers.storage.isEmpty()) {
+                    storage.add(handlers.storage);
+                }
+            }
         }
     }
 
