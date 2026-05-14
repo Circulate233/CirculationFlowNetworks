@@ -11,19 +11,6 @@ import org.jetbrains.annotations.Nullable;
 public interface IEnergyHandler {
 
     //~ if >=1.20 '(TileEntity ' -> '(BlockEntity ' {
-    static @Nullable IEnergyHandler release(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
-        var m = RegistryEnergyHandler.getEnergyManager(tileEntity);
-        if (m == null) return null;
-        return release(tileEntity, m, hubMetadata);
-    }
-
-    static @Nullable IEnergyHandler release(TileEntity tileEntity,
-                                            IEnergyHandlerManager manager,
-                                            @Nullable HubNode.HubMetadata hubMetadata) {
-        var t = manager.newBlockEntityInstance();
-        return t.init(tileEntity, hubMetadata);
-    }
-
     static @Nullable IEnergyHandler release(ItemStack stack, @Nullable HubNode.HubMetadata hubMetadata) {
         if (stack == null || stack.isEmpty()) return null;
         var m = RegistryEnergyHandler.getEnergyManager(stack);

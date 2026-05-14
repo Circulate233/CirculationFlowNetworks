@@ -12,7 +12,8 @@ import java.util.Objects;
 /**
  * Server tick hot path container backed by a sparse array plus occupancy bitset.
  * Elements are compared by reference identity and deletions leave tombstones
- * until a later compaction pass.
+ * until a later compaction pass. Compaction only removes interior tombstones;
+ * once grown, backing arrays keep their capacity and never shrink.
  *
  * <p>This container is intentionally single-threaded and only supports one
  * active iterator at a time. Hot paths should prefer the index-based alive-slot
@@ -173,6 +174,8 @@ public final class TombstoneReferenceBag<T> extends AbstractCollection<T> {
         if (!isAlive(index)) {
             return;
         }
+        // Hot paths may remove during alive-index traversal. Leave a tombstone
+        // here and let compaction happen only after the traversal finishes.
         elements[index] = null;
         clearLive(index);
         freeStack[freeTop++] = index;
@@ -244,6 +247,8 @@ public final class TombstoneReferenceBag<T> extends AbstractCollection<T> {
             clearAndNullUsed();
             return;
         }
+        // Compact only rewrites the used prefix to eliminate tombstones.
+        // Capacity stays unchanged so a grown bag never pays shrink/regrow churn.
         int writeIndex = 0;
         for (int readIndex = firstAliveIndex(); readIndex >= 0; readIndex = nextAliveIndex(readIndex)) {
             Object value = elements[readIndex];
@@ -309,6 +314,8 @@ public final class TombstoneReferenceBag<T> extends AbstractCollection<T> {
         private int nextIndex;
         private int lastReturnedIndex;
         private boolean canRemove;
+        private boolean pendingCompact;
+        private boolean compactedAfterExhaustion;
 
         private ReusableIterator(TombstoneReferenceBag<E> owner) {
             this.owner = owner;
@@ -318,10 +325,16 @@ public final class TombstoneReferenceBag<T> extends AbstractCollection<T> {
             nextIndex = owner.firstAliveIndex();
             lastReturnedIndex = -1;
             canRemove = false;
+            pendingCompact = false;
+            compactedAfterExhaustion = false;
         }
 
         @Override
         public boolean hasNext() {
+            if (nextIndex < 0) {
+                compactAfterExhaustion();
+                return false;
+            }
             return nextIndex >= 0;
         }
 
@@ -343,10 +356,24 @@ public final class TombstoneReferenceBag<T> extends AbstractCollection<T> {
                 throw new IllegalStateException();
             }
             owner.removeAt(lastReturnedIndex);
-            owner.compactIfNeeded();
             nextIndex = owner.findAliveIndexAtOrAfter(lastReturnedIndex);
             lastReturnedIndex = -1;
             canRemove = false;
+            pendingCompact = true;
+            compactedAfterExhaustion = false;
+        }
+
+        /**
+         * Delay compaction until the iterator is fully exhausted so live-slot
+         * indexes stay stable for the whole traversal.
+         */
+        private void compactAfterExhaustion() {
+            if (!pendingCompact || compactedAfterExhaustion) {
+                return;
+            }
+            owner.compactIfNeeded();
+            pendingCompact = false;
+            compactedAfterExhaustion = true;
         }
     }
 }

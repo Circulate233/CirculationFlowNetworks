@@ -1298,6 +1298,8 @@ public final class EnergyMachineManager {
             if (receive.isEmpty()) {
                 return;
             }
+            // Keep only tombstone removals inside this traversal. Compaction
+            // reorders live slots and must stay outside the active cursor pass.
             var sender = send.elementAt(senderIndex);
             int currentSenderIndex = senderIndex;
             EnergyAmount extractable = sender.canExtractValue();
@@ -1317,7 +1319,6 @@ public final class EnergyMachineManager {
                                 if (!receiversAreStorage) {
                                     receiver.recycle();
                                     receive.removeAt(currentReceiverIndex);
-                                    receive.compactIfNeeded();
                                     receiverIndex = receive.findAliveIndexAtOrAfter(currentReceiverIndex);
                                 } else {
                                     receiverIndex = receive.nextAliveIndex(currentReceiverIndex);
@@ -1332,7 +1333,6 @@ public final class EnergyMachineManager {
                                     if (extracted.isZero()) {
                                         sender.recycle();
                                         send.removeAt(currentSenderIndex);
-                                        send.compactIfNeeded();
                                         senderIndex = send.findAliveIndexAtOrAfter(currentSenderIndex);
                                         break;
                                     }
@@ -1345,15 +1345,15 @@ public final class EnergyMachineManager {
                                         if (!receiversAreStorage && received.compareTo(receivable) >= 0) {
                                             receiver.recycle();
                                             receive.removeAt(currentReceiverIndex);
-                                            receive.compactIfNeeded();
                                             receiverIndex = receive.findAliveIndexAtOrAfter(currentReceiverIndex);
                                         } else {
                                             receiverIndex = receive.nextAliveIndex(currentReceiverIndex);
                                         }
+                                        // Delay compaction until traversal ends so
+                                        // alive-slot indexes remain stable mid-pass.
                                         if (!sendAreStorage && !extractable.isPositive()) {
                                             sender.recycle();
                                             send.removeAt(currentSenderIndex);
-                                            send.compactIfNeeded();
                                             senderIndex = send.findAliveIndexAtOrAfter(currentSenderIndex);
                                             break;
                                         }
@@ -1400,7 +1400,6 @@ public final class EnergyMachineManager {
                 if (extractable.isZero()) {
                     sender.recycle();
                     send.removeAt(currentSenderIndex);
-                    send.compactIfNeeded();
                     senderIndex = send.findAliveIndexAtOrAfter(currentSenderIndex);
                     continue;
                 }
@@ -1425,7 +1424,6 @@ public final class EnergyMachineManager {
                                 if (extracted.isZero()) {
                                     sender.recycle();
                                     send.removeAt(currentSenderIndex);
-                                    send.compactIfNeeded();
                                     senderIndex = send.findAliveIndexAtOrAfter(currentSenderIndex);
                                     break;
                                 }
@@ -1442,7 +1440,6 @@ public final class EnergyMachineManager {
                                     if (!extractable.isPositive()) {
                                         sender.recycle();
                                         send.removeAt(currentSenderIndex);
-                                        send.compactIfNeeded();
                                         senderIndex = send.findAliveIndexAtOrAfter(currentSenderIndex);
                                         break;
                                     }
@@ -1475,7 +1472,6 @@ public final class EnergyMachineManager {
             var sender = send.elementAt(senderIndex);
             sender.recycle();
             send.removeAt(senderIndex);
-            send.compactIfNeeded();
             return send.findAliveIndexAtOrAfter(senderIndex);
         }
         return send.nextAliveIndex(senderIndex);
