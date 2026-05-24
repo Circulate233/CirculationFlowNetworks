@@ -234,12 +234,7 @@ public final class NetworkManager {
 
     private void registerNodeIndices(String dimId, INode node) {
         BlockPos pos = node.getPos();
-
-        var pMap = posNodes.get(dimId);
-        if (pMap == posNodes.defaultReturnValue()) {
-            posNodes.put(dimId, pMap = new Long2ReferenceOpenHashMap<>());
-        }
-        pMap.put(BlockPosCompat.toLong(pos), node);
+        long posLong = BlockPosCompat.toLong(pos);
 
         long ownChunkCoord = Functions.mergeChunkCoords(pos);
         var locMap = nodeLocation.get(dimId);
@@ -282,16 +277,40 @@ public final class NetworkManager {
             nodeScope.put(dimId, nodeScopeMap);
         }
         nodeScopeMap.put(node, LongSets.unmodifiable(chunksCovered));
+
+        var pMap = posNodes.get(dimId);
+        if (pMap == posNodes.defaultReturnValue()) {
+            posNodes.put(dimId, pMap = new Long2ReferenceOpenHashMap<>());
+        }
+        INode indexedNode = pMap.get(posLong);
+        if (indexedNode != null && indexedNode != node) {
+            throw new IllegalStateException("Node position already indexed at dim=" + dimId + " pos=" + pos);
+        }
+        pMap.put(posLong, node);
     }
 
     private void unregisterNodeIndices(String dimId, INode node) {
-        posNodes.get(dimId).remove(BlockPosCompat.toLong(node.getPos()));
+        var pMap = posNodes.get(dimId);
+        long posLong = BlockPosCompat.toLong(node.getPos());
+        if (pMap != posNodes.defaultReturnValue() && pMap.get(posLong) == node) {
+            pMap.remove(posLong);
+        }
 
         long ownChunkCoord = Functions.mergeChunkCoords(node.getPos());
-        nodeLocation.get(dimId).get(ownChunkCoord).remove(node);
+        var locMap = nodeLocation.get(dimId);
+        if (locMap != nodeLocation.defaultReturnValue()) {
+            var locSet = locMap.get(ownChunkCoord);
+            if (locSet != locMap.defaultReturnValue()) {
+                locSet.remove(node);
+                if (locSet.isEmpty()) {
+                    locMap.remove(ownChunkCoord);
+                }
+            }
+        }
 
         var sm = scopeNode.get(dimId);
-        LongSet coveredChunks = nodeScope.get(dimId).remove(node);
+        var nodeScopeMap = nodeScope.get(dimId);
+        LongSet coveredChunks = nodeScopeMap == nodeScope.defaultReturnValue() ? null : nodeScopeMap.remove(node);
         if (coveredChunks != null && sm != scopeNode.defaultReturnValue()) {
             for (long chunk : coveredChunks) {
                 var set = sm.get(chunk);
@@ -606,8 +625,18 @@ public final class NetworkManager {
         }
 
         String dimId = getDimensionId(newNode);
+        INode replacedNode = getIndexedNode(dimId, newNode.getPos());
+        if (replacedNode != null && replacedNode != newNode) {
+            removeNodeInternal(replacedNode);
+        }
         activeNodes.add(newNode);
-        registerNodeIndices(dimId, newNode);
+        try {
+            registerNodeIndices(dimId, newNode);
+        } catch (RuntimeException e) {
+            unregisterNodeIndices(dimId, newNode);
+            activeNodes.remove(newNode);
+            throw e;
+        }
 
         ReferenceSet<INode> candidates = new ReferenceOpenHashSet<>();
         var scopeMap = scopeNode.get(dimId);
@@ -681,14 +710,18 @@ public final class NetworkManager {
 
     private boolean hasHubConflict(INode newNode) {
         int hubCount = (newNode instanceof IHubNode) ? 1 : 0;
+        INode replacedNode = getIndexedNode(getDimensionId(newNode), newNode.getPos());
         ReferenceSet<IGrid> countedGrids = new ReferenceOpenHashSet<>();
         for (INode existing : getLinkedNodesForNode(newNode)) {
+            if (isSamePositionNode(newNode, existing)) {
+                continue;
+            }
             IGrid grid = existing.getGrid();
             if (grid == null || !countedGrids.add(grid)) {
                 continue;
             }
             var hub = grid.getHubNode();
-            if (hub != null && hub.isActive()) {
+            if (hub != null && hub != replacedNode && hub.isActive()) {
                 hubCount++;
                 if (hubCount > 1) {
                     return true;
@@ -696,6 +729,19 @@ public final class NetworkManager {
             }
         }
         return false;
+    }
+
+    @Nullable
+    private INode getIndexedNode(String dimId, BlockPos pos) {
+        var pMap = posNodes.get(dimId);
+        if (pMap == posNodes.defaultReturnValue()) {
+            return null;
+        }
+        return pMap.get(BlockPosCompat.toLong(pos));
+    }
+
+    private static boolean isSamePositionNode(INode a, INode b) {
+        return a != null && b != null && a.getDimensionId().equals(b.getDimensionId()) && a.getPos().equals(b.getPos());
     }
 
     private @NotNull ReferenceSet<INode> getLinkedNodesForNode(INode newNode) {
