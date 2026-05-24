@@ -1298,8 +1298,6 @@ public final class EnergyMachineManager {
             if (receive.isEmpty()) {
                 return;
             }
-            // Keep only tombstone removals inside this traversal. Compaction
-            // reorders live slots and must stay outside the active cursor pass.
             var sender = send.elementAt(senderIndex);
             int currentSenderIndex = senderIndex;
             EnergyAmount extractable = sender.canExtractValue();

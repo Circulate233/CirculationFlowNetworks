@@ -1,9 +1,11 @@
 package com.circulation.circulation_networks;
 
+import com.circulation.circulation_networks.api.INodeBlockEntity;
 import com.circulation.circulation_networks.energy.manager.AE2HandlerManager;
 import com.circulation.circulation_networks.energy.manager.DEHandlerManager;
 import com.circulation.circulation_networks.energy.manager.FEHandlerManager;
 import com.circulation.circulation_networks.energy.manager.MEKHandlerManager;
+import com.circulation.circulation_networks.events.BlockEntityLifeCycleEvent;
 import com.circulation.circulation_networks.handlers.NodePlacementValidationHandler;
 import com.circulation.circulation_networks.handlers.NodeRescanHandler;
 import com.circulation.circulation_networks.manager.ChargingManager;
@@ -24,6 +26,7 @@ import com.circulation.circulation_networks.registry.RegistryBlocks;
 import com.circulation.circulation_networks.registry.RegistryEnergyHandler;
 import com.circulation.circulation_networks.registry.RegistryItems;
 import com.circulation.circulation_networks.tiles.MultiblockShellBlockEntity;
+import com.circulation.circulation_networks.utils.BlockEntityLifecycleHooks;
 import com.circulation.circulation_networks.utils.HubPlatformServices;
 import com.circulation.circulation_networks.utils.HubTeamServices;
 import com.circulation.circulation_networks.utils.Packet;
@@ -187,8 +190,23 @@ public final class CirculationFlowNetworks {
         if (!(event.getLevel() instanceof Level level) || level.isClientSide() || !(event.getChunk() instanceof LevelChunk chunk)) {
             return;
         }
+        syncLoadedChunkNodeBlockEntities(level, chunk);
         NetworkManager.INSTANCE.validatePendingNodesInChunk(level, chunk.getPos().x, chunk.getPos().z);
         PocketNodeManager.INSTANCE.onChunkLoad(level, chunk.getPos().x, chunk.getPos().z);
+    }
+
+    private void syncLoadedChunkNodeBlockEntities(Level level, LevelChunk chunk) {
+        if (!NetworkManager.INSTANCE.isInit()) {
+            return;
+        }
+        for (var blockEntity : chunk.getBlockEntities().values()) {
+            if (!(blockEntity instanceof INodeBlockEntity<?> nodeBlockEntity)) {
+                continue;
+            }
+            nodeBlockEntity.syncNodeAfterNetworkInit();
+            BlockEntityLifecycleHooks.dispatchValidate(
+                new BlockEntityLifeCycleEvent.Validate(level, blockEntity.getBlockPos(), blockEntity));
+        }
     }
 
     private void onBlockBreak(BlockEvent.BreakEvent event) {

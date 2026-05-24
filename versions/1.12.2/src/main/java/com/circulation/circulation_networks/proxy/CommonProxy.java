@@ -1,6 +1,7 @@
 package com.circulation.circulation_networks.proxy;
 
 import com.circulation.circulation_networks.CirculationFlowNetworks;
+import com.circulation.circulation_networks.api.INodeBlockEntity;
 import com.circulation.circulation_networks.energy.manager.AE2HandlerManager;
 import com.circulation.circulation_networks.energy.manager.EIOHandlerManager;
 import com.circulation.circulation_networks.energy.manager.EUHandlerManager;
@@ -188,8 +189,23 @@ public class CommonProxy implements IGuiHandler {
         if (event.getWorld().isRemote) {
             return;
         }
+        syncLoadedChunkNodeBlockEntities(event);
         NetworkManager.INSTANCE.validatePendingNodesInChunk(event.getWorld(), event.getChunk().x, event.getChunk().z);
         PocketNodeManager.INSTANCE.onChunkLoad(event.getWorld(), event.getChunk().x, event.getChunk().z);
+    }
+
+    private void syncLoadedChunkNodeBlockEntities(ChunkEvent.Load event) {
+        if (!NetworkManager.INSTANCE.isInit()) {
+            return;
+        }
+        World world = event.getWorld();
+        for (TileEntity blockEntity : event.getChunk().getTileEntityMap().values()) {
+            if (!(blockEntity instanceof INodeBlockEntity<?> nodeBlockEntity)) {
+                continue;
+            }
+            nodeBlockEntity.syncNodeAfterNetworkInit();
+            BlockEntityLifecycleHooks.dispatchValidate(new BlockEntityLifeCycleEvent.Validate(world, blockEntity.getPos(), blockEntity));
+        }
     }
 
     public void revalidateLoadedNodeBlockEntities() {

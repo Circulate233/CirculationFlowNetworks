@@ -167,7 +167,9 @@ public final class NetworkManager {
             return readCompressedNbt(file);
         } catch (IOException e) {
             CirculationFlowNetworks.LOGGER.warn("Failed to read {} from {}", context, file.getAbsolutePath(), e);
-            file.delete();
+            if (!file.delete()) {
+                CirculationFlowNetworks.LOGGER.warn("Failed to delete unreadable {} file {}", context, file.getAbsolutePath());
+            }
             return null;
         }
     }
@@ -365,13 +367,8 @@ public final class NetworkManager {
     private void registerNodeIndices(int dimId, INode node) {
         rememberSerializedDimensionKey(dimId, node);
         BlockPos pos = node.getPos();
-
-        var pMap = posNodes.get(dimId);
-        if (pMap == posNodes.defaultReturnValue()) {
-            posNodes.put(dimId, pMap = new Long2ReferenceOpenHashMap<>());
-        }
         //~ if >=1.20 '.toLong()' -> '.asLong()' {
-        pMap.put(pos.toLong(), node);
+        long posLong = pos.toLong();
         //~}
 
         long ownChunkCoord = ChunkCoordUtils.mergeChunkCoords(pos);
@@ -415,6 +412,16 @@ public final class NetworkManager {
             nodeScope.put(dimId, nodeScopeMap);
         }
         nodeScopeMap.put(node, LongSets.unmodifiable(chunksCovered));
+
+        var pMap = posNodes.get(dimId);
+        if (pMap == posNodes.defaultReturnValue()) {
+            posNodes.put(dimId, pMap = new Long2ReferenceOpenHashMap<>());
+        }
+        INode indexedNode = pMap.get(posLong);
+        if (indexedNode != null && indexedNode != node) {
+            throw new IllegalStateException("Node position already indexed at dim=" + dimId + " pos=" + pos);
+        }
+        pMap.put(posLong, node);
     }
 
     private void rememberSerializedDimensionKey(int dimId, INode node) {
@@ -427,15 +434,29 @@ public final class NetworkManager {
     }
 
     private void unregisterNodeIndices(int dimId, INode node) {
+        var pMap = posNodes.get(dimId);
         //~ if >=1.20 '.toLong()' -> '.asLong()' {
-        posNodes.get(dimId).remove(node.getPos().toLong());
+        long posLong = node.getPos().toLong();
+        if (pMap != posNodes.defaultReturnValue() && pMap.get(posLong) == node) {
+            pMap.remove(posLong);
+        }
         //~}
 
         long ownChunkCoord = ChunkCoordUtils.mergeChunkCoords(node.getPos());
-        nodeLocation.get(dimId).get(ownChunkCoord).remove(node);
+        var locMap = nodeLocation.get(dimId);
+        if (locMap != nodeLocation.defaultReturnValue()) {
+            var locSet = locMap.get(ownChunkCoord);
+            if (locSet != locMap.defaultReturnValue()) {
+                locSet.remove(node);
+                if (locSet.isEmpty()) {
+                    locMap.remove(ownChunkCoord);
+                }
+            }
+        }
 
         var sm = scopeNode.get(dimId);
-        LongSet coveredChunks = nodeScope.get(dimId).remove(node);
+        var nodeScopeMap = nodeScope.get(dimId);
+        LongSet coveredChunks = nodeScopeMap == nodeScope.defaultReturnValue() ? null : nodeScopeMap.remove(node);
         if (coveredChunks != null && sm != scopeNode.defaultReturnValue()) {
             for (long chunk : coveredChunks) {
                 var set = sm.get(chunk);
@@ -792,8 +813,18 @@ public final class NetworkManager {
     private @NotNull AddNodeResult performAddNode(INode newNode, @Nullable TileEntity blockEntity) {
         //~}
         int dimId = getDimensionId(newNode);
+        INode replacedNode = getIndexedNode(dimId, newNode.getPos());
+        if (replacedNode != null && replacedNode != newNode) {
+            removeNodeInternal(replacedNode);
+        }
         activeNodes.add(newNode);
-        registerNodeIndices(dimId, newNode);
+        try {
+            registerNodeIndices(dimId, newNode);
+        } catch (RuntimeException e) {
+            unregisterNodeIndices(dimId, newNode);
+            activeNodes.remove(newNode);
+            throw e;
+        }
 
         ReferenceSet<INode> candidates = new ReferenceOpenHashSet<>();
         var scopeMap = scopeNode.get(dimId);
@@ -867,14 +898,18 @@ public final class NetworkManager {
 
     private boolean hasHubConflict(INode newNode) {
         int hubCount = (newNode instanceof IHubNode) ? 1 : 0;
+        INode replacedNode = getIndexedNode(getDimensionId(newNode), newNode.getPos());
         ReferenceSet<IGrid> countedGrids = new ReferenceOpenHashSet<>();
         for (INode existing : getLinkedNodesForNode(newNode)) {
+            if (isSamePositionNode(newNode, existing)) {
+                continue;
+            }
             IGrid grid = existing.getGrid();
             if (grid == null || !countedGrids.add(grid)) {
                 continue;
             }
             var hub = grid.getHubNode();
-            if (hub != null && hub.isActive()) {
+            if (hub != null && hub != replacedNode && hub.isActive()) {
                 hubCount++;
                 if (hubCount > 1) {
                     return true;
@@ -882,6 +917,21 @@ public final class NetworkManager {
             }
         }
         return false;
+    }
+
+    @Nullable
+    private INode getIndexedNode(int dimId, BlockPos pos) {
+        var pMap = posNodes.get(dimId);
+        if (pMap == posNodes.defaultReturnValue()) {
+            return null;
+        }
+        //~ if >=1.20 '.toLong()' -> '.asLong()' {
+        return pMap.get(pos.toLong());
+        //~}
+    }
+
+    private static boolean isSamePositionNode(INode a, INode b) {
+        return a != null && b != null && a.getDimensionId() == b.getDimensionId() && a.getPos().equals(b.getPos());
     }
 
     private @NotNull ReferenceSet<INode> getLinkedNodesForNode(INode newNode) {
@@ -987,17 +1037,13 @@ public final class NetworkManager {
         var f = getSaveFile();
         var entries = new ObjectArrayList<GridEntry>();
         if (!f.exists() || !f.isDirectory()) {
-            EnergyMachineManager.INSTANCE.initGrid(entries);
-            ChargingManager.INSTANCE.initGrid(entries);
-            init = true;
+            finishInitGrid(entries);
             return;
         }
 
         File[] files = f.listFiles(file -> file.isFile() && file.getName().endsWith(".dat"));
         if (files == null || files.length == 0) {
-            EnergyMachineManager.INSTANCE.initGrid(entries);
-            ChargingManager.INSTANCE.initGrid(entries);
-            init = true;
+            finishInitGrid(entries);
             return;
         }
 
@@ -1020,7 +1066,9 @@ public final class NetworkManager {
             var grid = Grid.deserialize(nbt);
             if (grid == null) continue;
             if (grid.getNodes().isEmpty()) {
-                file.delete();
+                if (!file.delete()) {
+                    CirculationFlowNetworks.LOGGER.warn("Failed to delete empty grid file {}", file.getAbsolutePath());
+                }
                 continue;
             }
 
@@ -1065,6 +1113,10 @@ public final class NetworkManager {
                 grid.setHubNode(null);
             }
         }
+        finishInitGrid(entries);
+    }
+
+    private void finishInitGrid(Collection<GridEntry> entries) {
         EnergyMachineManager.INSTANCE.initGrid(entries);
         ChargingManager.INSTANCE.initGrid(entries);
         validationTracker.mergeEarlyIntoPending();

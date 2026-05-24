@@ -50,6 +50,12 @@ public final class NodePlacementValidationHandler {
         }
     }
 
+    private static void sendFailureMessage(EntityPlayer player, NetworkManager.AddNodeResult.Status status) {
+        if (status == NetworkManager.AddNodeResult.Status.HUB_CONFLICT) {
+            player.sendMessage(new TextComponentTranslation("message.circulation_networks.hub_conflict"));
+        }
+    }
+
     @SubscribeEvent
     public void onBlockPlace(PlayerInteractEvent.RightClickBlock event) {
         if (event.getHand() != EnumHand.MAIN_HAND) {
@@ -80,9 +86,7 @@ public final class NodePlacementValidationHandler {
         try {
             NetworkManager.AddNodeResult result = NetworkManager.INSTANCE.canAddNode(node, blockEntity);
             if (!result.isSuccess()) {
-                if (result.getStatus() == NetworkManager.AddNodeResult.Status.HUB_CONFLICT) {
-                    player.sendMessage(new TextComponentTranslation("message.circulation_networks.hub_conflict"));
-                }
+                sendFailureMessage(player, result.getStatus());
                 syncPlayerInventory(player);
                 event.setCancellationResult(EnumActionResult.FAIL);
                 event.setCanceled(true);
