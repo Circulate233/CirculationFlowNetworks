@@ -52,8 +52,8 @@ public class FEHandler implements IEnergyHandler {
         if (sendState == ROLE_SUPPORTED && sendDirection != null) {
             var optional = blockEntity.getCapability(ForgeCapabilities.ENERGY, sendDirection);
             if (optional.isPresent()) {
-                IEnergyStorage storage = optional.orElse(null);
-                if (storage != null && hasEnergy(storage)) {
+                IEnergyStorage storage = optional.orElseThrow(IllegalStateException::new);
+                if (hasEnergy(storage)) {
                     send = storage;
                 }
             } else {
@@ -63,8 +63,8 @@ public class FEHandler implements IEnergyHandler {
         if (receiveState == ROLE_SUPPORTED && receiveDirection != null) {
             var optional = blockEntity.getCapability(ForgeCapabilities.ENERGY, receiveDirection);
             if (optional.isPresent()) {
-                IEnergyStorage storage = optional.orElse(null);
-                if (storage != null && hasRoom(storage)) {
+                IEnergyStorage storage = optional.orElseThrow(IllegalStateException::new);
+                if (hasRoom(storage)) {
                     receive = storage;
                 }
             } else {
@@ -81,10 +81,7 @@ public class FEHandler implements IEnergyHandler {
         if (!optional.isPresent()) {
             return 0;
         }
-        IEnergyStorage storage = optional.orElse(null);
-        if (storage == null) {
-            return 0;
-        }
+        IEnergyStorage storage = optional.orElseThrow(IllegalStateException::new);
         int attempted = 0;
         boolean hasEnergy = hasEnergy(storage);
         boolean hasRoom = hasRoom(storage);
@@ -108,9 +105,9 @@ public class FEHandler implements IEnergyHandler {
     }
 
     @Override
-    public IEnergyHandler init(BlockEntity blockEntity, @Nullable HubNode.HubMetadata hubMetadata) {
+    public void init(BlockEntity blockEntity, @Nullable HubNode.HubMetadata hubMetadata) {
         if (initialized) {
-            return this;
+            return;
         }
         initialized = true;
         bindHint(blockEntity);
@@ -132,18 +129,16 @@ public class FEHandler implements IEnergyHandler {
         if (receive == null && receiveState == ROLE_UNKNOWN && attemptedReceive) {
             receiveState = ROLE_UNSUPPORTED;
         }
-        return this;
     }
 
     @Override
-    public IEnergyHandler init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
+    public void init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
         var optional = itemStack.getCapability(ForgeCapabilities.ENERGY);
         optional.ifPresent(ies -> {
             if (hasRoom(ies) && canReceiveEffectively(ies)) {
                 this.receive = ies;
             }
         });
-        return this;
     }
 
     @Override

@@ -107,9 +107,9 @@ public class FEHandler implements IEnergyHandler {
     }
 
     @Override
-    public IEnergyHandler init(BlockEntity blockEntity, @Nullable HubNode.HubMetadata hubMetadata) {
+    public void init(BlockEntity blockEntity, @Nullable HubNode.HubMetadata hubMetadata) {
         if (initialized) {
-            return this;
+            return;
         }
         initialized = true;
         bindHint(blockEntity);
@@ -131,17 +131,15 @@ public class FEHandler implements IEnergyHandler {
         if (receive == null && receiveState == ROLE_UNKNOWN && attemptedReceive) {
             receiveState = ROLE_UNSUPPORTED;
         }
-        return this;
     }
 
     @Override
-    public IEnergyHandler init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
+    public void init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
         var ies = itemStack.getCapability(Capabilities.EnergyStorage.ITEM);
-        if (ies == null) return this;
+        if (ies == null) return;
         if (hasRoom(ies) && canReceiveEffectively(ies)) {
             this.receive = ies;
         }
-        return this;
     }
 
     @Override

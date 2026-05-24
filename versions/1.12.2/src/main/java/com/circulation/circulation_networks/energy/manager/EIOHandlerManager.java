@@ -8,11 +8,46 @@ import crazypants.enderio.base.machine.modes.IoMode;
 import crazypants.enderio.base.power.IEnergyTank;
 import crazypants.enderio.base.power.forge.tile.ILegacyPoweredTile;
 import crazypants.enderio.powertools.machine.capbank.TileCapBank;
+import crazypants.enderio.powertools.machine.capbank.network.ICapBankNetwork;
+import it.unimi.dsi.fastutil.objects.Reference2ObjectMap;
+import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 
 public final class EIOHandlerManager implements IEnergyHandlerManager {
+
+    public static final EIOHandlerManager INSTANCE = new EIOHandlerManager();
+
+    private final Reference2ObjectMap<ICapBankNetwork, EIOHandler> networkCache = new Reference2ObjectOpenHashMap<>();
+
+    public void clearTickCache() {
+        networkCache.clear();
+    }
+
+    private EIOHandlerManager() {
+    }
+
+    private IEnergyHandler claimCapBankHandler(EIOHandler handler) {
+        ICapBankNetwork network = handler.getCapBankNetwork();
+        if (network == null) {
+            return handler;
+        }
+        EIOHandler claimed = networkCache.get(network);
+        if (claimed != null) {
+            return claimed;
+        }
+        networkCache.put(network, handler);
+        return handler;
+    }
+
+    @Override
+    public IEnergyHandler resolveMappedHandler(IEnergyHandler handler, IEnergyHandler.HandlerResolveContext context) {
+        if (handler instanceof EIOHandler eioHandler && context.tileEntity() instanceof TileCapBank) {
+            return claimCapBankHandler(eioHandler);
+        }
+        return handler.resolveMappedHandler(context);
+    }
 
     @Override
     public boolean isAvailable(TileEntity tileEntity) {

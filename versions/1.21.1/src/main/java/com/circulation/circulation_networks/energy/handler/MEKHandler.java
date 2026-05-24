@@ -129,25 +129,25 @@ public class MEKHandler implements IEnergyHandler {
     }
 
     @Override
-    public IEnergyHandler init(BlockEntity blockEntity, @Nullable HubNode.HubMetadata hubMetadata) {
+    public void init(BlockEntity blockEntity, @Nullable HubNode.HubMetadata hubMetadata) {
         if (initialized) {
-            return this;
+            return;
         }
         initialized = true;
         var level = blockEntity.getLevel();
         if (level == null) {
-            return this;
+            return;
         }
         if (blockEntity instanceof TileEntityEnergyCube energyCube) {
             send = energyCube;
             receive = energyCube;
             energyType = EnergyType.STORAGE;
-            return this;
+            return;
         } else if (blockEntity instanceof TileEntityInductionPort port) {
             send = port;
             receive = port;
             energyType = EnergyType.STORAGE;
-            return this;
+            return;
         } else {
             var pos = blockEntity.getBlockPos();
             bindHint(blockEntity);
@@ -181,11 +181,10 @@ public class MEKHandler implements IEnergyHandler {
         } else if (receive != null) {
             energyType = EnergyType.RECEIVE;
         }
-        return this;
     }
 
     @Override
-    public IEnergyHandler init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
+    public void init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
         isItem = true;
         IStrictEnergyHandler handler = itemStack.getCapability(Capabilities.STRICT_ENERGY.item());
         if (handler != null) {
@@ -198,7 +197,6 @@ public class MEKHandler implements IEnergyHandler {
             EnergyAmountConversionUtils.setFromDoubleFloor(needEnergy, joulesToFe(Math.clamp(remaining, 0.0D, maxInsert)));
         }
         energyType = EnergyType.RECEIVE;
-        return this;
     }
 
     @Override

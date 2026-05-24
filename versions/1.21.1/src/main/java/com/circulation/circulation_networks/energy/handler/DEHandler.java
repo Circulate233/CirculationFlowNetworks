@@ -102,13 +102,13 @@ public class DEHandler implements IEnergyHandler {
     }
 
     @Override
-    public IEnergyHandler init(BlockEntity blockEntity, @Nullable HubNode.HubMetadata hubMetadata) {
+    public void init(BlockEntity blockEntity, @Nullable HubNode.HubMetadata hubMetadata) {
         if (initialized) {
-            return this;
+            return;
         }
         initialized = true;
         if (blockEntity.getLevel() == null) {
-            return this;
+            return;
         }
         if (blockEntity instanceof TileEnergyPylon) {
             for (Direction direction : DIRECTIONS) {
@@ -121,11 +121,11 @@ public class DEHandler implements IEnergyHandler {
                     sendState = send != null ? ROLE_SUPPORTED : ROLE_UNKNOWN;
                     receiveState = receive != null ? ROLE_SUPPORTED : ROLE_UNKNOWN;
                     energyType = EnergyType.STORAGE;
-                    return this;
+                    return;
                 }
             }
             energyType = EnergyType.INVALID;
-            return this;
+            return;
         }
         bindHint(blockEntity);
         boolean needSendScan = send == null && sendState == ROLE_UNKNOWN;
@@ -146,16 +146,14 @@ public class DEHandler implements IEnergyHandler {
         if (receive == null && receiveState == ROLE_UNKNOWN && attemptedReceive) {
             receiveState = ROLE_UNSUPPORTED;
         }
-        return this;
     }
 
     @Override
-    public IEnergyHandler init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
+    public void init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
         IOPStorage storage = itemStack.getCapability(CapabilityOP.ITEM);
         if (storage != null && canReceiveNow(storage)) {
             receive = storage;
         }
-        return this;
     }
 
     @Override

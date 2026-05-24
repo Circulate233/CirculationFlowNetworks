@@ -109,8 +109,8 @@ public class MEKHandler implements IEnergyHandler {
         if (sendState == ROLE_SUPPORTED && sendDirection != null) {
             var optional = blockEntity.getCapability(Capabilities.STRICT_ENERGY, sendDirection);
             if (optional.isPresent()) {
-                IStrictEnergyHandler handler = optional.orElse(null);
-                if (handler != null && hasEnergy(handler)) {
+                IStrictEnergyHandler handler = optional.orElseThrow(IllegalStateException::new);
+                if (hasEnergy(handler)) {
                     send = handler;
                 }
             } else {
@@ -120,8 +120,8 @@ public class MEKHandler implements IEnergyHandler {
         if (receiveState == ROLE_SUPPORTED && receiveDirection != null) {
             var optional = blockEntity.getCapability(Capabilities.STRICT_ENERGY, receiveDirection);
             if (optional.isPresent()) {
-                IStrictEnergyHandler handler = optional.orElse(null);
-                if (handler != null && hasRoom(handler)) {
+                IStrictEnergyHandler handler = optional.orElseThrow(IllegalStateException::new);
+                if (hasRoom(handler)) {
                     receive = handler;
                 }
             } else {
@@ -131,21 +131,21 @@ public class MEKHandler implements IEnergyHandler {
     }
 
     @Override
-    public IEnergyHandler init(BlockEntity blockEntity, @Nullable HubNode.HubMetadata hubMetadata) {
+    public void init(BlockEntity blockEntity, @Nullable HubNode.HubMetadata hubMetadata) {
         if (initialized) {
-            return this;
+            return;
         }
         initialized = true;
         if (blockEntity instanceof TileEntityEnergyCube energyCube) {
             send = energyCube;
             receive = energyCube;
             energyType = EnergyType.STORAGE;
-            return this;
+            return;
         } else if (blockEntity instanceof TileEntityInductionPort port) {
             send = port;
             receive = port;
             energyType = EnergyType.STORAGE;
-            return this;
+            return;
         } else {
             bindHint(blockEntity);
             boolean needSendScan = send == null && sendState == ROLE_UNKNOWN;
@@ -160,7 +160,7 @@ public class MEKHandler implements IEnergyHandler {
                 if (!optional.isPresent()) {
                     continue;
                 }
-                int attempted = bindHandler(optional.orElse(null), direction, needSendScan, needReceiveScan);
+                int attempted = bindHandler(optional.orElseThrow(IllegalStateException::new), direction, needSendScan, needReceiveScan);
                 attemptedSend |= (attempted & 1) != 0;
                 attemptedReceive |= (attempted & 2) != 0;
                 needSendScan = send == null && sendState == ROLE_UNKNOWN;
@@ -178,27 +178,23 @@ public class MEKHandler implements IEnergyHandler {
         } else if (receive != null) {
             energyType = EnergyType.RECEIVE;
         }
-        return this;
     }
 
     @Override
-    public IEnergyHandler init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
+    public void init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
         isItem = true;
         var optional = itemStack.getCapability(Capabilities.STRICT_ENERGY);
         if (optional.isPresent()) {
-            IStrictEnergyHandler handler = optional.orElse(null);
-            if (handler != null) {
-                receive = handler;
-                double stored = getStoredEnergy(handler);
-                double max = getMaxStoredEnergy(handler);
-                double remaining = max - stored;
-                FloatingLong insertRemainder = handler.insertEnergy(FloatingLong.MAX_VALUE, Action.SIMULATE);
-                double maxInsert = FloatingLong.MAX_VALUE.subtract(insertRemainder).doubleValue();
-                EnergyAmountConversionUtils.setFromDoubleFloor(needEnergy, joulesToFe(Math.max(0.0D, Math.min(remaining, maxInsert))));
-            }
+            IStrictEnergyHandler handler = optional.orElseThrow(IllegalStateException::new);
+            receive = handler;
+            double stored = getStoredEnergy(handler);
+            double max = getMaxStoredEnergy(handler);
+            double remaining = max - stored;
+            FloatingLong insertRemainder = handler.insertEnergy(FloatingLong.MAX_VALUE, Action.SIMULATE);
+            double maxInsert = FloatingLong.MAX_VALUE.subtract(insertRemainder).doubleValue();
+            EnergyAmountConversionUtils.setFromDoubleFloor(needEnergy, joulesToFe(Math.max(0.0D, Math.min(remaining, maxInsert))));
         }
         energyType = EnergyType.RECEIVE;
-        return this;
     }
 
     @Override

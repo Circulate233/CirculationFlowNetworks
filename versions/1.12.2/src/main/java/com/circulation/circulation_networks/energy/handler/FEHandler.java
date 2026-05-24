@@ -97,9 +97,9 @@ public class FEHandler implements IEnergyHandler {
     }
 
     @Override
-    public IEnergyHandler init(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
+    public void init(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
         if (initialized) {
-            return this;
+            return;
         }
         initialized = true;
         bindHint(tileEntity);
@@ -121,20 +121,18 @@ public class FEHandler implements IEnergyHandler {
         if (receive == null && receiveState == ROLE_UNKNOWN && attemptedReceive) {
             receiveState = ROLE_UNSUPPORTED;
         }
-        return this;
     }
 
     @Override
-    public IEnergyHandler init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
+    public void init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
         var ies = itemStack.getCapability(CapabilityEnergy.ENERGY, null);
-        if (ies == null) return this;
+        if (ies == null) return;
         if (canReceiveEffectively(ies)) {
             this.receive = ies;
             energyType = EnergyType.RECEIVE;
         } else {
             energyType = EnergyType.INVALID;
         }
-        return this;
     }
 
     @Override

@@ -75,8 +75,8 @@ public class DEHandler implements IEnergyHandler {
         if (sendState == ROLE_SUPPORTED && sendDirection != null) {
             var optional = blockEntity.getCapability(CapabilityOP.OP, sendDirection);
             if (optional.isPresent()) {
-                IOPStorage storage = optional.orElse(null);
-                if (storage != null && hasEnergy(storage)) {
+                IOPStorage storage = optional.orElseThrow(IllegalStateException::new);
+                if (hasEnergy(storage)) {
                     send = storage;
                 }
             } else {
@@ -86,8 +86,8 @@ public class DEHandler implements IEnergyHandler {
         if (receiveState == ROLE_SUPPORTED && receiveDirection != null) {
             var optional = blockEntity.getCapability(CapabilityOP.OP, receiveDirection);
             if (optional.isPresent()) {
-                IOPStorage storage = optional.orElse(null);
-                if (storage != null && hasRoom(storage)) {
+                IOPStorage storage = optional.orElseThrow(IllegalStateException::new);
+                if (hasRoom(storage)) {
                     receive = storage;
                 }
             } else {
@@ -104,17 +104,14 @@ public class DEHandler implements IEnergyHandler {
         if (!optional.isPresent()) {
             return 0;
         }
-        IOPStorage storage = optional.orElse(null);
-        if (storage != null) {
-            return bindRole(storage, direction, needSendScan, needReceiveScan);
-        }
-        return 0;
+        IOPStorage storage = optional.orElseThrow(IllegalStateException::new);
+        return bindRole(storage, direction, needSendScan, needReceiveScan);
     }
 
     @Override
-    public IEnergyHandler init(BlockEntity blockEntity, @Nullable HubNode.HubMetadata hubMetadata) {
+    public void init(BlockEntity blockEntity, @Nullable HubNode.HubMetadata hubMetadata) {
         if (initialized) {
-            return this;
+            return;
         }
         initialized = true;
         if (blockEntity instanceof TileEnergyPylon) {
@@ -129,11 +126,11 @@ public class DEHandler implements IEnergyHandler {
                     sendState = send != null ? ROLE_SUPPORTED : ROLE_UNKNOWN;
                     receiveState = receive != null ? ROLE_SUPPORTED : ROLE_UNKNOWN;
                     energyType = EnergyType.STORAGE;
-                    return this;
+                    return;
                 }
             }
             energyType = EnergyType.INVALID;
-            return this;
+            return;
         }
         bindHint(blockEntity);
         boolean needSendScan = send == null && sendState == ROLE_UNKNOWN;
@@ -154,17 +151,15 @@ public class DEHandler implements IEnergyHandler {
         if (receive == null && receiveState == ROLE_UNKNOWN && attemptedReceive) {
             receiveState = ROLE_UNSUPPORTED;
         }
-        return this;
     }
 
     @Override
-    public IEnergyHandler init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
+    public void init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
         itemStack.getCapability(CapabilityOP.OP).ifPresent(storage -> {
             if (canReceiveNow(storage)) {
                 receive = storage;
             }
         });
-        return this;
     }
 
     @Override

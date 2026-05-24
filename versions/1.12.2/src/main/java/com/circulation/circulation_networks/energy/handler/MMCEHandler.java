@@ -19,6 +19,7 @@ public class MMCEHandler implements IEnergyHandler {
     private long remainingReceiveBudget;
     private EnergyType energyType = EnergyType.INVALID;
     private boolean initialized;
+    private boolean prepared;
 
     public MMCEHandler() {
     }
@@ -40,47 +41,62 @@ public class MMCEHandler implements IEnergyHandler {
         return Math.max(0L, hatch.getMaxEnergy() - hatch.getCurrentEnergy());
     }
 
-    @Override
-    public IEnergyHandler init(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
-        if (initialized) {
-            return this;
-        }
-        initialized = true;
-        if (tileEntity instanceof TileEnergyInputHatch inputHatch) {
-            hatch = inputHatch;
-            remainingReceiveBudget = getTransferLimit(inputHatch);
-            remainingExtractBudget = 0L;
-            energyType = EnergyType.RECEIVE;
-        } else if (tileEntity instanceof TileEnergyOutputHatch outputHatch) {
-            hatch = outputHatch;
-            remainingExtractBudget = getTransferLimit(outputHatch);
-            remainingReceiveBudget = 0L;
-            energyType = EnergyType.SEND;
-        } else {
-            hatch = null;
-            remainingExtractBudget = 0L;
-            remainingReceiveBudget = 0L;
-            energyType = EnergyType.INVALID;
-        }
-        return this;
-    }
-
-    @Override
-    public IEnergyHandler init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
+    private void resetState() {
         hatch = null;
         remainingExtractBudget = 0L;
         remainingReceiveBudget = 0L;
         energyType = EnergyType.INVALID;
-        return this;
+    }
+
+    private void scanIntoState(TileEntity tileEntity) {
+        resetState();
+        if (tileEntity instanceof TileEnergyInputHatch inputHatch) {
+            hatch = inputHatch;
+            remainingReceiveBudget = getTransferLimit(inputHatch);
+            energyType = EnergyType.RECEIVE;
+            prepared = true;
+            return;
+        }
+        if (tileEntity instanceof TileEnergyOutputHatch outputHatch) {
+            hatch = outputHatch;
+            remainingExtractBudget = getTransferLimit(outputHatch);
+            energyType = EnergyType.SEND;
+        }
+        prepared = true;
+    }
+
+    @Override
+    public void asyncInit(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
+        scanIntoState(tileEntity);
+    }
+
+    @Override
+    public boolean shouldRunAsyncInit(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
+        return true;
+    }
+
+    @Override
+    public void init(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
+        if (initialized) {
+            return;
+        }
+        initialized = true;
+        if (!prepared) {
+            scanIntoState(tileEntity);
+        }
+    }
+
+    @Override
+    public void init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
+        resetState();
+        prepared = true;
     }
 
     @Override
     public void clear() {
-        hatch = null;
-        remainingExtractBudget = 0L;
-        remainingReceiveBudget = 0L;
-        energyType = EnergyType.INVALID;
+        resetState();
         initialized = false;
+        prepared = false;
     }
 
     @Override

@@ -2,6 +2,7 @@ package com.circulation.circulation_networks.manager;
 
 import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.api.EnergyAmount;
+import com.circulation.circulation_networks.api.ICirculationShielderBlockEntity;
 import com.circulation.circulation_networks.api.IEnergyHandler;
 import com.circulation.circulation_networks.api.IEnergyHandlerManager;
 import com.circulation.circulation_networks.api.IGrid;
@@ -56,6 +57,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import net.minecraft.server.MinecraftServer;
 import static com.circulation.circulation_networks.utils.SideCompat.isClientWorld;
@@ -67,6 +73,9 @@ public final class EnergyMachineManager {
     private static final int WARNING_STALE_TICKS = 200;
     private static final long NODE_RESCAN_COOLDOWN_TICKS = 40L;
     private static final double WARNING_RENDER_DISTANCE_SQ = 48.0D * 48.0D;
+    private static final int ASYNC_INIT_PARALLEL_THRESHOLD = 128;
+    private static final int ASYNC_INIT_THREAD_COUNT = Math.max(1, Math.min(4, Runtime.getRuntime().availableProcessors() - 1));
+    private static final AtomicInteger ASYNC_INIT_THREAD_ID = new AtomicInteger(1);
     private final Int2ObjectMap<Long2ObjectMap<ReferenceSet<IEnergySupplyNode>>> scopeNode = new Int2ObjectOpenHashMap<>();
     private final Int2ObjectMap<Object2ObjectMap<IEnergySupplyNode, LongSet>> nodeScope = new Int2ObjectOpenHashMap<>();
     //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
@@ -90,6 +99,8 @@ public final class EnergyMachineManager {
     private final Set<TileEntity> cache = ConcurrentHashMap.newKeySet();
     private final Int2ObjectMap<Long2LongMap> lastWarningTicks = new Int2ObjectOpenHashMap<>();
     private final LongOpenHashSet visibleWarningsScratch = new LongOpenHashSet();
+    @Nullable
+    private ExecutorService machineInitExecutor;
     private long warningTickCounter;
     private long lastWarningCleanupTick;
     private long interactionEpoch;
@@ -206,8 +217,8 @@ public final class EnergyMachineManager {
         return player.getDistanceSq(pos.getX() + 0.5D, pos.getY() + 1.25D, pos.getZ() + 0.5D);
     }
 
-    private static long getPackedPos(TileEntity blockEntity) {
-        return blockEntity.getPos().toLong();
+    private static long getPackedPos(BlockPos pos) {
+        return pos.toLong();
     }
     //?} else if <1.21 {
     /*private static MinecraftServer getServer() {
@@ -304,85 +315,7 @@ public final class EnergyMachineManager {
         processedTickGrids.clear();
         usedHandlersThisTick.clear();
         clearWarningPositionsScratch();
-        for (var te : machineNodeTiles) {
-            //~ if >=1.20 '.getWorld()' -> '.getLevel()' {
-            //~ if >=1.20 '.getPos()' -> '.getBlockPos()' {
-            var world = te.getWorld();
-            var pos = te.getPos();
-            //~}
-            //~}
-            int dimId = getDimensionId(world);
-            var activeShielders = CirculationShielderManager.INSTANCE.getShieldersForDim(dimId);
-            if (!ChunkCoordUtils.isChunkLoaded(world, pos) || (activeShielders.length > 0 && CirculationShielderManager.INSTANCE.isBlockedByShielder(dimId, pos))) {
-                continue;
-            }
-
-            var mte = (IMachineNodeBlockEntity) te;
-            var grid = mte.getNode().getGrid();
-            if (grid == null) {
-                continue;
-            }
-
-            var hubMetadata = getHubMetadata(grid);
-            var handler = mte.getEnergyHandler().init(te, hubMetadata);
-            usedHandlersThisTick.add(handler);
-
-            var participant = EnergyTransferParticipant.obtain(handler, grid, hubMetadata, getOrCreateInteraction(grid));
-            final IEnergyHandler.EnergyType type = participant.getType();
-            if (type == IEnergyHandler.EnergyType.INVALID) {
-                participant.recycle();
-                continue;
-            }
-
-            var gridData = getTickGridData(grid);
-            gridData.handlers(type).add(participant);
-            if (type == IEnergyHandler.EnergyType.RECEIVE && gridData.receiveTargets.get(participant) == null) {
-                gridData.receiveTargets.put(participant, new WarningTarget(dimId, getPackedPos(te)));
-            }
-        }
-        for (var entry : machineGrids.reference2ObjectEntrySet())  {
-            var te = entry.getKey();
-            var grids = entry.getValue();
-            //~ if >=1.20 '.getWorld()' -> '.getLevel()' {
-            //~ if >=1.20 '.getPos()' -> '.getBlockPos()' {
-            var world = te.getWorld();
-            var pos = te.getPos();
-            //~}
-            //~}
-            int dimId = getDimensionId(world);
-            var activeShielders = CirculationShielderManager.INSTANCE.getShieldersForDim(dimId);
-            if (ChunkCoordUtils.isChunkLoaded(world, pos) && (activeShielders.length == 0 || !CirculationShielderManager.INSTANCE.isBlockedByShielder(dimId, pos))) {
-                WarningTarget warningTarget = null;
-                var override = overrideManager == null ? null : overrideManager.getOverride(dimId, pos);
-                for (var grid : grids) {
-                    if (grid == null) continue;
-                    var hubMetadata = getHubMetadata(grid);
-                    var handler = getOrCreateTickMachineHandler(te, hubMetadata);
-                    if (handler == null) {
-                        continue;
-                    }
-                    var participant = EnergyTransferParticipant.obtain(handler, grid, hubMetadata, getOrCreateInteraction(grid));
-
-                    final IEnergyHandler.EnergyType type = override != null ? override : stabilizeEnergyType(te, participant.getType());
-                    if (type == IEnergyHandler.EnergyType.INVALID) {
-                        participant.recycle();
-                        continue;
-                    }
-
-                    var gridData = getTickGridData(grid);
-                    gridData.handlers(type).add(participant);
-                    if (type == IEnergyHandler.EnergyType.RECEIVE) {
-                        if (gridData.receiveTargets.get(participant) == null) {
-                            if (warningTarget == null) {
-                                warningTarget = new WarningTarget(dimId, getPackedPos(te));
-                            }
-                            gridData.receiveTargets.put(participant, warningTarget);
-                        }
-                    }
-                }
-            }
-        }
-
+        assembleTickMachines(overrideManager);
         for (var grid : activeTickGrids) {
             if (processedTickGrids.contains(grid)) continue;
             var hubNode = grid.getHubNode();
@@ -866,6 +799,11 @@ public final class EnergyMachineManager {
     }
 
     public void onServerStop() {
+        ExecutorService executor = machineInitExecutor;
+        machineInitExecutor = null;
+        if (executor != null) {
+            executor.shutdownNow();
+        }
         scopeNode.clear();
         nodeScope.clear();
         gridMachineMap.clear();
@@ -1004,18 +942,271 @@ public final class EnergyMachineManager {
         return data;
     }
 
+    private void assembleTickMachines(@Nullable EnergyTypeOverrideManager overrideManager) {
+        AssemblyBatch batch = collectAssemblySeedsSerial(overrideManager);
+        if (batch.seeds().isEmpty()) {
+            return;
+        }
+        if (!runAsyncInitStage(batch.initJobs())) {
+            clearTouchedHandlers(batch.initJobs());
+            emitParticipantsSyncFallback(batch);
+            return;
+        }
+        finalizeAndEmitParticipantsSerial(batch);
+    }
+
+    private AssemblyBatch collectAssemblySeedsSerial(@Nullable EnergyTypeOverrideManager overrideManager) {
+        ObjectList<AssemblySeed> seeds = new ObjectArrayList<>();
+        Reference2ObjectMap<IEnergyHandler, HandlerInitJob> initJobs = new Reference2ObjectOpenHashMap<>();
+        Reference2ObjectMap<IGrid, HubNode.HubMetadata> hubMetadataCache = new Reference2ObjectOpenHashMap<>();
+        Int2ObjectMap<ICirculationShielderBlockEntity[]> shielderCache = new Int2ObjectOpenHashMap<>();
+        Int2ObjectMap<Long2ObjectMap<IEnergyHandler.EnergyType>> overridesByDim = overrideManager == null ? null : new Int2ObjectOpenHashMap<>();
+        for (var te : machineNodeTiles) {
+            collectMachineNodeSeed(te, seeds, initJobs, hubMetadataCache, shielderCache);
+        }
+        for (var entry : machineGrids.reference2ObjectEntrySet()) {
+            collectMachineGridSeeds(entry, overrideManager, overridesByDim, seeds, initJobs, hubMetadataCache, shielderCache);
+        }
+        return new AssemblyBatch(seeds, initJobs);
+    }
+
+    private void collectMachineNodeSeed(TileEntity te,
+                                        ObjectList<AssemblySeed> seeds,
+                                        Reference2ObjectMap<IEnergyHandler, HandlerInitJob> initJobs,
+                                        Reference2ObjectMap<IGrid, HubNode.HubMetadata> hubMetadataCache,
+                                        Int2ObjectMap<ICirculationShielderBlockEntity[]> shielderCache) {
+        MachineSeedContext context = collectMachineSeedContext(te, shielderCache);
+        if (context == null) {
+            return;
+        }
+        addMachineNodeSeed(te, context, seeds, initJobs, hubMetadataCache);
+    }
+
     @Nullable
-    private IEnergyHandler getOrCreateTickMachineHandler(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
-        IEnergyHandler original = machineOriginalHandlerCache.get(tileEntity);
+    private MachineSeedContext collectMachineSeedContext(TileEntity te,
+                                                         Int2ObjectMap<ICirculationShielderBlockEntity[]> shielderCache) {
+        //~ if >=1.20 '.getWorld()' -> '.getLevel()' {
+        //~ if >=1.20 '.getPos()' -> '.getBlockPos()' {
+        var world = te.getWorld();
+        var pos = te.getPos();
+        //~}
+        //~}
+        if (world == null || pos == null) {
+            return null;
+        }
+        int dimId = getDimensionId(world);
+        var activeShielders = shielderCache.computeIfAbsent(dimId, CirculationShielderManager.INSTANCE::getShieldersForDim);
+        if (!ChunkCoordUtils.isChunkLoaded(world, pos) || (activeShielders.length > 0 && CirculationShielderManager.INSTANCE.isBlockedByShielder(dimId, pos))) {
+            return null;
+        }
+        return new MachineSeedContext(world, pos, dimId, getPackedPos(pos));
+    }
+
+    private void addMachineNodeSeed(TileEntity te,
+                                    MachineSeedContext context,
+                                    ObjectList<AssemblySeed> seeds,
+                                    Reference2ObjectMap<IEnergyHandler, HandlerInitJob> initJobs,
+                                    Reference2ObjectMap<IGrid, HubNode.HubMetadata> hubMetadataCache) {
+        var mte = (IMachineNodeBlockEntity) te;
+        var grid = mte.getNode().getGrid();
+        if (grid == null) {
+            return;
+        }
+        var handler = mte.getEnergyHandler();
+        var hubMetadata = getCachedHubMetadata(grid, hubMetadataCache);
+        registerInitJob(initJobs, handler, te, hubMetadata);
+        seeds.add(new AssemblySeed(te, handler, grid, hubMetadata, context.dimId(), context.posLong(), null, true));
+    }
+
+    private void collectMachineGridSeeds(Reference2ObjectMap.Entry<TileEntity, ReferenceSet<IGrid>> entry,
+                                         @Nullable EnergyTypeOverrideManager overrideManager,
+                                         @Nullable Int2ObjectMap<Long2ObjectMap<IEnergyHandler.EnergyType>> overridesByDim,
+                                         ObjectList<AssemblySeed> seeds,
+                                         Reference2ObjectMap<IEnergyHandler, HandlerInitJob> initJobs,
+                                         Reference2ObjectMap<IGrid, HubNode.HubMetadata> hubMetadataCache,
+                                         Int2ObjectMap<ICirculationShielderBlockEntity[]> shielderCache) {
+        var te = entry.getKey();
+        var original = machineOriginalHandlerCache.get(te);
         if (original == null) {
+            return;
+        }
+        MachineSeedContext context = collectMachineSeedContext(te, shielderCache);
+        if (context == null) {
+            return;
+        }
+        IEnergyHandler.EnergyType override = getCachedOverride(overrideManager, overridesByDim, context);
+        for (var grid : entry.getValue()) {
+            if (grid == null) {
+                continue;
+            }
+            var hubMetadata = getCachedHubMetadata(grid, hubMetadataCache);
+            registerInitJob(initJobs, original, te, hubMetadata);
+            seeds.add(new AssemblySeed(te, original, grid, hubMetadata, context.dimId(), context.posLong(), override, false));
+        }
+    }
+
+    private void registerInitJob(Reference2ObjectMap<IEnergyHandler, HandlerInitJob> initJobs,
+                                 IEnergyHandler handler,
+                                 TileEntity tileEntity,
+                                 @Nullable HubNode.HubMetadata hubMetadata) {
+        initJobs.computeIfAbsent(handler, key -> new HandlerInitJob(
+            handler,
+            tileEntity,
+            hubMetadata,
+            handler.shouldRunAsyncInit(tileEntity, hubMetadata)
+        ));
+    }
+
+    @Nullable
+    private IEnergyHandler.EnergyType getCachedOverride(@Nullable EnergyTypeOverrideManager overrideManager,
+                                                        @Nullable Int2ObjectMap<Long2ObjectMap<IEnergyHandler.EnergyType>> overridesByDim,
+                                                        MachineSeedContext context) {
+        if (overrideManager == null || overridesByDim == null) {
             return null;
         }
-        IEnergyHandler handler = original.init(tileEntity, hubMetadata);
-        if (handler == null) {
+        Long2ObjectMap<IEnergyHandler.EnergyType> dimOverrides = overridesByDim.get(context.dimId());
+        if (!overridesByDim.containsKey(context.dimId())) {
+            dimOverrides = overrideManager.getOverridesForDim(context.dimId());
+            overridesByDim.put(context.dimId(), dimOverrides);
+        }
+        return dimOverrides == null ? null : dimOverrides.get(context.posLong());
+    }
+
+    @Nullable
+    private static HubNode.HubMetadata getCachedHubMetadata(@Nullable IGrid grid,
+                                                            Reference2ObjectMap<IGrid, HubNode.HubMetadata> hubMetadataCache) {
+        if (grid == null) {
             return null;
         }
+        if (hubMetadataCache.containsKey(grid)) {
+            return hubMetadataCache.get(grid);
+        }
+        HubNode.HubMetadata hubMetadata = getHubMetadata(grid);
+        hubMetadataCache.put(grid, hubMetadata);
+        return hubMetadata;
+    }
+
+    private boolean runAsyncInitStage(Reference2ObjectMap<IEnergyHandler, HandlerInitJob> initJobs) {
+        if (initJobs.isEmpty()) {
+            return true;
+        }
+        int asyncJobCount = 0;
+        for (var job : initJobs.values()) {
+            if (job.runAsync()) {
+                asyncJobCount++;
+            }
+        }
+        if (asyncJobCount == 0) {
+            return true;
+        }
+        if (asyncJobCount < ASYNC_INIT_PARALLEL_THRESHOLD) {
+            for (var job : initJobs.values()) {
+                if (job.runAsync() && !runAsyncInitJob(job)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        ExecutorService executor = getOrCreateMachineInitExecutor();
+        ObjectList<Future<?>> futures = new ObjectArrayList<>(asyncJobCount);
+        for (var job : initJobs.values()) {
+            if (job.runAsync()) {
+                futures.add(executor.submit(() -> runAsyncInitJob(job)));
+            }
+        }
+        for (var future : futures) {
+            try {
+                Object result = future.get();
+                if (!(result instanceof Boolean ok) || !ok) {
+                    return false;
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            } catch (ExecutionException e) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean runAsyncInitJob(HandlerInitJob job) {
+        try {
+            job.handler().asyncInit(job.tileEntity(), job.hubMetadata());
+            return true;
+        } catch (Throwable throwable) {
+            return false;
+        }
+    }
+
+    private void finalizeAndEmitParticipantsSerial(AssemblyBatch batch) {
+        for (var job : batch.initJobs().values()) {
+            job.handler().init(job.tileEntity(), job.hubMetadata());
+        }
+        for (var seed : batch.seeds()) {
+            addParticipant(seed);
+        }
+    }
+
+    private void emitParticipantsSyncFallback(AssemblyBatch batch) {
+        for (var job : batch.initJobs().values()) {
+            job.handler().init(job.tileEntity(), job.hubMetadata());
+        }
+        for (var seed : batch.seeds()) {
+            addParticipant(seed);
+        }
+    }
+
+    private void clearTouchedHandlers(Reference2ObjectMap<IEnergyHandler, HandlerInitJob> initJobs) {
+        for (var job : initJobs.values()) {
+            job.handler().clear();
+        }
+    }
+
+    private ExecutorService getOrCreateMachineInitExecutor() {
+        ExecutorService executor = machineInitExecutor;
+        if (executor != null) {
+            return executor;
+        }
+        machineInitExecutor = Executors.newFixedThreadPool(ASYNC_INIT_THREAD_COUNT, runnable -> {
+            Thread thread = new Thread(runnable, "CFN-MachineInit-" + ASYNC_INIT_THREAD_ID.getAndIncrement());
+            thread.setDaemon(true);
+            return thread;
+        });
+        return machineInitExecutor;
+    }
+
+    private void addParticipant(AssemblySeed seed) {
+        IEnergyHandler handler = seed.originalHandler();
+        var resolvedHandler = resolveMappedHandler(seed.tileEntity(), handler, seed.hubMetadata());
+        if (resolvedHandler == null) {
+            return;
+        }
+        handler = resolvedHandler;
         usedHandlersThisTick.add(handler);
-        return handler;
+        var participant = EnergyTransferParticipant.obtain(handler, seed.grid(), seed.hubMetadata(), getOrCreateInteraction(seed.grid()));
+        IEnergyHandler.EnergyType type = participant.getType();
+        if (!seed.machineNode()) {
+            type = seed.overrideType() != null ? seed.overrideType() : stabilizeEnergyType(seed.tileEntity(), type);
+        }
+        if (type == IEnergyHandler.EnergyType.INVALID) {
+            participant.recycle();
+            return;
+        }
+        var gridData = getTickGridData(seed.grid());
+        gridData.handlers(type).add(participant);
+        if (type == IEnergyHandler.EnergyType.RECEIVE && gridData.receiveTargets.get(participant) == null) {
+            gridData.receiveTargets.put(participant, new WarningTarget(seed.dimId(), seed.posLong()));
+        }
+    }
+
+    @Nullable
+    private IEnergyHandler resolveMappedHandler(TileEntity tileEntity,
+                                                IEnergyHandler handler,
+                                                @Nullable HubNode.HubMetadata hubMetadata) {
+        IEnergyHandlerManager manager = RegistryEnergyHandler.getEnergyManager(tileEntity);
+        IEnergyHandler.HandlerResolveContext context = new IEnergyHandler.HandlerResolveContext(tileEntity, hubMetadata, manager);
+        return manager != null ? manager.resolveMappedHandler(handler, context) : handler.resolveMappedHandler(context);
     }
 
     private void bindMachineHandler(TileEntity tileEntity, IEnergyHandlerManager manager) {
@@ -1187,6 +1378,44 @@ public final class EnergyMachineManager {
     //? if <1.20
     @Desugar
     private record WarningTarget(int dimId, long posLong) {
+    }
+
+    //? if <1.20
+    @Desugar
+    //~ if >=1.20 'TileEntity ' -> 'BlockEntity ' {
+    private record AssemblySeed(TileEntity tileEntity,
+    //~}
+                                IEnergyHandler originalHandler,
+                                IGrid grid,
+                                @Nullable HubNode.HubMetadata hubMetadata,
+                                int dimId,
+                                long posLong,
+                                @Nullable IEnergyHandler.EnergyType overrideType,
+                                boolean machineNode) {
+    }
+
+    //? if <1.20
+    @Desugar
+    //~ if >=1.20 'TileEntity ' -> 'BlockEntity ' {
+    private record HandlerInitJob(IEnergyHandler handler,
+                                  TileEntity tileEntity,
+    //~}
+                                  @Nullable HubNode.HubMetadata hubMetadata,
+                                  boolean runAsync) {
+    }
+
+    //? if <1.20
+    @Desugar
+    private record AssemblyBatch(ObjectList<AssemblySeed> seeds,
+                                 Reference2ObjectMap<IEnergyHandler, HandlerInitJob> initJobs) {
+    }
+
+    //? if <1.20
+    @Desugar
+    private record MachineSeedContext(World world,
+                                      BlockPos pos,
+                                      int dimId,
+                                      long posLong) {
     }
 
     static final class GridTickData {

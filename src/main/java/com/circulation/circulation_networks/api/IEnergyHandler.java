@@ -3,6 +3,9 @@ package com.circulation.circulation_networks.api;
 import com.circulation.circulation_networks.registry.RegistryEnergyHandler;
 import com.circulation.circulation_networks.network.nodes.HubNode;
 //~ mc_imports
+//? if <1.20 {
+import com.github.bsideup.jabel.Desugar;
+//?}
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 
@@ -10,19 +13,43 @@ import org.jetbrains.annotations.Nullable;
 
 public interface IEnergyHandler {
 
-    //~ if >=1.20 '(TileEntity ' -> '(BlockEntity ' {
     static @Nullable IEnergyHandler release(ItemStack stack, @Nullable HubNode.HubMetadata hubMetadata) {
         if (stack == null || stack.isEmpty()) return null;
         var m = RegistryEnergyHandler.getEnergyManager(stack);
         if (m == null) return null;
         var t = m.newItemInstance();
-        return t.init(stack, hubMetadata);
+        t.init(stack, hubMetadata);
+        return t;
     }
 
-    IEnergyHandler init(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata);
+    //? if <1.20
+    @Desugar
+    //~ if >=1.20 'TileEntity ' -> 'BlockEntity ' {
+    record HandlerResolveContext(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata,
+    //~}
+                                 @Nullable IEnergyHandlerManager manager) {
+    }
+
+    //~ if >=1.20 '(TileEntity ' -> '(BlockEntity ' {
+    default void asyncInit(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
+    }
     //~}
 
-    IEnergyHandler init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata);
+    //~ if >=1.20 '(TileEntity ' -> '(BlockEntity ' {
+    default boolean shouldRunAsyncInit(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
+    //~}
+        return false;
+    }
+
+    //~ if >=1.20 '(TileEntity ' -> '(BlockEntity ' {
+    void init(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata);
+    //~}
+
+    void init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata);
+
+    default IEnergyHandler resolveMappedHandler(HandlerResolveContext context) {
+        return this;
+    }
 
     void clear();
 

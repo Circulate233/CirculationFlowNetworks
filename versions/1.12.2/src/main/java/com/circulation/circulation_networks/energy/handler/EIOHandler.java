@@ -46,6 +46,7 @@ public class EIOHandler implements IEnergyHandler {
     @Nullable
     private EnergyType energyType;
     private boolean initialized;
+    private boolean prepared;
     private int sendState = ROLE_UNKNOWN;
     private int receiveState = ROLE_UNKNOWN;
 
@@ -264,12 +265,49 @@ public class EIOHandler implements IEnergyHandler {
         }
     }
 
+    private void prepareLegacyPoweredTile(ILegacyPoweredTile poweredTile) {
+        bindLegacyPoweredTile(poweredTile);
+        updateStorageEnergyType();
+        prepared = true;
+    }
+
+    private void prepareCapabilityMachine(AbstractCapabilityMachineEntity machineEntity) {
+        bindCapabilityMachine(machineEntity);
+        updateStorageEnergyType();
+        prepared = true;
+    }
+
     @Override
-    public IEnergyHandler init(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
+    public void asyncInit(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
+        if (tileEntity instanceof TileCapBank) {
+            return;
+        }
+        if (tileEntity instanceof ILegacyPoweredTile poweredTile) {
+            prepareLegacyPoweredTile(poweredTile);
+            return;
+        }
+        if (tileEntity instanceof AbstractCapabilityMachineEntity machineEntity) {
+            prepareCapabilityMachine(machineEntity);
+            return;
+        }
+        energyType = EnergyType.INVALID;
+        prepared = true;
+    }
+
+    @Override
+    public boolean shouldRunAsyncInit(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
+        return tileEntity instanceof ILegacyPoweredTile || tileEntity instanceof AbstractCapabilityMachineEntity;
+    }
+
+    @Override
+    public void init(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
         if (initialized) {
-            return this;
+            return;
         }
         initialized = true;
+        if (prepared) {
+            return;
+        }
         if (tileEntity instanceof TileCapBank tcapBank) {
             capBank = tcapBank;
             ICapBankNetwork activeNetwork = capBank.getNetwork();
@@ -278,20 +316,19 @@ public class EIOHandler implements IEnergyHandler {
                 capBankNetwork = networkStorage;
             }
             energyType = EnergyType.STORAGE;
-            return this;
+            prepared = true;
+            return;
         }
         if (tileEntity instanceof ILegacyPoweredTile poweredTile) {
-            bindLegacyPoweredTile(poweredTile);
-            updateStorageEnergyType();
-            return this;
+            prepareLegacyPoweredTile(poweredTile);
+            return;
         }
         if (tileEntity instanceof AbstractCapabilityMachineEntity machineEntity) {
-            bindCapabilityMachine(machineEntity);
-            updateStorageEnergyType();
-            return this;
+            prepareCapabilityMachine(machineEntity);
+            return;
         }
         energyType = EnergyType.INVALID;
-        return this;
+        prepared = true;
     }
 
     private void refreshNetworkStorage() {
@@ -313,10 +350,14 @@ public class EIOHandler implements IEnergyHandler {
         }
     }
 
+    @Nullable
+    public ICapBankNetwork getCapBankNetwork() {
+        return capBankNetwork;
+    }
+
     @Override
-    public IEnergyHandler init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
+    public void init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
         energyType = EnergyType.INVALID;
-        return this;
     }
 
     @Override
@@ -332,6 +373,7 @@ public class EIOHandler implements IEnergyHandler {
         receiveFacing = null;
         energyType = null;
         initialized = false;
+        prepared = false;
         sendState = ROLE_UNKNOWN;
         receiveState = ROLE_UNKNOWN;
     }

@@ -100,7 +100,7 @@ public class CommonProxy implements IGuiHandler {
         }
 
         if (Loader.isModLoaded("enderio")) {
-            RegistryEnergyHandler.registerEnergyHandler(new EIOHandlerManager());
+            RegistryEnergyHandler.registerEnergyHandler(EIOHandlerManager.INSTANCE);
         }
         if (AE2_LOADED) {
             RegistryEnergyHandler.registerEnergyHandler(AE2HandlerManager.INSTANCE);
@@ -175,6 +175,7 @@ public class CommonProxy implements IGuiHandler {
             if (AE2_LOADED) {
                 AE2HandlerManager.INSTANCE.clearTickCache();
             }
+            EIOHandlerManager.INSTANCE.clearTickCache();
             DatPersistenceScheduler.INSTANCE.onServerTick();
         }
     }

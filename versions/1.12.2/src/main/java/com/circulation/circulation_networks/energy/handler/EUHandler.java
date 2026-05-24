@@ -10,10 +10,14 @@ import ic2.api.energy.tile.IEnergySink;
 import ic2.api.energy.tile.IEnergySource;
 import ic2.api.energy.tile.IEnergyTile;
 import ic2.api.item.ElectricItem;
+import ic2.core.WorldData;
+import ic2.core.energy.grid.EnergyNetLocal;
+import ic2.core.energy.grid.Tile;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 
 import net.minecraft.util.EnumFacing;
+import net.minecraft.util.math.BlockPos;
 import org.jetbrains.annotations.Nullable;
 
 public class EUHandler implements IEnergyHandler {
@@ -30,6 +34,7 @@ public class EUHandler implements IEnergyHandler {
     private IEnergySink receive;
     private EnumFacing receiveFacing = EnumFacing.NORTH;
     private boolean initialized;
+    private boolean prepared;
 
     static EnergyAmount positiveFeAmountFromEu(double valueEu) {
         if (!(valueEu > 0.0D)) {
@@ -85,44 +90,86 @@ public class EUHandler implements IEnergyHandler {
         }
     }
 
-    @Override
-    public IEnergyHandler init(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
-        if (initialized) {
-            return this;
-        }
-        initialized = true;
+    private void resetBlockState() {
+        energyType = EnergyType.INVALID;
+        send = null;
+        receive = null;
+        receiveFacing = EnumFacing.NORTH;
         isItem = false;
-        IEnergyTile tile = EnergyNet.instance.getSubTile(tileEntity.getWorld(), tileEntity.getPos());
-        boolean o = tile instanceof IEnergySource;
-        boolean i = tile instanceof IEnergySink;
-        if (o) {
-            if (i) {
-                energyType = EnergyType.STORAGE;
-                receive = (IEnergySink) tile;
-            } else energyType = EnergyType.SEND;
+    }
+
+    private void prepareBlockState(TileEntity tileEntity) {
+        resetBlockState();
+        var data = WorldData.get(tileEntity.getWorld(), false);
+        if (data == null) {
+            prepared = true;
+            return;
+        }
+        BlockPos pos = tileEntity.getPos();
+        EnergyNetLocal energyNet = data.energyNet;
+        Tile tiles = energyNet.getTile(pos);
+        IEnergyTile tile = null;
+        if (tiles != null) {
+            for (IEnergyTile subTile : tiles.getSubTiles()) {
+                if (EnergyNet.instance.getPos(subTile).equals(pos)) {
+                    tile = subTile;
+                }
+            }
+        }
+        boolean output = tile instanceof IEnergySource;
+        boolean input = tile instanceof IEnergySink;
+        if (output) {
             send = (IEnergySource) tile;
-        } else if (i) {
-            var receive = (IEnergySink) tile;
+            if (input) {
+                receive = (IEnergySink) tile;
+                energyType = EnergyType.STORAGE;
+            } else {
+                energyType = EnergyType.SEND;
+            }
+        } else if (input) {
+            var sink = (IEnergySink) tile;
             for (var value : EnumFacing.values()) {
-                if (receive.acceptsEnergyFrom(null, value)) {
-                    this.receiveFacing = value;
-                    this.receive = receive;
+                if (sink.acceptsEnergyFrom(null, value)) {
+                    receiveFacing = value;
+                    receive = sink;
                     energyType = EnergyType.RECEIVE;
                     break;
                 }
             }
         }
-        if (!(send != null && send.getOfferedEnergy() > 0) && !(receive != null && receive.getDemandedEnergy() > 0))
+        if (!(send != null && send.getOfferedEnergy() > 0) && !(receive != null && receive.getDemandedEnergy() > 0)) {
             energyType = EnergyType.INVALID;
-        return this;
+        }
+        prepared = true;
     }
 
     @Override
-    public IEnergyHandler init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
+    public void asyncInit(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
+        prepareBlockState(tileEntity);
+    }
+
+    @Override
+    public boolean shouldRunAsyncInit(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
+        return true;
+    }
+
+    @Override
+    public void init(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
+        if (initialized) {
+            return;
+        }
+        initialized = true;
+        if (!prepared) {
+            prepareBlockState(tileEntity);
+        }
+    }
+
+    @Override
+    public void init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
         isItem = true;
         this.itemStack = itemStack;
         energyType = EnergyType.RECEIVE;
-        return this;
+        prepared = true;
     }
 
     @Override
@@ -133,6 +180,7 @@ public class EUHandler implements IEnergyHandler {
         this.itemStack = ItemStack.EMPTY;
         this.isItem = false;
         this.initialized = false;
+        this.prepared = false;
     }
 
     @Override

@@ -21,6 +21,10 @@ public interface IEnergyHandlerManager extends Comparable<IEnergyHandlerManager>
 
     IEnergyHandler newItemInstance();
 
+    default IEnergyHandler resolveMappedHandler(IEnergyHandler handler, IEnergyHandler.HandlerResolveContext context) {
+        return handler.resolveMappedHandler(context);
+    }
+
     default String getUnit() {
         return "FE";
     }

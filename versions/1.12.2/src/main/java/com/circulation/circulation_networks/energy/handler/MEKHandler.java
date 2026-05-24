@@ -13,6 +13,7 @@ import mekanism.common.base.IEnergyWrapper;
 import mekanism.common.content.matrix.SynchronizedMatrixData;
 import mekanism.common.tier.EnergyCubeTier;
 import mekanism.common.tile.TileEntityEnergyCube;
+import mekanism.common.tile.prefab.TileEntityElectricBlock;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
@@ -69,6 +70,7 @@ public class MEKHandler implements IEnergyHandler {
     private EnergyType energyType = EnergyType.INVALID;
     private boolean creative;
     private boolean initialized;
+    private boolean prepared;
     @Nullable
     private EnumFacing sendFacing;
     @Nullable
@@ -132,19 +134,78 @@ public class MEKHandler implements IEnergyHandler {
         return attempted;
     }
 
+    private void prepareEnergyCube(TileEntityEnergyCube tileEntity) {
+        creative = tileEntity.tier == EnergyCubeTier.CREATIVE;
+        send = tileEntity;
+        receive = tileEntity;
+        energyType = EnergyType.STORAGE;
+        EnergyAmountConversionUtils.setFromDoubleFloor(maxExtract, tileEntity.getMaxOutput());
+        EnergyAmountConversionUtils.setFromDoubleFloor(maxReceive, tileEntity.getMaxOutput());
+        prepared = true;
+    }
+
+    private void prepareOrdinaryBlock(TileEntity tileEntity) {
+        bindOrdinaryHint(tileEntity);
+        boolean needSendScan = send == null && sendState == ROLE_UNKNOWN;
+        boolean needReceiveScan = receive == null && receiveState == ROLE_UNKNOWN;
+        boolean attemptedSend = false;
+        boolean attemptedReceive = false;
+        for (var i = 0; i < EnumFacing.VALUES.length; i++) {
+            if (!needSendScan && !needReceiveScan) break;
+            int attempted = bindOrdinarySide(tileEntity, EnumFacing.VALUES[i], needSendScan, needReceiveScan);
+            attemptedSend |= (attempted & 1) != 0;
+            attemptedReceive |= (attempted & 2) != 0;
+            needSendScan = send == null && sendState == ROLE_UNKNOWN;
+            needReceiveScan = receive == null && receiveState == ROLE_UNKNOWN;
+        }
+        if (send == null && sendState == ROLE_UNKNOWN && attemptedSend) {
+            sendState = ROLE_UNSUPPORTED;
+        }
+        if (receive == null && receiveState == ROLE_UNKNOWN && attemptedReceive) {
+            receiveState = ROLE_UNSUPPORTED;
+        }
+        if (receive != null) energyType = send != null ? EnergyType.STORAGE : EnergyType.RECEIVE;
+        else if (send != null) energyType = EnergyType.SEND;
+        else energyType = EnergyType.INVALID;
+
+        if (tileEntity instanceof IEnergyWrapper energyWrapper && energyWrapper.getMaxOutput() != 0) {
+            EnergyAmountConversionUtils.setFromDoubleFloor(maxExtract, energyWrapper.getMaxOutput());
+            EnergyAmountConversionUtils.setFromDoubleFloor(maxReceive, energyWrapper.getMaxOutput());
+        } else {
+            maxExtract.init(MAX_SCALED_DOUBLE_TRANSFER);
+            maxReceive.init(MAX_SCALED_DOUBLE_TRANSFER);
+        }
+        prepared = true;
+    }
+
     @Override
-    public IEnergyHandler init(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
+    public void asyncInit(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
+        if (tileEntity instanceof TileEntityEnergyCube energyCube) {
+            prepareEnergyCube(energyCube);
+            return;
+        }
+        if (tileEntity instanceof TileEntityElectricBlock && (inductionPort == null || !inductionPort.isInstance(tileEntity))) {
+            prepareOrdinaryBlock(tileEntity);
+        }
+    }
+
+    @Override
+    public boolean shouldRunAsyncInit(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
+        return tileEntity instanceof TileEntityEnergyCube
+            || tileEntity instanceof TileEntityElectricBlock && (inductionPort == null || !inductionPort.isInstance(tileEntity));
+    }
+
+    @Override
+    public void init(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
         if (initialized) {
-            return this;
+            return;
         }
         initialized = true;
+        if (prepared) {
+            return;
+        }
         if (tileEntity instanceof TileEntityEnergyCube te) {
-            creative = te.tier == EnergyCubeTier.CREATIVE;
-            send = (IStrictEnergyStorage) tileEntity;
-            receive = (IStrictEnergyStorage) tileEntity;
-            energyType = EnergyType.STORAGE;
-            EnergyAmountConversionUtils.setFromDoubleFloor(maxExtract, te.getMaxOutput());
-            EnergyAmountConversionUtils.setFromDoubleFloor(maxReceive, te.getMaxOutput());
+            prepareEnergyCube(te);
         } else if (inductionPort != null && inductionPort.isInstance(tileEntity)) {
             send = (IStrictEnergyStorage) tileEntity;
             receive = (IStrictEnergyStorage) tileEntity;
@@ -158,42 +219,14 @@ public class MEKHandler implements IEnergyHandler {
             } catch (Throwable e) {
                 throw new RuntimeException(e);
             }
+            prepared = true;
         } else {
-            bindOrdinaryHint(tileEntity);
-            boolean needSendScan = send == null && sendState == ROLE_UNKNOWN;
-            boolean needReceiveScan = receive == null && receiveState == ROLE_UNKNOWN;
-            boolean attemptedSend = false;
-            boolean attemptedReceive = false;
-            for (var i = 0; i < EnumFacing.VALUES.length; i++) {
-                if (!needSendScan && !needReceiveScan) break;
-                int attempted = bindOrdinarySide(tileEntity, EnumFacing.VALUES[i], needSendScan, needReceiveScan);
-                attemptedSend |= (attempted & 1) != 0;
-                attemptedReceive |= (attempted & 2) != 0;
-                needSendScan = send == null && sendState == ROLE_UNKNOWN;
-                needReceiveScan = receive == null && receiveState == ROLE_UNKNOWN;
-            }
-            if (send == null && sendState == ROLE_UNKNOWN && attemptedSend) {
-                sendState = ROLE_UNSUPPORTED;
-            }
-            if (receive == null && receiveState == ROLE_UNKNOWN && attemptedReceive) {
-                receiveState = ROLE_UNSUPPORTED;
-            }
-            if (receive != null) energyType = send != null ? EnergyType.STORAGE : EnergyType.RECEIVE;
-            else if (send != null) energyType = EnergyType.SEND;
-
-            if (tileEntity instanceof IEnergyWrapper te && te.getMaxOutput() != 0) {
-                EnergyAmountConversionUtils.setFromDoubleFloor(maxExtract, te.getMaxOutput());
-                EnergyAmountConversionUtils.setFromDoubleFloor(maxReceive, te.getMaxOutput());
-            } else {
-                maxExtract.init(MAX_SCALED_DOUBLE_TRANSFER);
-                maxReceive.init(MAX_SCALED_DOUBLE_TRANSFER);
-            }
+            prepareOrdinaryBlock(tileEntity);
         }
-        return this;
     }
 
     @Override
-    public IEnergyHandler init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
+    public void init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
         isItem = true;
         receiveItem = (IEnergizedItem) itemStack.getItem();
         double i = receiveItem.getMaxTransfer(itemStack);
@@ -201,7 +234,6 @@ public class MEKHandler implements IEnergyHandler {
         EnergyAmountConversionUtils.setFromDoubleFloor(needEnergy, Math.max(0.0D, i == 0 ? r : Math.min(r, i)));
         stack = itemStack;
         energyType = EnergyType.RECEIVE;
-        return this;
     }
 
     @Override
@@ -215,6 +247,7 @@ public class MEKHandler implements IEnergyHandler {
         creative = false;
         isItem = false;
         initialized = false;
+        prepared = false;
         needEnergy.setZero();
         stack = ItemStack.EMPTY;
     }

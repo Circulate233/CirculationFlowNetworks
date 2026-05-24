@@ -23,46 +23,75 @@ public class AE2Handler implements IEnergyHandler {
     public final EnergyAmount acceptableValue = EnergyAmount.obtain(0);
     @Nullable
     private IEnergyService energyGrid;
+    @Nullable
+    private AENetworkedPoweredBlockEntity probedTile;
+    private boolean probed;
+    private boolean fullyInitialized;
 
     @Override
-    public IEnergyHandler init(BlockEntity blockEntity, @Nullable HubNode.HubMetadata hubMetadata) {
+    public void init(BlockEntity blockEntity, @Nullable HubNode.HubMetadata hubMetadata) {
         if (!(blockEntity instanceof ControllerBlockEntity) && !(blockEntity instanceof EnergyAcceptorBlockEntity)) {
-            return this;
+            clear();
+            probed = true;
+            return;
         }
+        clear();
         AENetworkedPoweredBlockEntity tile = (AENetworkedPoweredBlockEntity) blockEntity;
         var n = tile.getMainNode();
-        IGrid grid;
         if (n == null) {
-            return this;
-        } else {
-            grid = n.getGrid();
+            probed = true;
+            return;
         }
+        IGrid grid = n.getGrid();
         if (grid == null) {
-            return this;
+            probed = true;
+            return;
         }
         energyGrid = grid.getEnergyService();
-        var a = AE2HandlerManager.INSTANCE.claim(energyGrid, this);
-        if (a == this) {
-            var e = tile.getExternalPowerDemand(PowerUnit.FE, Double.MAX_VALUE);
-            EnergyAmountConversionUtils.setFromDoubleFloor(acceptableValue, e);
-            return this;
-        } else {
-            this.clear();
-            return a;
-        }
+        probedTile = tile;
+        probed = true;
     }
 
     @Override
-    public IEnergyHandler init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
+    public void init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
+        clear();
+        probed = true;
+        fullyInitialized = true;
+    }
+
+    @Override
+    public IEnergyHandler resolveMappedHandler(HandlerResolveContext context) {
+        if (energyGrid == null) {
+            return this;
+        }
+        var claimed = AE2HandlerManager.INSTANCE.claim(energyGrid, this);
+        if (claimed != this) {
+            clear();
+            probed = true;
+            return claimed;
+        }
+        completeInit();
         return this;
+    }
+
+    private void completeInit() {
+        if (!probed || fullyInitialized || probedTile == null) {
+            return;
+        }
+        var e = probedTile.getExternalPowerDemand(PowerUnit.FE, Double.MAX_VALUE);
+        EnergyAmountConversionUtils.setFromDoubleFloor(acceptableValue, e);
+        fullyInitialized = true;
     }
 
     @Override
     public void clear() {
-        if (energyGrid != null) energyGrid.injectPower(receivedValue.doubleValue() / 2, Actionable.MODULATE);
+        if (fullyInitialized && energyGrid != null) energyGrid.injectPower(receivedValue.doubleValue() / 2, Actionable.MODULATE);
         energyGrid = null;
+        probedTile = null;
         acceptableValue.setZero();
         receivedValue.setZero();
+        probed = false;
+        fullyInitialized = false;
     }
 
     @Override
