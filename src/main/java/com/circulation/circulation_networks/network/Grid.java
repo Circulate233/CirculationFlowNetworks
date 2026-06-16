@@ -3,6 +3,7 @@ package com.circulation.circulation_networks.network;
 import com.circulation.circulation_networks.api.IGrid;
 import com.circulation.circulation_networks.api.node.IHubNode;
 import com.circulation.circulation_networks.api.node.INode;
+import com.circulation.circulation_networks.manager.EnergyMachineManager;
 import com.circulation.circulation_networks.registry.NodeTypes;
 import com.circulation.circulation_networks.utils.NbtCompat;
 import it.unimi.dsi.fastutil.longs.Long2ReferenceOpenHashMap;
@@ -21,6 +22,10 @@ public final class Grid implements IGrid {
     private long snapshotVersion = 1L;
     @Nullable
     private IHubNode hubNode;
+    // Runtime-only per-tick energy pipeline state, stored here so the server tick hot path
+    // reads it by reference instead of via an identity-keyed map. Never serialized.
+    @Nullable
+    private transient EnergyMachineManager.GridTickData energyTickData;
 
     public Grid(UUID id) {
         this.id = id;
@@ -90,6 +95,17 @@ public final class Grid implements IGrid {
     @Override
     public void markSnapshotDirty() {
         snapshotVersion++;
+    }
+
+    @Override
+    @Nullable
+    public EnergyMachineManager.GridTickData getEnergyTickData() {
+        return energyTickData;
+    }
+
+    @Override
+    public void setEnergyTickData(@Nullable EnergyMachineManager.GridTickData data) {
+        this.energyTickData = data;
     }
 
     @Override

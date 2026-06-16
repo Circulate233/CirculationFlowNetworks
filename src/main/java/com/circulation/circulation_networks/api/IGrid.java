@@ -2,6 +2,7 @@ package com.circulation.circulation_networks.api;
 
 import com.circulation.circulation_networks.api.node.IHubNode;
 import com.circulation.circulation_networks.api.node.INode;
+import com.circulation.circulation_networks.manager.EnergyMachineManager;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
 import net.minecraft.nbt.CompoundTag;
 
@@ -44,5 +45,17 @@ public interface IGrid {
      * 标记当前网络节点快照已变化。
      */
     default void markSnapshotDirty() {
+    }
+
+    /**
+     * 运行期能量管线的每 tick 临时数据槽。挂在网格对象上是为了让服务端 tick 热路径按引用直接取用，
+     * 绕开按网格身份哈希的 map 查找。不参与序列化。
+     */
+    @Nullable
+    default EnergyMachineManager.GridTickData getEnergyTickData() {
+        return null;
+    }
+
+    default void setEnergyTickData(@Nullable EnergyMachineManager.GridTickData data) {
     }
 }

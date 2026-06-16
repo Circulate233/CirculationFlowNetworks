@@ -104,6 +104,7 @@ public final class EnergyMachineManager {
             if (receive.isEmpty()) return;
             var sender = si.next();
             var ri = receive.iterator();
+            boolean senderPairMatch = sender.requiresPairMatch();
             EnergyAmount extractable = sender.canExtractValue();
             try {
                 if (extractable.isZero()) {
@@ -114,53 +115,57 @@ public final class EnergyMachineManager {
                 }
                 while (ri.hasNext()) {
                     var receiver = ri.next();
-                    if (sender.canExtract(receiver) && receiver.canReceive(sender)) {
-                        EnergyAmount receivable = receiver.canReceiveValue();
-                        try {
-                            if (receivable.isZero()) {
-                                if (!receiversAreStorage) {
-                                    receiver.recycle();
-                                    ri.remove();
-                                }
-                                continue;
+                    // Per-pair canExtract/canReceive is skipped unless a participant opts in via
+                    // requiresPairMatch(); receivable.isZero already gates ordinary transfers.
+                    if ((senderPairMatch || receiver.requiresPairMatch())
+                            && !(sender.canExtract(receiver) && receiver.canReceive(sender))) {
+                        continue;
+                    }
+                    EnergyAmount receivable = receiver.canReceiveValue();
+                    try {
+                        if (receivable.isZero()) {
+                            if (!receiversAreStorage) {
+                                receiver.recycle();
+                                ri.remove();
                             }
-                            int compare = extractable.compareTo(receivable);
-                            EnergyAmount transferLimit = compare <= 0 ? EnergyAmount.obtain(extractable) : EnergyAmount.obtain(receivable);
+                            continue;
+                        }
+                        int compare = extractable.compareTo(receivable);
+                        EnergyAmount transferLimit = compare <= 0 ? EnergyAmount.obtain(extractable) : EnergyAmount.obtain(receivable);
+                        try {
+                            EnergyAmount extracted = sender.extractEnergy(transferLimit);
                             try {
-                                EnergyAmount extracted = sender.extractEnergy(transferLimit);
+                                if (extracted.isZero()) {
+                                    sender.recycle();
+                                    si.remove();
+                                    break;
+                                }
+                                extractable.subtract(extracted);
+                                EnergyAmount received = receiver.receiveEnergy(extracted);
                                 try {
-                                    if (extracted.isZero()) {
+                                    if (!received.isZero()) {
+                                        status.interaction(received, sender.interaction(), receiver.interaction());
+                                    }
+                                    if (!receiversAreStorage && received.compareTo(receivable) >= 0) {
+                                        receiver.recycle();
+                                        ri.remove();
+                                    }
+                                    if (!sendAreStorage && !extractable.isPositive()) {
                                         sender.recycle();
                                         si.remove();
                                         break;
                                     }
-                                    extractable.subtract(extracted);
-                                    EnergyAmount received = receiver.receiveEnergy(extracted);
-                                    try {
-                                        if (!received.isZero()) {
-                                            status.interaction(received, sender.interaction(), receiver.interaction());
-                                        }
-                                        if (!receiversAreStorage && received.compareTo(receivable) >= 0) {
-                                            receiver.recycle();
-                                            ri.remove();
-                                        }
-                                        if (!sendAreStorage && !extractable.isPositive()) {
-                                            sender.recycle();
-                                            si.remove();
-                                            break;
-                                        }
-                                    } finally {
-                                        received.recycle();
-                                    }
                                 } finally {
-                                    extracted.recycle();
+                                    received.recycle();
                                 }
                             } finally {
-                                transferLimit.recycle();
+                                extracted.recycle();
                             }
                         } finally {
-                            receivable.recycle();
+                            transferLimit.recycle();
                         }
+                    } finally {
+                        receivable.recycle();
                     }
                 }
             } finally {
@@ -288,7 +293,7 @@ public final class EnergyMachineManager {
                 var hubMetadata = getHubMetadata(grid);
                 var handler = baseHandler.init(te, hubMetadata);
                 usedHandlersThisTick.add(handler);
-                var participant = EnergyTransferParticipant.obtain(handler, grid, hubMetadata, getOrCreateInteraction(grid), false);
+                var participant = EnergyTransferParticipant.obtain(handler, grid, hubMetadata, false);
                 var type = override != null ? override : stabilizeEnergyType(te, participant.getType());
                 if (type == IEnergyHandler.EnergyType.INVALID) {
                     participant.recycle();
@@ -296,6 +301,7 @@ public final class EnergyMachineManager {
                 }
 
                 var gridData = getTickGridData(grid);
+                participant.setInteraction(gridData.interaction);
                 Objects.requireNonNull(gridData.handlers(type)).add(participant);
                 if (type == IEnergyHandler.EnergyType.RECEIVE) {
                     if (gridData.receiveTargets.get(participant) == null) {
@@ -326,7 +332,7 @@ public final class EnergyMachineManager {
             usedHandlersThisTick.add(baseHandler);
             var handler = baseHandler.init(te, hubMetadata);
             usedHandlersThisTick.add(handler);
-            var participant = EnergyTransferParticipant.obtain(handler, grid, hubMetadata, getOrCreateInteraction(grid), false);
+            var participant = EnergyTransferParticipant.obtain(handler, grid, hubMetadata, false);
 
             var type = participant.getType();
             if (type == IEnergyHandler.EnergyType.INVALID) {
@@ -334,6 +340,7 @@ public final class EnergyMachineManager {
                 continue;
             }
             var gridData = getTickGridData(grid);
+            participant.setInteraction(gridData.interaction);
             Objects.requireNonNull(gridData.handlers(type)).add(participant);
             if (type == IEnergyHandler.EnergyType.RECEIVE && gridData.receiveTargets.get(participant) == null) {
                 var warningTarget = new WarningTarget(dimId, WorldResolveCompat.getPackedPos(te));
@@ -363,7 +370,7 @@ public final class EnergyMachineManager {
             }
 
             processedTickGrids.add(grid);
-            var handlers = tickGridData.get(grid);
+            var handlers = grid.getEnergyTickData();
             if (handlers == null || !handlers.activeThisTick) {
                 continue;
             }
@@ -382,7 +389,7 @@ public final class EnergyMachineManager {
         ChargingManager.INSTANCE.onServerTick(server, tickGridData);
 
         for (var grid : activeTickGrids) {
-            tickGridData.get(grid).finishTick();
+            grid.getEnergyTickData().finishTick();
         }
         clearTickMachineHandlers();
         activeTickGrids.clear();
@@ -805,6 +812,9 @@ public final class EnergyMachineManager {
         tileGrids.clear();
         cache.clear();
         interaction.clear();
+        for (var grid : tickGridData.keySet()) {
+            grid.setEnergyTickData(null);
+        }
         tickGridData.clear();
         activeTickGrids.clear();
         processedTickGrids.clear();
@@ -843,13 +853,22 @@ public final class EnergyMachineManager {
     }
 
     private GridTickData getTickGridData(IGrid grid) {
-        GridTickData data = tickGridData.get(grid);
+        // Fast path: read the cached reference straight off the grid object (no identity-hash
+        // map lookup). The tickGridData map remains authoritative for the per-grid consumers
+        // (onServerTick iteration, ChannelTransferView, ChargingManager); the field is only a
+        // cache of the same object. They are populated together and cleared together
+        // (onServerStop clears both), so they never diverge.
+        GridTickData data = grid.getEnergyTickData();
         if (data == null) {
             data = new GridTickData();
+            grid.setEnergyTickData(data);
             tickGridData.put(grid, data);
         }
         if (!data.activeThisTick) {
             data.prepareForTick();
+            // Resolve the grid's Interaction once per tick here instead of once per
+            // participant, removing a reference-keyed map lookup from the per-machine path.
+            data.interaction = getOrCreateInteraction(grid);
             activeTickGrids.add(grid);
         }
         return data;
@@ -880,13 +899,10 @@ public final class EnergyMachineManager {
     }
 
     private void clearTickMachineHandlers() {
-        if (usedHandlersThisTick.isEmpty() && retiredOriginalHandlers.isEmpty()) {
-            return;
+        for (var handler : usedHandlersThisTick) {
+            handler.clear();
         }
-        var handlers = new ReferenceOpenHashSet<IEnergyHandler>();
-        handlers.addAll(usedHandlersThisTick);
-        handlers.addAll(retiredOriginalHandlers);
-        for (var handler : handlers) {
+        for (var handler : retiredOriginalHandlers) {
             handler.clear();
         }
         usedHandlersThisTick.clear();
@@ -1030,12 +1046,16 @@ public final class EnergyMachineManager {
     private record WarningTarget(String dimId, long posLong) {
     }
 
-    static final class GridTickData {
+    public static final class GridTickData {
         final TombstoneReferenceBag<EnergyTransferParticipant> send = new TombstoneReferenceBag<>();
         final TombstoneReferenceBag<EnergyTransferParticipant> storage = new TombstoneReferenceBag<>();
         final TombstoneReferenceBag<EnergyTransferParticipant> receive = new TombstoneReferenceBag<>();
         final Reference2ObjectMap<EnergyTransferParticipant, WarningTarget> receiveTargets = new Reference2ObjectOpenHashMap<>();
         boolean activeThisTick;
+        // Resolved once per tick in getTickGridData and shared by every participant of this
+        // grid, so the per-participant creation no longer looks the Interaction up per machine.
+        @Nullable
+        Interaction interaction;
 
         private static void recycle(TombstoneReferenceBag<EnergyTransferParticipant> handlers) {
             for (int index = handlers.firstAliveIndex(); index >= 0; index = handlers.nextAliveIndex(index)) {
@@ -1068,6 +1088,7 @@ public final class EnergyMachineManager {
             storage.clearAndNullUsed();
             receive.clearAndNullUsed();
             receiveTargets.clear();
+            interaction = null;
             activeThisTick = false;
         }
     }
@@ -1140,6 +1161,7 @@ public final class EnergyMachineManager {
             }
             var sender = send.elementAt(senderIndex);
             int currentSenderIndex = senderIndex;
+            boolean senderPairMatch = sender.requiresPairMatch();
             EnergyAmount extractable = sender.canExtractValue();
             try {
                 if (extractable.isZero()) {
@@ -1150,7 +1172,16 @@ public final class EnergyMachineManager {
                 while (receiverIndex >= 0) {
                     var receiver = receive.elementAt(receiverIndex);
                     int currentReceiverIndex = receiverIndex;
-                    if (sender.canExtract(receiver) && receiver.canReceive(sender)) {
+                    // Per-pair canExtract/canReceive is skipped unless a participant opts in via
+                    // requiresPairMatch(); the receivable/extractable zero checks already gate
+                    // ordinary transfers. A precise-match rejection only skips this receiver (it
+                    // may match another sender), never removes it.
+                    if ((senderPairMatch || receiver.requiresPairMatch())
+                            && !(sender.canExtract(receiver) && receiver.canReceive(sender))) {
+                        receiverIndex = receive.nextAliveIndex(currentReceiverIndex);
+                        continue;
+                    }
+                    {
                         EnergyAmount receivable = receiver.canReceiveValue();
                         try {
                             if (receivable.isZero()) {
@@ -1209,8 +1240,6 @@ public final class EnergyMachineManager {
                         } finally {
                             receivable.recycle();
                         }
-                    } else {
-                        receiverIndex = receive.nextAliveIndex(currentReceiverIndex);
                     }
                 }
                 if (receiverIndex < 0) {
@@ -1235,6 +1264,7 @@ public final class EnergyMachineManager {
             }
             var sender = send.elementAt(senderIndex);
             int currentSenderIndex = senderIndex;
+            boolean senderPairMatch = sender.requiresPairMatch();
             EnergyAmount extractable = sender.canExtractValue();
             try {
                 if (extractable.isZero()) {
@@ -1247,7 +1277,10 @@ public final class EnergyMachineManager {
                 var receiveIterator = receive.iterator();
                 while (receiveIterator.hasNext()) {
                     var receiver = receiveIterator.next();
-                    if (!sender.canExtract(receiver) || !receiver.canReceive(sender)) {
+                    // Per-pair canExtract/canReceive is skipped unless a participant opts in via
+                    // requiresPairMatch(); receivable.isZero already gates ordinary transfers.
+                    if ((senderPairMatch || receiver.requiresPairMatch())
+                            && (!sender.canExtract(receiver) || !receiver.canReceive(sender))) {
                         continue;
                     }
                     EnergyAmount receivable = receiver.canReceiveValue();

@@ -124,7 +124,8 @@ public final class ChargingManager {
             var stack = items.get(i);
             var handler = IEnergyHandler.release(stack, hubMetadata);
             if (handler != null) {
-                var participant = EnergyTransferParticipant.obtain(handler, grid, hubMetadata, EnergyMachineManager.getOrCreateInteraction(grid));
+                var participant = EnergyTransferParticipant.obtain(handler, grid, hubMetadata);
+                participant.setInteraction(EnergyMachineManager.getOrCreateInteraction(grid));
                 if (canReceiveMore(participant)) {
                     result.add(participant);
                 } else {
@@ -143,7 +144,8 @@ public final class ChargingManager {
             return;
         }
 
-        var participant = EnergyTransferParticipant.obtain(handler, grid, hubMetadata, EnergyMachineManager.getOrCreateInteraction(grid));
+        var participant = EnergyTransferParticipant.obtain(handler, grid, hubMetadata);
+        participant.setInteraction(EnergyMachineManager.getOrCreateInteraction(grid));
         if (canReceiveMore(participant)) {
             result.add(participant);
             return;
@@ -161,7 +163,8 @@ public final class ChargingManager {
             if (energyHandler == null) {
                 return;
             }
-            var participant = EnergyTransferParticipant.obtain(energyHandler, grid, hubMetadata, EnergyMachineManager.getOrCreateInteraction(grid));
+            var participant = EnergyTransferParticipant.obtain(energyHandler, grid, hubMetadata);
+            participant.setInteraction(EnergyMachineManager.getOrCreateInteraction(grid));
             if (canReceiveMore(participant)) {
                 result.add(participant);
                 return;

@@ -12,7 +12,7 @@ final class EnergyTransferParticipant {
 
     private static final int MAX_POOL_SIZE = 4096;
     private static final ObjectPool<EnergyTransferParticipant> POOL =
-        new ObjectPool<>(EnergyTransferParticipant::new, EnergyTransferParticipant::reset, MAX_POOL_SIZE);
+        new ObjectPool<>(EnergyTransferParticipant::new, EnergyTransferParticipant::reset, MAX_POOL_SIZE, EnergyTransferParticipant[]::new);
 
     private IEnergyHandler handler;
     @Nullable
@@ -22,29 +22,43 @@ final class EnergyTransferParticipant {
     @Nullable
     private EnergyMachineManager.Interaction interaction;
     private boolean recycleHandlerOnRecycle;
+    // Cached once in obtain() so the hot transfer loop reads a field instead of re-querying
+    // the handler for every sender/receiver pairing.
+    private boolean pairMatch;
 
     private EnergyTransferParticipant() {
     }
 
     static EnergyTransferParticipant obtain(IEnergyHandler handler,
                                             @Nullable IGrid grid,
-                                            @Nullable HubNode.HubMetadata hubMetadata,
-                                            @Nullable EnergyMachineManager.Interaction interaction) {
-        return obtain(handler, grid, hubMetadata, interaction, true);
+                                            @Nullable HubNode.HubMetadata hubMetadata) {
+        return obtain(handler, grid, hubMetadata, true);
     }
 
     static EnergyTransferParticipant obtain(IEnergyHandler handler,
                                             @Nullable IGrid grid,
                                             @Nullable HubNode.HubMetadata hubMetadata,
-                                            @Nullable EnergyMachineManager.Interaction interaction,
                                             boolean recycleHandlerOnRecycle) {
         EnergyTransferParticipant p = POOL.obtain();
         p.handler = handler;
         p.grid = grid;
         p.hubMetadata = hubMetadata;
-        p.interaction = interaction;
         p.recycleHandlerOnRecycle = recycleHandlerOnRecycle;
+        p.pairMatch = handler.requiresPairMatch(hubMetadata);
         return p;
+    }
+
+    void setInteraction(@Nullable EnergyMachineManager.Interaction interaction) {
+        this.interaction = interaction;
+    }
+
+    /**
+     * Whether this participant opts into precise per-pair canExtract/canReceive matching.
+     * Default handlers return false, letting the transfer loop skip the per-pair predicate
+     * (the value-zero checks already gate transfers).
+     */
+    boolean requiresPairMatch() {
+        return pairMatch;
     }
 
     IEnergyHandler.EnergyType getType() {
@@ -86,6 +100,13 @@ final class EnergyTransferParticipant {
     }
 
     void recycle() {
+        // Neutral-state guard (see ObjectPool): a live participant always has a non-null
+        // handler (set in obtain). Once recycled, reset() nulls it, so this cheaply absorbs
+        // a redundant recycle without the pool needing a contains check — and also avoids a
+        // NPE on the handler.clear() below.
+        if (handler == null) {
+            return;
+        }
         if (recycleHandlerOnRecycle) {
             handler.clear();
         }
@@ -98,5 +119,6 @@ final class EnergyTransferParticipant {
         hubMetadata = null;
         interaction = null;
         recycleHandlerOnRecycle = false;
+        pairMatch = false;
     }
 }
