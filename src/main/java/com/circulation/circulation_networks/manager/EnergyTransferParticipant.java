@@ -12,7 +12,7 @@ final class EnergyTransferParticipant {
 
     private static final int MAX_POOL_SIZE = 4096;
     private static final ObjectPool<EnergyTransferParticipant> POOL =
-        new ObjectPool<>(EnergyTransferParticipant::new, EnergyTransferParticipant::reset, MAX_POOL_SIZE);
+        new ObjectPool<>(EnergyTransferParticipant::new, EnergyTransferParticipant::reset, MAX_POOL_SIZE, EnergyTransferParticipant[]::new);
 
     private IEnergyHandler handler;
     @Nullable
@@ -21,20 +21,28 @@ final class EnergyTransferParticipant {
     private HubNode.HubMetadata hubMetadata;
     @Nullable
     private EnergyMachineManager.Interaction interaction;
+    private boolean pairMatch;
 
     private EnergyTransferParticipant() {
     }
 
     static EnergyTransferParticipant obtain(IEnergyHandler handler,
                                             @Nullable IGrid grid,
-                                            @Nullable HubNode.HubMetadata hubMetadata,
-                                            @Nullable EnergyMachineManager.Interaction interaction) {
+                                            @Nullable HubNode.HubMetadata hubMetadata) {
         EnergyTransferParticipant p = POOL.obtain();
         p.handler = handler;
         p.grid = grid;
         p.hubMetadata = hubMetadata;
-        p.interaction = interaction;
+        p.pairMatch = handler.requiresPairMatch(hubMetadata);
         return p;
+    }
+
+    void setInteraction(@Nullable EnergyMachineManager.Interaction interaction) {
+        this.interaction = interaction;
+    }
+
+    boolean requiresPairMatch() {
+        return pairMatch;
     }
 
     IEnergyHandler handler() {
@@ -80,6 +88,9 @@ final class EnergyTransferParticipant {
     }
 
     void recycle() {
+        if (handler == null) {
+            return;
+        }
         POOL.recycle(this);
     }
 
@@ -88,5 +99,6 @@ final class EnergyTransferParticipant {
         grid = null;
         hubMetadata = null;
         interaction = null;
+        pairMatch = false;
     }
 }

@@ -23,7 +23,7 @@ public class EnergyAmount extends Number implements Comparable<EnergyAmount> {
     protected static final BigInteger BIG_INT_MAX = BigInteger.valueOf(Integer.MAX_VALUE);
     protected static final BigInteger BIG_LONG_MIN = BigInteger.valueOf(Long.MIN_VALUE);
     protected static final BigInteger BIG_LONG_MAX = BigInteger.valueOf(Long.MAX_VALUE);
-    protected static final ObjectPool<EnergyAmount> POOL = new ObjectPool<>(EnergyAmount::new, EnergyAmount::clear, MAX_POOL_SIZE);
+    protected static final ObjectPool<EnergyAmount> POOL = new ObjectPool<>(EnergyAmount::new, EnergyAmount::clear, MAX_POOL_SIZE, EnergyAmount[]::new);
     protected byte state = STATE_UNINITIALIZED;
     private long longValue;
     private BigInteger bigValue;
@@ -276,6 +276,12 @@ public class EnergyAmount extends Number implements Comparable<EnergyAmount> {
     }
 
     public void recycle() {
+        // Neutral-state guard (see ObjectPool): a live value is always
+        // initialized; clear() resets it to STATE_UNINITIALIZED, so a redundant
+        // recycle is cheaply absorbed without a reference-hash contains check.
+        if (state == STATE_UNINITIALIZED) {
+            return;
+        }
         POOL.recycle(this);
     }
 

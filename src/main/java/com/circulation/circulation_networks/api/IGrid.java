@@ -2,13 +2,16 @@ package com.circulation.circulation_networks.api;
 
 import com.circulation.circulation_networks.api.node.IHubNode;
 import com.circulation.circulation_networks.api.node.INode;
+import com.circulation.circulation_networks.manager.EnergyMachineManager;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
 //~ mc_imports
 import net.minecraft.nbt.NBTTagCompound;
 
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nullable;
 import java.util.UUID;
 
+@ApiStatus.NonExtendable
 public interface IGrid {
 
     UUID getId();
@@ -46,5 +49,13 @@ public interface IGrid {
      * 标记当前网络节点快照已变化。
      */
     default void markSnapshotDirty() {
+    }
+
+    @Nullable
+    default EnergyMachineManager.GridTickData getEnergyTickData() {
+        return null;
+    }
+
+    default void setEnergyTickData(@Nullable EnergyMachineManager.GridTickData data) {
     }
 }

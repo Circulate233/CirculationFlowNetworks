@@ -65,6 +65,10 @@ public interface IEnergyHandler {
 
     boolean canReceive(IEnergyHandler sendHandler, @Nullable HubNode.HubMetadata hubMetadata);
 
+    default boolean requiresPairMatch(@Nullable HubNode.HubMetadata hubMetadata) {
+        return false;
+    }
+
     EnergyType getType(@Nullable HubNode.HubMetadata hubMetadata);
 
     enum EnergyType {
