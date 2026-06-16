@@ -611,7 +611,7 @@ public final class NetworkManager {
     }
     //~}
 
-    public void removeNode(int dim, BlockPos pos) {
+    public synchronized void removeNode(int dim, BlockPos pos) {
         var pMap = posNodes.get(dim);
         if (pMap != null && pMap != posNodes.defaultReturnValue()) {
             //~ if >=1.20 '.toLong()' -> '.asLong()' {
@@ -800,7 +800,7 @@ public final class NetworkManager {
     }
 
     //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-    public @NotNull AddNodeResult addNode(INode newNode, @Nullable TileEntity blockEntity) {
+    public synchronized @NotNull AddNodeResult addNode(INode newNode, @Nullable TileEntity blockEntity) {
         //~}
         AddNodeResult validation = canAddNode(newNode, blockEntity);
         if (!validation.isSuccess()) {
