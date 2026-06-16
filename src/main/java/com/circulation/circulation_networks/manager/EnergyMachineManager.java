@@ -365,13 +365,13 @@ public final class EnergyMachineManager {
     }
 
     //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-    public void addMachine(TileEntity blockEntity) {
+    public synchronized void addMachine(TileEntity blockEntity) {
         addMachine(blockEntity, false);
         //~}
     }
 
     //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-    private void addMachine(TileEntity blockEntity, boolean forceRebind) {
+    private synchronized void addMachine(TileEntity blockEntity, boolean forceRebind) {
         if (blockEntity instanceof IMachineNodeBlockEntity) {
             return;
         }
@@ -421,20 +421,20 @@ public final class EnergyMachineManager {
     }
 
     //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-    public void removeMachine(TileEntity blockEntity) {
+    public synchronized void removeMachine(TileEntity blockEntity) {
         //~}
         detachFromNetworks(blockEntity);
         invalidateMachineBinding(blockEntity);
     }
 
     //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-    public void addMachineNode(TileEntity blockEntity) {
+    public synchronized void addMachineNode(TileEntity blockEntity) {
         machineNodeTiles.add(blockEntity);
         //~}
     }
 
     //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-    private void removeMachineNode(TileEntity blockEntity) {
+    private synchronized void removeMachineNode(TileEntity blockEntity) {
         machineNodeTiles.remove(blockEntity);
         //~}
     }
