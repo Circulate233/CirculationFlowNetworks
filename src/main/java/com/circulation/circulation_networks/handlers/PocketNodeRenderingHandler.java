@@ -67,6 +67,7 @@ public final class PocketNodeRenderingHandler {
     // Keep a visible but tiny bias away from the host face to avoid Z-fighting.
     private static final double FACE_OFFSET = 0.503D;
     private static final float FACE_SCALE = 0.03125F;
+    private static final double MAX_RENDER_DISTANCE_SQ = 96.0D * 96.0D;
     private final Int2ObjectMap<Long2ObjectMap<PocketNodeClientHost>> hosts = new Int2ObjectOpenHashMap<>();
 
     private PocketNodeRenderingHandler() {
@@ -211,9 +212,7 @@ public final class PocketNodeRenderingHandler {
     }
 
     //? if >=1.20 {
-    /*private static final double MAX_RENDER_DISTANCE_SQ = 96.0D * 96.0D;
-
-    @SubscribeEvent
+    /*@SubscribeEvent
     public void renderWorldLastEvent(RenderLevelStageEvent event) {
         if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) {
             return;
@@ -313,6 +312,12 @@ public final class PocketNodeRenderingHandler {
 
             BlockPos pos = host.getRecord().pos();
             EnumFacing face = host.getRecord().attachmentFace();
+            double dx = pos.getX() + 0.5D - cameraX;
+            double dy = pos.getY() + 0.5D - cameraY;
+            double dz = pos.getZ() + 0.5D - cameraZ;
+            if (dx * dx + dy * dy + dz * dz > MAX_RENDER_DISTANCE_SQ) {
+                continue;
+            }
             GlStateManager.pushMatrix();
             GlStateManager.enableRescaleNormal();
             GlStateManager.enableBlend();
