@@ -32,7 +32,6 @@ import net.neoforged.api.distmarker.OnlyIn;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.OpenGlHelper;
-import net.minecraft.client.renderer.RenderHelper;
 import net.minecraft.client.renderer.block.model.IBakedModel;
 import net.minecraft.client.renderer.block.model.ItemCameraTransforms;
 import net.minecraft.client.renderer.texture.TextureMap;
@@ -88,14 +87,6 @@ public final class PocketNodeRenderingHandler {
     }
 
     //? if <1.20 {
-    private static void applyWorldLight(Minecraft mc, BlockPos pos) {
-        int packedLight = mc.world.getCombinedLight(pos, 0);
-        int blockLight = packedLight % 65536;
-        int skyLight = packedLight / 65536;
-        OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, blockLight, skyLight);
-        GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
-    }
-
     private static void applyFullBrightLight() {
         OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, 240.0F, 240.0F);
         GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
@@ -211,6 +202,19 @@ public final class PocketNodeRenderingHandler {
         hosts.clear();
     }
 
+    //? if <1.20 {
+    /** Returns whether the current client dimension owns any pocket-node host records. */
+    public boolean hasWorldRenderHosts() {
+        Minecraft minecraft = Minecraft.getMinecraft();
+        EntityPlayerSP player = minecraft.player;
+        if (player == null) {
+            return false;
+        }
+        Long2ObjectMap<PocketNodeClientHost> dimHosts = hosts.get(player.dimension);
+        return dimHosts != null && !dimHosts.isEmpty();
+    }
+    //?}
+
     //? if >=1.20 {
     /*@SubscribeEvent
     public void renderWorldLastEvent(RenderLevelStageEvent event) {
@@ -319,38 +323,36 @@ public final class PocketNodeRenderingHandler {
                 continue;
             }
             GlStateManager.pushMatrix();
-            GlStateManager.enableRescaleNormal();
-            GlStateManager.enableBlend();
-            GlStateManager.tryBlendFuncSeparate(
-                GL11.GL_SRC_ALPHA,
-                GL11.GL_ONE_MINUS_SRC_ALPHA,
-                GL11.GL_ONE,
-                GL11.GL_ZERO
-            );
-            GlStateManager.disableCull();
-            GlStateManager.depthMask(true);
-            GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
-            GlStateManager.translate(pos.getX() + 0.5D - cameraX, pos.getY() + 0.5D - cameraY, pos.getZ() + 0.5D - cameraZ);
-            applyFaceTransform(face);
-            mc.getTextureManager().bindTexture(TextureMap.LOCATION_BLOCKS_TEXTURE);
-            GlStateManager.enableAlpha();
-            GlStateManager.alphaFunc(GL11.GL_GREATER, 0.1F);
-            GlStateManager.scale(16.0F, 16.0F, 16.0F);
-            if (host.isGui3d()) {
-                GlStateManager.scale(1.0F, 1.0F, 0.002F);
+            try {
+                GlStateManager.enableRescaleNormal();
+                GlStateManager.enableBlend();
+                GlStateManager.tryBlendFuncSeparate(
+                    GL11.GL_SRC_ALPHA,
+                    GL11.GL_ONE_MINUS_SRC_ALPHA,
+                    GL11.GL_ONE,
+                    GL11.GL_ZERO
+                );
+                GlStateManager.disableCull();
+                GlStateManager.depthMask(true);
+                GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+                GlStateManager.translate(pos.getX() + 0.5D - cameraX, pos.getY() + 0.5D - cameraY, pos.getZ() + 0.5D - cameraZ);
+                applyFaceTransform(face);
+                mc.getTextureManager().bindTexture(TextureMap.LOCATION_BLOCKS_TEXTURE);
+                GlStateManager.enableAlpha();
+                GlStateManager.alphaFunc(GL11.GL_GREATER, 0.1F);
+                GlStateManager.scale(16.0F, 16.0F, 16.0F);
+                if (host.isGui3d()) {
+                    GlStateManager.scale(1.0F, 1.0F, 0.002F);
+                }
+                IBakedModel model = PocketNodeItemStackRenderer.toBrightItemModel(PocketNodeModelCache.get(host.getRenderStack()));
+                model = ForgeHooksClient.handleCameraTransforms(model, ItemCameraTransforms.TransformType.GUI, false);
+                GlStateManager.disableLighting();
+                applyFullBrightLight();
+                mc.getRenderItem().renderItem(host.getRenderStack(), model);
+            } finally {
+                GlStateManager.popMatrix();
             }
-            IBakedModel model = PocketNodeItemStackRenderer.toBrightItemModel(PocketNodeModelCache.get(host.getRenderStack()));
-            model = ForgeHooksClient.handleCameraTransforms(model, ItemCameraTransforms.TransformType.GUI, false);
-            RenderHelper.disableStandardItemLighting();
-            applyFullBrightLight();
-            mc.getRenderItem().renderItem(host.getRenderStack(), model);
-            GlStateManager.depthMask(true);
-            GlStateManager.enableCull();
-            GlStateManager.disableBlend();
-            GlStateManager.popMatrix();
         }
-
-        applyWorldLight(mc, player.getPosition());
     }
     //?} else {
     /*private static void applyFaceTransform(PoseStack poseStack, Direction face) {

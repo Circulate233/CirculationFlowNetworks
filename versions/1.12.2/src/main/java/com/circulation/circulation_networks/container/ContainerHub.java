@@ -170,7 +170,8 @@ public class ContainerHub extends CFNBaseContainer {
     }
 
     private void refreshEnergyStats(boolean refreshEnergy, boolean refreshLatency) {
-        var energy = EnergyMachineManager.INSTANCE.getInteraction().get(node.getGrid());
+        var grid = node.getGrid();
+        var energy = grid == null ? null : grid.getInteraction();
         if (energy == null) {
             if (refreshEnergy) {
                 input = "0";

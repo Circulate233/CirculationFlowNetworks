@@ -19,7 +19,7 @@ public final class DEHandlerManager implements IEnergyHandlerManager {
                 return true;
             }
         }
-        return false;
+        return blockEntity.getCapability(CapabilityOP.OP, null).isPresent();
     }
 
     @Override

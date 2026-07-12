@@ -2,7 +2,10 @@ package com.circulation.circulation_networks.energy.handler;
 
 import com.circulation.circulation_networks.api.EnergyAmount;
 import com.circulation.circulation_networks.api.EnergyAmounts;
+import com.circulation.circulation_networks.api.HandlerTickResult;
 import com.circulation.circulation_networks.api.IEnergyHandler;
+import com.circulation.circulation_networks.manager.HandlerBindingPolicy;
+import com.circulation.circulation_networks.manager.HandlerInvalidationSink;
 import com.circulation.circulation_networks.network.nodes.HubNode;
 import hellfirepvp.modularmachinery.common.tiles.TileEnergyInputHatch;
 import hellfirepvp.modularmachinery.common.tiles.TileEnergyOutputHatch;
@@ -11,15 +14,23 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Objects;
+
 public class MMCEHandler implements IEnergyHandler {
+
+    private static final HandlerBindingPolicy BINDING_POLICY = HandlerBindingPolicy.of(
+        HandlerBindingPolicy.TickLifecycle.BEGIN_TICK,
+        HandlerBindingPolicy.RoleScope.FIXED,
+        HandlerBindingPolicy.MappingScope.NONE,
+        HandlerBindingPolicy.PairMatching.NONE
+    );
 
     @Nullable
     private TileEnergyHatch hatch;
     private long remainingExtractBudget;
     private long remainingReceiveBudget;
     private EnergyType energyType = EnergyType.INVALID;
-    private boolean initialized;
-    private boolean prepared;
+    private long activeEpoch = Long.MIN_VALUE;
 
     public MMCEHandler() {
     }
@@ -41,62 +52,82 @@ public class MMCEHandler implements IEnergyHandler {
         return Math.max(0L, hatch.getMaxEnergy() - hatch.getCurrentEnergy());
     }
 
-    private void resetState() {
-        hatch = null;
+    private void clearTickState() {
         remainingExtractBudget = 0L;
         remainingReceiveBudget = 0L;
-        energyType = EnergyType.INVALID;
     }
 
-    private void scanIntoState(TileEntity tileEntity) {
-        resetState();
+    private void bindHatch(TileEntity tileEntity) {
+        hatch = null;
+        energyType = EnergyType.INVALID;
         if (tileEntity instanceof TileEnergyInputHatch inputHatch) {
             hatch = inputHatch;
-            remainingReceiveBudget = getTransferLimit(inputHatch);
             energyType = EnergyType.RECEIVE;
-            prepared = true;
             return;
         }
         if (tileEntity instanceof TileEnergyOutputHatch outputHatch) {
             hatch = outputHatch;
-            remainingExtractBudget = getTransferLimit(outputHatch);
             energyType = EnergyType.SEND;
         }
-        prepared = true;
     }
 
     @Override
-    public void asyncInit(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
-        scanIntoState(tileEntity);
+    public HandlerBindingPolicy bindingPolicy() {
+        return BINDING_POLICY;
     }
 
     @Override
-    public boolean shouldRunAsyncInit(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
-        return true;
-    }
-
-    @Override
-    public void init(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
-        if (initialized) {
-            return;
+    public void bindBlockEntity(TileEntity tileEntity, HandlerInvalidationSink invalidationSink) {
+        if (hatch != null) {
+            throw new IllegalStateException("MMCE handler is already bound");
         }
-        initialized = true;
-        if (!prepared) {
-            scanIntoState(tileEntity);
+        Objects.requireNonNull(invalidationSink, "invalidationSink");
+        bindHatch(Objects.requireNonNull(tileEntity, "tileEntity"));
+        if (hatch == null) {
+            throw new IllegalArgumentException("MMCE handler requires an energy input or output hatch");
         }
     }
 
     @Override
-    public void init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
-        resetState();
-        prepared = true;
+    public HandlerTickResult beginServerTick(long epoch) {
+        if (hatch == null) {
+            throw new IllegalStateException("MMCE handler has no block-entity binding");
+        }
+        if (epoch <= activeEpoch) {
+            throw new IllegalArgumentException("MMCE handler epoch must increase: previous " + activeEpoch + ", got " + epoch);
+        }
+        activeEpoch = epoch;
+        if (hatch instanceof TileEnergyInputHatch inputHatch) {
+            remainingReceiveBudget = getTransferLimit(inputHatch);
+        } else if (hatch instanceof TileEnergyOutputHatch outputHatch) {
+            remainingExtractBudget = getTransferLimit(outputHatch);
+        } else {
+            throw new IllegalStateException("MMCE handler bound to an unsupported hatch type");
+        }
+        return HandlerTickResult.UNCHANGED;
     }
 
     @Override
-    public void clear() {
-        resetState();
-        initialized = false;
-        prepared = false;
+    public void endServerTick(long epoch) {
+        throw new IllegalStateException("MMCE handler uses begin-only tick lifecycle");
+    }
+
+    @Override
+    public void unbindBlockEntity() {
+        clearTickState();
+        activeEpoch = Long.MIN_VALUE;
+        hatch = null;
+        energyType = EnergyType.INVALID;
+    }
+
+    @Override
+    public void bindItem(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
+        throw new IllegalStateException("MMCE does not support item energy bindings");
+    }
+
+    @Override
+    public void unbindItem() {
+        throw new UnsupportedOperationException("MMCE does not support item energy bindings");
     }
 
     @Override

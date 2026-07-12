@@ -14,6 +14,30 @@ out
 .idea
 .vscode
 *test
+!versions/1.12.2/src/test/
+versions/1.12.2/src/test/*
+!versions/1.12.2/src/test/java/
+versions/1.12.2/src/test/java/*
+!versions/1.12.2/src/test/java/com/
+versions/1.12.2/src/test/java/com/*
+!versions/1.12.2/src/test/java/com/circulation/
+versions/1.12.2/src/test/java/com/circulation/*
+!versions/1.12.2/src/test/java/com/circulation/circulation_networks/
+versions/1.12.2/src/test/java/com/circulation/circulation_networks/*
+!versions/1.12.2/src/test/java/com/circulation/circulation_networks/client/
+versions/1.12.2/src/test/java/com/circulation/circulation_networks/client/*
+!versions/1.12.2/src/test/java/com/circulation/circulation_networks/client/render/
+versions/1.12.2/src/test/java/com/circulation/circulation_networks/client/render/*
+!versions/1.12.2/src/test/java/com/circulation/circulation_networks/client/render/LegacyWorldRenderStateProfileTest.java
+!versions/1.12.2/src/test/java/com/circulation/circulation_networks/manager/
+versions/1.12.2/src/test/java/com/circulation/circulation_networks/manager/*
+!versions/1.12.2/src/test/java/com/circulation/circulation_networks/manager/MachineChunkResidencyIndexTest.java
+!versions/1.12.2/src/test/java/com/circulation/circulation_networks/manager/MachineBindingIndexSharedBackendTest.java
+!versions/1.12.2/src/test/java/com/circulation/circulation_networks/energy/
+versions/1.12.2/src/test/java/com/circulation/circulation_networks/energy/*
+!versions/1.12.2/src/test/java/com/circulation/circulation_networks/energy/handler/
+versions/1.12.2/src/test/java/com/circulation/circulation_networks/energy/handler/*
+!versions/1.12.2/src/test/java/com/circulation/circulation_networks/energy/handler/MMCEHandlerLargeTransferTest.java
 
 # gradle
 build

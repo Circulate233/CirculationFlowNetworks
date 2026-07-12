@@ -612,14 +612,19 @@ public final class NetworkManager {
     //~}
 
     public synchronized void removeNode(int dim, BlockPos pos) {
-        var pMap = posNodes.get(dim);
-        if (pMap != null && pMap != posNodes.defaultReturnValue()) {
-            //~ if >=1.20 '.toLong()' -> '.asLong()' {
-            INode removedNode = pMap.get(pos.toLong());
-            if (removedNode != null) {
-                removeNodeInternal(removedNode);
+        MachineBindingIndex.INSTANCE.beginTopologyTransaction();
+        try {
+            var pMap = posNodes.get(dim);
+            if (pMap != null && pMap != posNodes.defaultReturnValue()) {
+                //~ if >=1.20 '.toLong()' -> '.asLong()' {
+                INode removedNode = pMap.get(pos.toLong());
+                if (removedNode != null) {
+                    removeNodeInternal(removedNode);
+                }
+                //~}
             }
-            //~}
+        } finally {
+            MachineBindingIndex.INSTANCE.endTopologyTransaction();
         }
     }
 
@@ -806,7 +811,12 @@ public final class NetworkManager {
         if (!validation.isSuccess()) {
             return validation;
         }
-        return performAddNode(newNode, blockEntity);
+        MachineBindingIndex.INSTANCE.beginTopologyTransaction();
+        try {
+            return performAddNode(newNode, blockEntity);
+        } finally {
+            MachineBindingIndex.INSTANCE.endTopologyTransaction();
+        }
     }
 
     //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
@@ -978,14 +988,12 @@ public final class NetworkManager {
     private IGrid allocGrid() {
         IGrid grid = new Grid(UUID.randomUUID());
         grids.put(grid.getId(), grid);
-        EnergyMachineManager.INSTANCE.getInteraction().put(grid, new EnergyMachineManager.Interaction());
         markGridDirty(grid);
         return grid;
     }
 
     private void destroyGrid(IGrid grid) {
         grids.remove(grid.getId());
-        EnergyMachineManager.INSTANCE.getInteraction().remove(grid);
         dirtyGrids.remove(grid);
         deleteFileAsync(new File(getSaveFile(), grid.getId().toString() + ".dat"));
     }
@@ -1083,7 +1091,6 @@ public final class NetworkManager {
         for (var entry : entries) {
             var grid = entry.grid();
             grids.put(grid.getId(), grid);
-            EnergyMachineManager.INSTANCE.getInteraction().put(grid, new EnergyMachineManager.Interaction());
 
             var registered = new ObjectArrayList<INode>();
             boolean collision = false;
@@ -1108,7 +1115,6 @@ public final class NetworkManager {
                     unregisterNodeIndices(entry.dimId, node);
                 }
                 grids.remove(grid.getId());
-                EnergyMachineManager.INSTANCE.getInteraction().remove(grid);
                 grid.getNodes().clear();
                 grid.setHubNode(null);
             }

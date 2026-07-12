@@ -1,60 +1,99 @@
 package com.circulation.circulation_networks.energy.manager;
 
+import appeng.api.networking.IGrid;
 import appeng.api.networking.energy.IEnergyService;
+import appeng.blockentity.grid.AENetworkedPoweredBlockEntity;
 import appeng.blockentity.networking.ControllerBlockEntity;
 import appeng.blockentity.networking.EnergyAcceptorBlockEntity;
-import appeng.me.energy.IEnergyOverlayGridConnection;
-import appeng.me.service.EnergyService;
 import com.circulation.circulation_networks.api.IEnergyHandler;
 import com.circulation.circulation_networks.api.IEnergyHandlerManager;
+import com.circulation.circulation_networks.energy.handler.AE2BackendHandler;
 import com.circulation.circulation_networks.energy.handler.AE2Handler;
-import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import com.circulation.circulation_networks.manager.MappedEnergyHandlerProvider;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import org.jetbrains.annotations.NotNull;
 
-public final class AE2HandlerManager implements IEnergyHandlerManager {
+import java.util.Objects;
+
+/** Owns AE2 shared backends keyed strictly by energy-service identity. */
+public final class AE2HandlerManager implements IEnergyHandlerManager, MappedEnergyHandlerProvider {
 
     public static final AE2HandlerManager INSTANCE = new AE2HandlerManager();
 
-    private final Reference2ObjectMap<IEnergyService, AE2Handler> gridCache = new Reference2ObjectOpenHashMap<>();
+    private final Reference2ObjectMap<IEnergyService, BackendLease> identities = new Reference2ObjectOpenHashMap<>();
+    private final Reference2ObjectMap<IEnergyHandler, BackendLease> backends = new Reference2ObjectOpenHashMap<>();
 
     private AE2HandlerManager() {
     }
 
-    public void clearTickCache() {
-        gridCache.clear();
+    @Override
+    public @NotNull IEnergyHandler resolveRuntime(IEnergyHandler boundHandler, long epoch) {
+        throw new UnsupportedOperationException("AE2 uses shared-backend mapping, not runtime mapping");
     }
 
-    public AE2Handler claim(IEnergyService grid, AE2Handler aeGrid) {
-        var a = gridCache.get(grid);
-        if (a != null) {
-            return a;
-        }
-        ReferenceSet<IEnergyService> visited = new ReferenceOpenHashSet<>();
-        ObjectArrayList<IEnergyService> queue = new ObjectArrayList<>();
-        queue.add(grid);
-        while (!queue.isEmpty()) {
-            IEnergyService current = queue.removeLast();
-            if (!visited.add(current)) {
-                continue;
-            }
-            gridCache.put(current, aeGrid);
-            if (current instanceof EnergyService service) {
-                for (IEnergyOverlayGridConnection connection : service.getOverlayGridConnections()) {
-                    queue.addAll(connection.connectedEnergyServices());
-                }
+    @Override
+    public @NotNull IEnergyHandler acquireSharedBackend(IEnergyHandler boundHandler) {
+        AE2Handler endpoint = requireEndpoint(boundHandler);
+        ReferenceSet<IEnergyService> component = endpoint.componentServices();
+        BackendLease lease = findExactComponent(component);
+        if (lease == null) {
+            lease = new BackendLease(new AE2BackendHandler(endpoint.energyService()), component);
+            backends.put(lease.backend, lease);
+            for (IEnergyService service : component) {
+                identities.put(service, lease);
             }
         }
-        return aeGrid;
+        if (lease.references == Integer.MAX_VALUE) {
+            throw new IllegalStateException("AE2 shared-backend reference count exhausted");
+        }
+        lease.references++;
+        return lease.backend;
+    }
+
+    @Override
+    public void releaseSharedBackend(IEnergyHandler boundHandler, IEnergyHandler sharedBackend) {
+        requireEndpoint(boundHandler);
+        if (!(sharedBackend instanceof AE2BackendHandler backend)) {
+            throw new IllegalArgumentException("AE2 manager received backend " + sharedBackend.getClass().getName());
+        }
+        BackendLease lease = backends.get(backend);
+        if (lease == null || lease.backend != backend || lease.references <= 0) {
+            throw new IllegalStateException("AE2 shared-backend lease is inconsistent");
+        }
+        lease.references--;
+        if (lease.references == 0) {
+            backends.remove(backend);
+            removeIdentityMappings(lease);
+            backend.close();
+        }
+    }
+
+    private void removeIdentityMappings(BackendLease retired) {
+        identities.reference2ObjectEntrySet().removeIf(entry -> entry.getValue() == retired);
+    }
+
+    private BackendLease findExactComponent(ReferenceSet<IEnergyService> component) {
+        if (component.isEmpty()) {
+            throw new IllegalStateException("AE2 endpoint has an empty overlay component");
+        }
+        BackendLease candidate = identities.get(component.iterator().next());
+        return candidate != null && candidate.matches(component) ? candidate : null;
     }
 
     @Override
     public boolean isAvailable(BlockEntity blockEntity) {
-        return blockEntity instanceof ControllerBlockEntity || blockEntity instanceof EnergyAcceptorBlockEntity;
+        if (!(blockEntity instanceof ControllerBlockEntity)
+            && !(blockEntity instanceof EnergyAcceptorBlockEntity)) {
+            return false;
+        }
+        AENetworkedPoweredBlockEntity endpoint = (AENetworkedPoweredBlockEntity) blockEntity;
+        IGrid grid = endpoint.getMainNode().getGrid();
+        return grid != null && grid.getEnergyService() != null;
     }
 
     @Override
@@ -79,7 +118,7 @@ public final class AE2HandlerManager implements IEnergyHandlerManager {
 
     @Override
     public IEnergyHandler newItemInstance() {
-        return new AE2Handler();
+        throw new UnsupportedOperationException("AE2 handler manager does not support item bindings");
     }
 
     @Override
@@ -90,5 +129,28 @@ public final class AE2HandlerManager implements IEnergyHandlerManager {
     @Override
     public double getMultiplying() {
         return 2.0D;
+    }
+
+    private static AE2Handler requireEndpoint(IEnergyHandler handler) {
+        Objects.requireNonNull(handler, "handler");
+        if (handler instanceof AE2Handler endpoint) {
+            return endpoint;
+        }
+        throw new IllegalArgumentException("AE2 manager received endpoint " + handler.getClass().getName());
+    }
+
+    private static final class BackendLease {
+        private final AE2BackendHandler backend;
+        private final ReferenceOpenHashSet<IEnergyService> services;
+        private int references;
+
+        private BackendLease(AE2BackendHandler backend, ReferenceSet<IEnergyService> services) {
+            this.backend = backend;
+            this.services = new ReferenceOpenHashSet<>(services);
+        }
+
+        private boolean matches(ReferenceSet<IEnergyService> candidate) {
+            return services.size() == candidate.size() && services.containsAll(candidate);
+        }
     }
 }

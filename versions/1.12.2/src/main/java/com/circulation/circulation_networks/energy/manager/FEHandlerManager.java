@@ -5,23 +5,19 @@ import com.circulation.circulation_networks.api.IEnergyHandlerManager;
 import com.circulation.circulation_networks.energy.handler.FEHandler;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.EnumFacing;
 import net.minecraftforge.energy.CapabilityEnergy;
-import net.minecraftforge.energy.IEnergyStorage;
 
 public final class FEHandlerManager implements IEnergyHandlerManager {
 
     @Override
     public boolean isAvailable(TileEntity tileEntity) {
-        for (var i = 0; i < EnumFacing.VALUES.length; ++i) {
-            if (tileEntity.hasCapability(CapabilityEnergy.ENERGY, EnumFacing.VALUES[i])) return true;
-        }
-        return tileEntity instanceof IEnergyStorage;
+        return FEHandler.supports(tileEntity);
     }
 
     @Override
     public boolean isAvailable(ItemStack itemStack) {
-        return itemStack.hasCapability(CapabilityEnergy.ENERGY, null);
+        var storage = itemStack.getCapability(CapabilityEnergy.ENERGY, null);
+        return storage != null && storage.canReceive();
     }
 
     @Override

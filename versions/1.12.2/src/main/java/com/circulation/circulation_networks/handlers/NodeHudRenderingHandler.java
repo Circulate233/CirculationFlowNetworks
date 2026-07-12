@@ -5,6 +5,7 @@ import com.circulation.circulation_networks.api.API;
 import com.circulation.circulation_networks.api.EnergyAmount;
 import com.circulation.circulation_networks.blocks.MultiblockShellBlock;
 import com.circulation.circulation_networks.client.render.ClientAnimationTicker;
+import com.circulation.circulation_networks.client.render.LegacyWorldRenderStateGuard;
 import com.circulation.circulation_networks.gui.GuiHub;
 import com.circulation.circulation_networks.gui.component.base.AtlasRegion;
 import com.circulation.circulation_networks.gui.component.base.ComponentAtlas;
@@ -50,6 +51,15 @@ public final class NodeHudRenderingHandler {
     private static final float TILT_ANGLE = -10.0F;
     private static final float BG_ALPHA = 0.85F;
 
+    private final FloatBuffer modelViewBuffer = BufferUtils.createFloatBuffer(16);
+    private final FloatBuffer projectionBuffer = BufferUtils.createFloatBuffer(16);
+    private final IntBuffer viewportBuffer = BufferUtils.createIntBuffer(16);
+    private final float[] modelViewMatrix = new float[16];
+    private final float[] projectionMatrix = new float[16];
+    private final int[] viewport = new int[4];
+    private final float[] projectedCorners = new float[8];
+    private final int[] scissorBox = new int[4];
+
     private long cachedPosLong = Long.MIN_VALUE;
     private String displayName = "";
     private String formattedInput = "";
@@ -64,17 +74,43 @@ public final class NodeHudRenderingHandler {
     private NodeHudRenderingHandler() {
     }
 
-    private static float[] projectToWindow(float objX, float objY, FloatBuffer mv, FloatBuffer proj, IntBuffer vp) {
-        float eyeX = mv.get(0) * objX + mv.get(4) * objY + mv.get(12);
-        float eyeY = mv.get(1) * objX + mv.get(5) * objY + mv.get(13);
-        float eyeZ = mv.get(2) * objX + mv.get(6) * objY + mv.get(14);
-        float eyeW = mv.get(3) * objX + mv.get(7) * objY + mv.get(15);
-        float clipX = proj.get(0) * eyeX + proj.get(4) * eyeY + proj.get(8) * eyeZ + proj.get(12) * eyeW;
-        float clipY = proj.get(1) * eyeX + proj.get(5) * eyeY + proj.get(9) * eyeZ + proj.get(13) * eyeW;
-        float clipW = proj.get(3) * eyeX + proj.get(7) * eyeY + proj.get(11) * eyeZ + proj.get(15) * eyeW;
-        float ndcX = clipX / clipW;
-        float ndcY = clipY / clipW;
-        return new float[]{vp.get(0) + vp.get(2) * (ndcX + 1) / 2f, vp.get(1) + vp.get(3) * (ndcY + 1) / 2f};
+    static final class HudProjection {
+
+        private HudProjection() {
+        }
+
+        static void projectToWindow(float objX, float objY, float[] mv, float[] proj, int[] vp, float[] result, int offset) {
+            float eyeX = mv[0] * objX + mv[4] * objY + mv[12];
+            float eyeY = mv[1] * objX + mv[5] * objY + mv[13];
+            float eyeZ = mv[2] * objX + mv[6] * objY + mv[14];
+            float eyeW = mv[3] * objX + mv[7] * objY + mv[15];
+            float clipX = proj[0] * eyeX + proj[4] * eyeY + proj[8] * eyeZ + proj[12] * eyeW;
+            float clipY = proj[1] * eyeX + proj[5] * eyeY + proj[9] * eyeZ + proj[13] * eyeW;
+            float clipW = proj[3] * eyeX + proj[7] * eyeY + proj[11] * eyeZ + proj[15] * eyeW;
+            if (clipW == 0.0F || !Float.isFinite(clipW)) {
+                throw new IllegalStateException("node HUD projection produced an invalid clip W");
+            }
+            float ndcX = clipX / clipW;
+            float ndcY = clipY / clipW;
+            result[offset] = vp[0] + vp[2] * (ndcX + 1) / 2f;
+            result[offset + 1] = vp[1] + vp[3] * (ndcY + 1) / 2f;
+        }
+
+        static void computeScissorBox(float hudX, float hudY, int width, float[] mv, float[] proj,
+                                      int[] vp, float[] corners, int[] result) {
+            projectToWindow(hudX, hudY, mv, proj, vp, corners, 0);
+            projectToWindow(hudX + width, hudY, mv, proj, vp, corners, 2);
+            projectToWindow(hudX + width, hudY + 9, mv, proj, vp, corners, 4);
+            projectToWindow(hudX, hudY + 9, mv, proj, vp, corners, 6);
+            float minX = Math.min(Math.min(corners[0], corners[2]), Math.min(corners[4], corners[6]));
+            float minY = Math.min(Math.min(corners[1], corners[3]), Math.min(corners[5], corners[7]));
+            float maxX = Math.max(Math.max(corners[0], corners[2]), Math.max(corners[4], corners[6]));
+            float maxY = Math.max(Math.max(corners[1], corners[3]), Math.max(corners[5], corners[7]));
+            result[0] = Math.round(minX);
+            result[1] = Math.round(minY);
+            result[2] = Math.max(Math.round(maxX - minX), 1);
+            result[3] = Math.max(Math.round(maxY - minY), 1);
+        }
     }
 
     public void updateData(long posLong, String displayName, String input, String output, String interactionTimeMicros, int nodeCount) {
@@ -183,102 +219,95 @@ public final class NodeHudRenderingHandler {
         ComponentAtlas atlas = ComponentAtlas.INSTANCE;
         atlas.awaitReady();
 
-        GlStateManager.pushMatrix();
-        double factor = hitDist > 1e-6 ? 1.0 - HUD_PULL_DIST / hitDist : 1.0;
-        GlStateManager.translate(hitX * factor, hitY * factor, hitZ * factor);
-        GlStateManager.rotate(-mc.getRenderManager().playerViewY, 0.0F, 1.0F, 0.0F);
-        GlStateManager.rotate(mc.getRenderManager().playerViewX, 1.0F, 0.0F, 0.0F);
-        GlStateManager.rotate(TILT_ANGLE, 0.0F, 1.0F, 0.0F);
-        GlStateManager.scale(-scaleFactor, -scaleFactor, scaleFactor);
-
-        GlStateManager.enableBlend();
-        GlStateManager.tryBlendFuncSeparate(
-            GlStateManager.SourceFactor.SRC_ALPHA,
-            GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
-            GlStateManager.SourceFactor.ONE,
-            GlStateManager.DestFactor.ZERO
-        );
-        GlStateManager.disableLighting();
-        GlStateManager.disableCull();
-        GlStateManager.disableDepth();
-
-        float anchorX = 5;
-        float anchorY = -HUD_HEIGHT / 2.0f;
-
-        AtlasRegion bgRegion = atlas.getRegion("node_hud_base");
-        if (bgRegion != null) {
-            atlas.bind();
-            GlStateManager.color(1.0F, 1.0F, 1.0F, BG_ALPHA);
-            drawWorldQuad(bgRegion, anchorX, anchorY);
+        try (LegacyWorldRenderStateGuard ignored = LegacyWorldRenderStateGuard.openNodeHudPass("node HUD")) {
+            renderHud(mc, atlas, partialTick, hitX, hitY, hitZ, hitDist, scaleFactor);
         }
-
-        AtlasRegion crystalRegion = atlas.getRegion("node_hud_crystal");
-        if (crystalRegion != null) {
-            long clientTick = ClientAnimationTicker.ticks();
-            float angle = (clientTick + partialTick) * 360.0f / ROTATION_PERIOD_TICKS;
-            float cx = anchorX + 20 + CRYSTAL_SIZE / 2.0f;
-            float cy = anchorY + 20 + CRYSTAL_SIZE / 2.0f;
-            drawRotatedRegion(atlas, crystalRegion, cx, cy, angle);
-        }
-
-        String tooltipText = CI18n.format("hud.node.network_data");
-        int tooltipWidth = mc.fontRenderer.getStringWidth(tooltipText) + 6;
-        int tooltipHeight = 12;
-        float tooltipY = anchorY - tooltipHeight - 2;
-        drawColoredRect(anchorX, tooltipY, anchorX + tooltipWidth, tooltipY + tooltipHeight);
-
-        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
-        int textX1 = (int) (anchorX + 86);
-        int textX2 = (int) (anchorX + 90);
-        int hudYI = (int) anchorY;
-        drawScrollingText(mc.fontRenderer, displayName, 66, textX1, hudYI + 13, TEXT_COLOR, partialTick);
-        drawScrollingText(mc.fontRenderer, formattedInput, 62, textX2, hudYI + 26, TEXT_COLOR, partialTick);
-        drawScrollingText(mc.fontRenderer, formattedOutput, 62, textX2, hudYI + 40, TEXT_COLOR, partialTick);
-        drawScrollingText(mc.fontRenderer, formattedLatency, 62, textX2, hudYI + 54, TEXT_COLOR, partialTick);
-        drawScrollingText(mc.fontRenderer, formattedNodeCount, 62, textX2, hudYI + 68, TEXT_COLOR, partialTick);
-        mc.fontRenderer.drawString(tooltipText, (int) (anchorX + 3), (int) (tooltipY + 2), 0xFFFFFF);
-
-        GlStateManager.enableDepth();
-        GlStateManager.enableCull();
-        GlStateManager.enableLighting();
-        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
-        GlStateManager.disableBlend();
-        GlStateManager.popMatrix();
     }
 
-    private void drawScrollingText(FontRenderer fr, String text, int maxWidth, int x, int y, int color, float partialTick) {
+    private void renderHud(Minecraft mc, ComponentAtlas atlas, float partialTick, double hitX, double hitY,
+                           double hitZ, double hitDist, float scaleFactor) {
+        GlStateManager.pushMatrix();
+        try {
+            double factor = hitDist > 1e-6 ? 1.0 - HUD_PULL_DIST / hitDist : 1.0;
+            GlStateManager.translate(hitX * factor, hitY * factor, hitZ * factor);
+            GlStateManager.rotate(-mc.getRenderManager().playerViewY, 0.0F, 1.0F, 0.0F);
+            GlStateManager.rotate(mc.getRenderManager().playerViewX, 1.0F, 0.0F, 0.0F);
+            GlStateManager.rotate(TILT_ANGLE, 0.0F, 1.0F, 0.0F);
+            GlStateManager.scale(-scaleFactor, -scaleFactor, scaleFactor);
+
+            float anchorX = 5;
+            float anchorY = -HUD_HEIGHT / 2.0f;
+
+            AtlasRegion bgRegion = atlas.getRegion("node_hud_base");
+            if (bgRegion != null) {
+                atlas.bind();
+                GlStateManager.color(1.0F, 1.0F, 1.0F, BG_ALPHA);
+                drawWorldQuad(bgRegion, anchorX, anchorY);
+            }
+
+            AtlasRegion crystalRegion = atlas.getRegion("node_hud_crystal");
+            if (crystalRegion != null) {
+                long clientTick = ClientAnimationTicker.ticks();
+                float angle = (clientTick + partialTick) * 360.0f / ROTATION_PERIOD_TICKS;
+                float cx = anchorX + 20 + CRYSTAL_SIZE / 2.0f;
+                float cy = anchorY + 20 + CRYSTAL_SIZE / 2.0f;
+                drawRotatedRegion(atlas, crystalRegion, cx, cy, angle);
+            }
+
+            String tooltipText = CI18n.format("hud.node.network_data");
+            int tooltipWidth = mc.fontRenderer.getStringWidth(tooltipText) + 6;
+            int tooltipHeight = 12;
+            float tooltipY = anchorY - tooltipHeight - 2;
+            drawColoredRect(anchorX, tooltipY, anchorX + tooltipWidth, tooltipY + tooltipHeight);
+
+            GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+            captureHudProjection();
+            int textX1 = (int) (anchorX + 86);
+            int textX2 = (int) (anchorX + 90);
+            int hudYI = (int) anchorY;
+            drawScrollingText(mc.fontRenderer, displayName, 66, textX1, hudYI + 13, partialTick);
+            drawScrollingText(mc.fontRenderer, formattedInput, 62, textX2, hudYI + 26, partialTick);
+            drawScrollingText(mc.fontRenderer, formattedOutput, 62, textX2, hudYI + 40, partialTick);
+            drawScrollingText(mc.fontRenderer, formattedLatency, 62, textX2, hudYI + 54, partialTick);
+            drawScrollingText(mc.fontRenderer, formattedNodeCount, 62, textX2, hudYI + 68, partialTick);
+            mc.fontRenderer.drawString(tooltipText, (int) (anchorX + 3), (int) (tooltipY + 2), 0xFFFFFF);
+        } finally {
+            GlStateManager.popMatrix();
+        }
+    }
+
+    private void drawScrollingText(FontRenderer fr, String text, int maxWidth, int x, int y, float partialTick) {
         int textWidth = fr.getStringWidth(text);
         if (textWidth <= maxWidth) {
-            fr.drawString(text, x, y, color);
+            fr.drawString(text, x, y, TEXT_COLOR);
             return;
         }
         float offset = ScrollingTextHelper.getScrollOffset(textWidth, maxWidth, ClientAnimationTicker.ticks(), partialTick);
-        enableHudScissor(x, y, maxWidth, 9);
-        fr.drawString(text, x - (int) offset, y, color);
-        disableHudScissor();
+        enableHudScissor(x, y, maxWidth);
+        try {
+            fr.drawString(text, x - (int) offset, y, TEXT_COLOR);
+        } finally {
+            disableHudScissor();
+        }
     }
 
-    private void enableHudScissor(float hudX, float hudY, int width, int height) {
-        FloatBuffer mv = BufferUtils.createFloatBuffer(16);
-        FloatBuffer proj = BufferUtils.createFloatBuffer(16);
-        IntBuffer vp = BufferUtils.createIntBuffer(16);
-        GL11.glGetFloat(GL11.GL_MODELVIEW_MATRIX, mv);
-        GL11.glGetFloat(GL11.GL_PROJECTION_MATRIX, proj);
-        GL11.glGetInteger(GL11.GL_VIEWPORT, vp);
-        float[] c1 = projectToWindow(hudX, hudY, mv, proj, vp);
-        float[] c2 = projectToWindow(hudX + width, hudY, mv, proj, vp);
-        float[] c3 = projectToWindow(hudX + width, hudY + height, mv, proj, vp);
-        float[] c4 = projectToWindow(hudX, hudY + height, mv, proj, vp);
-        float minX = Math.min(Math.min(c1[0], c2[0]), Math.min(c3[0], c4[0]));
-        float minY = Math.min(Math.min(c1[1], c2[1]), Math.min(c3[1], c4[1]));
-        float maxX = Math.max(Math.max(c1[0], c2[0]), Math.max(c3[0], c4[0]));
-        float maxY = Math.max(Math.max(c1[1], c2[1]), Math.max(c3[1], c4[1]));
-        int rx = Math.round(minX);
-        int ry = Math.round(minY);
-        int rw = Math.round(maxX - minX);
-        int rh = Math.round(maxY - minY);
+    private void captureHudProjection() {
+        modelViewBuffer.clear();
+        projectionBuffer.clear();
+        viewportBuffer.clear();
+        GL11.glGetFloat(GL11.GL_MODELVIEW_MATRIX, modelViewBuffer);
+        GL11.glGetFloat(GL11.GL_PROJECTION_MATRIX, projectionBuffer);
+        GL11.glGetInteger(GL11.GL_VIEWPORT, viewportBuffer);
+        modelViewBuffer.get(modelViewMatrix);
+        projectionBuffer.get(projectionMatrix);
+        viewportBuffer.get(viewport);
+    }
+
+    private void enableHudScissor(float hudX, float hudY, int width) {
+        HudProjection.computeScissorBox(hudX, hudY, width, modelViewMatrix, projectionMatrix, viewport,
+            projectedCorners, scissorBox);
         GL11.glEnable(GL11.GL_SCISSOR_TEST);
-        GL11.glScissor(rx, ry, Math.max(rw, 1), Math.max(rh, 1));
+        GL11.glScissor(scissorBox[0], scissorBox[1], scissorBox[2], scissorBox[3]);
     }
 
     private void disableHudScissor() {

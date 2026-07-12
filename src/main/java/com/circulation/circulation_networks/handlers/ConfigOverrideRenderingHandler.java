@@ -9,6 +9,7 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import net.minecraft.client.Minecraft;
 //~ mc_imports
+import net.minecraft.item.ItemStack;
 import net.minecraft.util.math.BlockPos;
 //? if <1.20 {
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
@@ -59,42 +60,57 @@ public final class ConfigOverrideRenderingHandler {
         overrides.clear();
     }
 
+    //? if <1.20 {
     @SubscribeEvent
-        //? if <1.20 {
     public void renderWorldLastEvent(RenderWorldLastEvent event) {
-        //?} else {
-    /*public void renderWorldLastEvent(RenderLevelStageEvent event) {
-        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) return;
-    *///?}
         if (overrides.isEmpty()) return;
 
-        //? if <1.20 {
         Minecraft mc = Minecraft.getMinecraft();
         EntityPlayerSP p = mc.player;
-        //?} else {
-        /*Minecraft mc = Minecraft.getInstance();
-        LocalPlayer p = mc.player;
-        *///?}
-
-        //? if <1.20 {
-        var stack = p.getHeldItemMainhand();
-        //?} else {
-        /*var stack = p.getMainHandItem();
-         *///?}
-        if (!(stack.getItem() == CFNItems.circulationConfigurator
-            && CirculationConfiguratorState.getFunction(stack) == ToolFunction.CONFIGURATION))
-            return;
-
-        //? if <1.20 {
+        ItemStack stack = p.getHeldItemMainhand();
         double doubleX = RenderingUtils.getPlayerRenderX(event.getPartialTicks());
         double doubleY = RenderingUtils.getPlayerRenderY(event.getPartialTicks());
         double doubleZ = RenderingUtils.getPlayerRenderZ(event.getPartialTicks());
-        //?} else {
-        /*var cameraPos = event.getCamera().getPosition();
+
+        renderOverrides(stack, doubleX, doubleY, doubleZ);
+    }
+    //?} else {
+    /*@SubscribeEvent
+    public void renderLevelStageEvent(RenderLevelStageEvent event) {
+        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) return;
+        if (overrides.isEmpty()) return;
+
+        Minecraft mc = Minecraft.getInstance();
+        LocalPlayer p = mc.player;
+        ItemStack stack = p.getMainHandItem();
+        var cameraPos = event.getCamera().getPosition();
         double doubleX = cameraPos.x;
         double doubleY = cameraPos.y;
         double doubleZ = cameraPos.z;
+
+        //? if <1.21 {
+        PoseStack eventPoseStack = event.getPoseStack();
+        renderOverrides(stack, doubleX, doubleY, doubleZ, eventPoseStack);
+        //?} else {
+        /^var eventModelViewMatrix = event.getModelViewMatrix();
+        renderOverrides(stack, doubleX, doubleY, doubleZ, eventModelViewMatrix);
+        ^///?}
+    }
+    *///?}
+
+    //? if <1.20 {
+    private void renderOverrides(ItemStack stack, double doubleX, double doubleY, double doubleZ) {
+        //?} else if <1.21 {
+    /*private void renderOverrides(ItemStack stack, double doubleX, double doubleY, double doubleZ,
+                                 PoseStack eventPoseStack) {
+        *///?} else {
+    /*private void renderOverrides(ItemStack stack, double doubleX, double doubleY, double doubleZ,
+                                 org.joml.Matrix4f eventModelViewMatrix) {
         *///?}
+        if (overrides.isEmpty()) return;
+        if (!(stack.getItem() == CFNItems.circulationConfigurator
+            && CirculationConfiguratorState.getFunction(stack) == ToolFunction.CONFIGURATION))
+            return;
 
         //? if <1.20 {
         GlStateManager.pushMatrix();
@@ -102,14 +118,14 @@ public final class ConfigOverrideRenderingHandler {
         //?} else if <1.21 {
         /*PoseStack mvStack = RenderSystem.getModelViewStack();
         mvStack.pushPose();
-        mvStack.last().pose().set(event.getPoseStack().last().pose());
-        mvStack.last().normal().set(event.getPoseStack().last().normal());
+        mvStack.last().pose().set(eventPoseStack.last().pose());
+        mvStack.last().normal().set(eventPoseStack.last().normal());
         mvStack.translate(-doubleX, -doubleY, -doubleZ);
         RenderSystem.applyModelViewMatrix();
         *///?} else {
         /*var mvStack = RenderSystem.getModelViewStack();
         mvStack.pushMatrix();
-        mvStack.set(event.getModelViewMatrix());
+        mvStack.set(eventModelViewMatrix);
         mvStack.translate((float) -doubleX, (float) -doubleY, (float) -doubleZ);
         RenderSystem.applyModelViewMatrix();
         *///?}
@@ -118,11 +134,7 @@ public final class ConfigOverrideRenderingHandler {
             RenderingUtils.setupAdditiveBlend();
 
             for (var entry : overrides.long2ObjectEntrySet()) {
-                //? if <1.20 {
-                BlockPos pos = BlockPos.fromLong(entry.getLongKey());
-                //?} else {
-                /*BlockPos pos = BlockPos.of(entry.getLongKey());
-                 *///?}
+                BlockPos pos = unpackBlockPos(entry.getLongKey());
                 IEnergyHandler.EnergyType type = entry.getValue();
 
                 if (!RenderingUtils.isWithinRenderDistance(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5,
@@ -186,7 +198,9 @@ public final class ConfigOverrideRenderingHandler {
                 RenderingUtils.drawBoxEdges(x0, y0, z0, x1, y1, z1, edgeR, edgeG, edgeB, 0.6f, 2.0f);
             }
         } finally {
-            RenderingUtils.restoreWorldRenderState();
+            //? if >=1.20 {
+            /*RenderingUtils.restoreWorldRenderState();
+            *///?}
             //? if <1.20 {
             GlStateManager.popMatrix();
             //?} else if <1.21 {
@@ -198,4 +212,14 @@ public final class ConfigOverrideRenderingHandler {
              *///?}
         }
     }
+
+    //? if <1.20 {
+    private BlockPos unpackBlockPos(long packedPos) {
+        return BlockPos.fromLong(packedPos);
+    }
+    //?} else {
+    /*private BlockPos unpackBlockPos(long packedPos) {
+        return BlockPos.of(packedPos);
+    }
+    *///?}
 }

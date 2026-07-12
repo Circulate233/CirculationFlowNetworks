@@ -2,7 +2,10 @@ package com.circulation.circulation_networks.energy.handler;
 
 import com.circulation.circulation_networks.api.EnergyAmount;
 import com.circulation.circulation_networks.api.EnergyAmounts;
+import com.circulation.circulation_networks.api.HandlerTickResult;
 import com.circulation.circulation_networks.api.IEnergyHandler;
+import com.circulation.circulation_networks.manager.HandlerBindingPolicy;
+import com.circulation.circulation_networks.manager.HandlerInvalidationSink;
 import com.circulation.circulation_networks.network.nodes.HubNode;
 import com.circulation.circulation_networks.utils.EnergyAmountConversionUtils;
 import ic2.api.energy.EnergyNet;
@@ -20,8 +23,16 @@ import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Objects;
+
 public class EUHandler implements IEnergyHandler {
     private static final double MAX_EU_TRANSFER = Long.MAX_VALUE / 4.0D;
+    private static final HandlerBindingPolicy BINDING_POLICY = HandlerBindingPolicy.of(
+        HandlerBindingPolicy.TickLifecycle.STATIC,
+        HandlerBindingPolicy.RoleScope.FIXED,
+        HandlerBindingPolicy.MappingScope.NONE,
+        HandlerBindingPolicy.PairMatching.NONE
+    );
 
     private EnergyType energyType;
     @Nullable
@@ -32,9 +43,12 @@ public class EUHandler implements IEnergyHandler {
 
     @Nullable
     private IEnergySink receive;
+    @Nullable
+    private IEnergyTile cachedTile;
     private EnumFacing receiveFacing = EnumFacing.NORTH;
-    private boolean initialized;
-    private boolean prepared;
+    @Nullable
+    private TileEntity blockEntity;
+    private long activeEpoch = Long.MIN_VALUE;
 
     static EnergyAmount positiveFeAmountFromEu(double valueEu) {
         if (!(valueEu > 0.0D)) {
@@ -90,97 +104,177 @@ public class EUHandler implements IEnergyHandler {
         }
     }
 
-    private void resetBlockState() {
+    private void clearTickState() {
         energyType = EnergyType.INVALID;
         send = null;
         receive = null;
         receiveFacing = EnumFacing.NORTH;
-        isItem = false;
     }
 
-    private void prepareBlockState(TileEntity tileEntity) {
-        resetBlockState();
-        var data = WorldData.get(tileEntity.getWorld(), false);
-        if (data == null) {
-            prepared = true;
-            return;
+    @Nullable
+    private IEnergyTile getCachedTile(BlockPos pos) {
+        if (cachedTile == null) {
+            return null;
+        }
+        BlockPos cachedPos = EnergyNet.instance.getPos(cachedTile);
+        if (!pos.equals(cachedPos)) {
+            cachedTile = null;
+            return null;
+        }
+        return cachedTile;
+    }
+
+    @Nullable
+    private IEnergyTile findEnergyTile(TileEntity tileEntity, BlockPos pos) {
+        IEnergyTile tile = getCachedTile(pos);
+        if (tile != null) {
+            return tile;
+        }
+        tile = resolveEnergyTile(tileEntity);
+        cachedTile = tile;
+        return tile;
+    }
+
+    /**
+     * Resolves the IC2 tile currently registered for a block entity without assuming that
+     * {@link EnergyNet#getSubTile(net.minecraft.world.World, BlockPos)} is already populated.
+     * IC2 emits its load event before that public lookup is reliable for some machine classes.
+     */
+    @Nullable
+    public static IEnergyTile resolveEnergyTile(TileEntity tileEntity) {
+        Objects.requireNonNull(tileEntity, "tileEntity");
+        if (tileEntity.getWorld() == null || tileEntity.getPos() == null) {
+            return null;
         }
         BlockPos pos = tileEntity.getPos();
+        IEnergyTile tile = EnergyNet.instance.getSubTile(tileEntity.getWorld(), pos);
+        if (tile != null) {
+            return tile;
+        }
+        var data = WorldData.get(tileEntity.getWorld(), false);
+        if (data == null) {
+            return null;
+        }
         EnergyNetLocal energyNet = data.energyNet;
         Tile tiles = energyNet.getTile(pos);
-        IEnergyTile tile = null;
         if (tiles != null) {
             for (IEnergyTile subTile : tiles.getSubTiles()) {
                 if (EnergyNet.instance.getPos(subTile).equals(pos)) {
-                    tile = subTile;
+                    return subTile;
                 }
             }
         }
+        if (tileEntity instanceof IEnergyTile energyTile && pos.equals(EnergyNet.instance.getPos(energyTile))) {
+            return energyTile;
+        }
+        return null;
+    }
+
+    /**
+     * Returns whether an IC2 tile has a usable CFN structural role. Cables deliberately do not
+     * qualify because connecting them would create a second energy network path.
+     */
+    public static boolean supportsEnergyTile(@Nullable IEnergyTile tile) {
+        if (tile instanceof ic2.core.block.wiring.TileEntityCable) {
+            return false;
+        }
+        if (tile instanceof IEnergySource) {
+            return true;
+        }
+        if (tile instanceof IEnergySink sink) {
+            for (EnumFacing facing : EnumFacing.VALUES) {
+                if (sink.acceptsEnergyFrom(null, facing)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private void prepareBlockState(TileEntity tileEntity) {
+        clearTickState();
+        BlockPos pos = tileEntity.getPos();
+        IEnergyTile tile = findEnergyTile(tileEntity, pos);
         boolean output = tile instanceof IEnergySource;
         boolean input = tile instanceof IEnergySink;
         if (output) {
             send = (IEnergySource) tile;
-            if (input) {
-                receive = (IEnergySink) tile;
-                energyType = EnergyType.STORAGE;
-            } else {
-                energyType = EnergyType.SEND;
-            }
-        } else if (input) {
-            var sink = (IEnergySink) tile;
+            energyType = EnergyType.SEND;
+        }
+        if (input) {
+            IEnergySink sink = (IEnergySink) tile;
             for (var value : EnumFacing.values()) {
                 if (sink.acceptsEnergyFrom(null, value)) {
                     receiveFacing = value;
                     receive = sink;
-                    energyType = EnergyType.RECEIVE;
+                    energyType = output ? EnergyType.STORAGE : EnergyType.RECEIVE;
                     break;
                 }
             }
         }
-        if (!(send != null && send.getOfferedEnergy() > 0) && !(receive != null && receive.getDemandedEnergy() > 0)) {
-            energyType = EnergyType.INVALID;
-        }
-        prepared = true;
     }
 
     @Override
-    public void asyncInit(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
+    public HandlerBindingPolicy bindingPolicy() {
+        return BINDING_POLICY;
+    }
+
+    @Override
+    public void bindBlockEntity(TileEntity tileEntity, HandlerInvalidationSink invalidationSink) {
+        if (blockEntity != null || isItem) {
+            throw new IllegalStateException("EU handler is already bound");
+        }
+        blockEntity = Objects.requireNonNull(tileEntity, "tileEntity");
+        Objects.requireNonNull(invalidationSink, "invalidationSink");
+        cachedTile = null;
         prepareBlockState(tileEntity);
-    }
-
-    @Override
-    public boolean shouldRunAsyncInit(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
-        return true;
-    }
-
-    @Override
-    public void init(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
-        if (initialized) {
-            return;
-        }
-        initialized = true;
-        if (!prepared) {
-            prepareBlockState(tileEntity);
+        if (energyType == EnergyType.INVALID) {
+            throw new IllegalArgumentException("IC2 block entity has no structural source or sink role");
         }
     }
 
     @Override
-    public void init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
+    public HandlerTickResult beginServerTick(long epoch) {
+        if (blockEntity == null) {
+            throw new IllegalStateException("EU handler has no block-entity binding");
+        }
+        if (epoch <= activeEpoch) {
+            throw new IllegalArgumentException("EU handler epoch must increase: previous " + activeEpoch + ", got " + epoch);
+        }
+        activeEpoch = epoch;
+        return HandlerTickResult.UNCHANGED;
+    }
+
+    @Override
+    public void endServerTick(long epoch) {
+        throw new IllegalStateException("EU handler has a static tick lifecycle");
+    }
+
+    @Override
+    public void unbindBlockEntity() {
+        clearTickState();
+        cachedTile = null;
+        blockEntity = null;
+        activeEpoch = Long.MIN_VALUE;
+    }
+
+    @Override
+    public void bindItem(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
+        if (blockEntity != null || isItem) {
+            throw new IllegalStateException("EU handler is already bound");
+        }
         isItem = true;
         this.itemStack = itemStack;
         energyType = EnergyType.RECEIVE;
-        prepared = true;
     }
 
     @Override
-    public void clear() {
+    public void unbindItem() {
         this.energyType = EnergyType.INVALID;
         this.send = null;
         this.receive = null;
         this.itemStack = ItemStack.EMPTY;
         this.isItem = false;
-        this.initialized = false;
-        this.prepared = false;
     }
 
     @Override

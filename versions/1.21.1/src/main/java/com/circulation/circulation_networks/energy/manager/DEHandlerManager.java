@@ -18,7 +18,8 @@ public final class DEHandlerManager implements IEnergyHandlerManager {
             return false;
         }
         for (Direction direction : DIRECTIONS) {
-            if (CapabilityOP.fromBlockEntity(blockEntity, direction) != null) {
+            var storage = CapabilityOP.fromBlockEntity(blockEntity, direction);
+            if (storage != null && (storage.canExtract() || storage.canReceive())) {
                 return true;
             }
         }
@@ -27,7 +28,8 @@ public final class DEHandlerManager implements IEnergyHandlerManager {
 
     @Override
     public boolean isAvailable(ItemStack itemStack) {
-        return itemStack.getCapability(CapabilityOP.ITEM) != null;
+        var storage = itemStack.getCapability(CapabilityOP.ITEM);
+        return storage != null && storage.canReceive();
     }
 
     @Override

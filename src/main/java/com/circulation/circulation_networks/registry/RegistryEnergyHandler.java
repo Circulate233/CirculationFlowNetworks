@@ -54,6 +54,7 @@ public final class RegistryEnergyHandler {
             throw new IllegalStateException("Energy handler registry is already locked");
         }
         list.add(manager);
+        list.sort(Comparator.reverseOrder());
         referenceSet.add(new Pair(manager.getMultiplying(), manager.getUnit(), manager.getPriority()));
     }
 
@@ -117,22 +118,30 @@ public final class RegistryEnergyHandler {
 
     public static @Nullable IEnergyHandlerManager getEnergyManager(TileEntity tile) {
         if (locked) {
-            for (IEnergyHandlerManager manager : managerArray) {
-                if (manager.isAvailable(tile)) return manager;
-            }
-        } else {
-            for (IEnergyHandlerManager manager : list) {
-                if (manager.isAvailable(tile)) return manager;
+            return selectEnergyManagerExcluding(tile, managerArray, null);
+        }
+        return selectEnergyManagerExcluding(tile, list.toArray(new IEnergyHandlerManager[0]), null);
+    }
+
+    public static @Nullable IEnergyHandlerManager getEnergyManagerExcluding(
+        TileEntity tile,
+        IEnergyHandlerManager excluded) {
+        if (locked) {
+            return selectEnergyManagerExcluding(tile, managerArray, excluded);
+        }
+        return selectEnergyManagerExcluding(tile, list.toArray(new IEnergyHandlerManager[0]), excluded);
+    }
+
+    static @Nullable IEnergyHandlerManager selectEnergyManagerExcluding(
+        TileEntity tile,
+        IEnergyHandlerManager[] managers,
+        @Nullable IEnergyHandlerManager excluded) {
+        for (IEnergyHandlerManager manager : managers) {
+            if (manager != excluded && manager.isAvailable(tile)) {
+                return manager;
             }
         }
         return null;
-    }
-
-    public static @Nullable IEnergyHandlerManager getEnergyManager(TileEntity tile, @Nullable IEnergyHandlerManager preferred) {
-        if (preferred != null && preferred.isAvailable(tile)) {
-            return preferred;
-        }
-        return getEnergyManager(tile);
     }
 
     public static @Nullable IEnergyHandlerManager getEnergyManager(ItemStack stack) {

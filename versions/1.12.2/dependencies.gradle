@@ -15,6 +15,13 @@ dependencies {
     compileOnly("org.lwjgl:lwjgl:3.3.6")
 
     implementation 'CraftTweaker2:CraftTweaker2-MC1120-Main:1.12-4.1.20.711'
+    implementation("info.loenwind.autosave:AutoSave:1.12.2-1.0.11")
+    implementation("info.loenwind.autoconfig:AutoConfig:1.12.2-1.0.2")
+    deobfImplementation("com.enderio.core:EnderCore:1.12.2-0.5.78:core")
+    deobfImplementation("com.enderio.core:EnderCore:1.12.2-0.5.78")
+    implementation(rfg.deobf("com.enderio:EnderIO:1.12.2-5.3.72")) {
+        transitive = false
+    }
     deobfImplementation "cofh:RedstoneFlux:1.12-2.0.0.1:universal"
     implementation 'com.cleanroommc:configanytime:1.0'
     deobfImplementation("curse.maven:top-245211:2667280")
@@ -27,19 +34,12 @@ dependencies {
     deobfRuntimeOnly("curse.maven:supermartijn642s-config-lib-438332:4715393")
     deobfRuntimeOnly("curse.maven:trash-cans-394535:4606884")
     deobfRuntimeOnly("curse.maven:building-gadgets-298187:3005950")
-    deobfImplementation("mezz.jei:jei_1.12.2:4.16.1.1013")
+    deobfCompileOnly("curse.maven:had-enough-items-557549:8405357")
     deobfRuntimeOnly("curse.maven:ender-utilities-224320:2977010")
     deobfRuntimeOnly("curse.maven:flare-692142:6598523")
     deobfImplementation("curse.maven:mekanism-268560:2835175")
     deobfImplementation("curse.maven:brandons-core-231382:3408276")
     deobfImplementation("curse.maven:draconic-evolution-223565:3431261")
     deobfRuntimeOnly("curse.maven:CodeChickenLib-242818:2779848")
-    implementation("info.loenwind.autosave:AutoSave:1.12.2-1.0.11")
-    implementation("info.loenwind.autoconfig:AutoConfig:1.12.2-1.0.2")
-    deobfImplementation("com.enderio.core:EnderCore:1.12.2-0.5.78:core")
-    deobfImplementation("com.enderio.core:EnderCore:1.12.2-0.5.78")
-    implementation(rfg.deobf("com.enderio:EnderIO:1.12.2-5.3.72")) {
-        transitive = false
-    }
     deobfImplementation("curse.maven:ae2-extended-life-570458:6302098")
 }

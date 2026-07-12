@@ -1,5 +1,6 @@
 package com.circulation.circulation_networks;
 
+import com.circulation.circulation_networks.energy.manager.EUHandlerManager;
 import com.circulation.circulation_networks.manager.ChargingManager;
 import com.circulation.circulation_networks.manager.DatPersistenceScheduler;
 import com.circulation.circulation_networks.manager.EnergyMachineManager;
@@ -17,6 +18,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.common.Loader;
 import net.minecraftforge.fml.common.SidedProxy;
 import net.minecraftforge.fml.common.event.FMLInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLPostInitializationEvent;
@@ -84,6 +86,7 @@ public class CirculationFlowNetworks {
     @Mod.EventHandler
     public void serverStarting(FMLServerStartingEvent event) {
         server = event.getServer();
+        EnergyTypeOverrideManager.get();
     }
 
     @Mod.EventHandler
@@ -92,9 +95,12 @@ public class CirculationFlowNetworks {
         PocketNodeManager.INSTANCE.save();
         HubChannelManager.INSTANCE.save();
         EnergyTypeOverrideManager.save();
+        EnergyMachineManager.INSTANCE.onServerStop();
+        if (Loader.isModLoaded("ic2")) {
+            EUHandlerManager.INSTANCE.onServerStop();
+        }
         NetworkManager.INSTANCE.onServerStop();
         PocketNodeManager.INSTANCE.onServerStop();
-        EnergyMachineManager.INSTANCE.onServerStop();
         EnergyTypeOverrideManager.onServerStop();
         ChargingManager.INSTANCE.onServerStop();
         HubChannelManager.INSTANCE.onServerStop();

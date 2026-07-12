@@ -18,15 +18,18 @@ public final class FEHandlerManager implements IEnergyHandlerManager {
         if (level == null) return false;
         var pos = blockEntity.getBlockPos();
         for (Direction direction : DIRECTIONS) {
-            if (level.getCapability(Capabilities.EnergyStorage.BLOCK, pos, null, blockEntity, direction) != null)
+            var storage = level.getCapability(Capabilities.EnergyStorage.BLOCK, pos, null, blockEntity, direction);
+            if (storage != null && (storage.canExtract() || storage.canReceive())) {
                 return true;
+            }
         }
         return false;
     }
 
     @Override
     public boolean isAvailable(ItemStack itemStack) {
-        return itemStack.getCapability(Capabilities.EnergyStorage.ITEM) != null;
+        var storage = itemStack.getCapability(Capabilities.EnergyStorage.ITEM);
+        return storage != null && storage.canReceive();
     }
 
     @Override

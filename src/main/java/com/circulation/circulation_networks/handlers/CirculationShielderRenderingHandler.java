@@ -79,6 +79,11 @@ public final class CirculationShielderRenderingHandler {
         clientShielders.remove(shielder);
     }
 
+    /** Returns whether a client-side shielder can currently request range rendering. */
+    public boolean hasClientShielders() {
+        return !clientShielders.isEmpty();
+    }
+
     @SubscribeEvent
         //? if <1.21 {
     public void onClientTick(TickEvent.ClientTickEvent event) {
@@ -158,14 +163,6 @@ public final class CirculationShielderRenderingHandler {
             );
         } finally {
             //? if <1.20 {
-            GlStateManager.depthMask(true);
-            GlStateManager.enableCull();
-            GlStateManager.enableLighting();
-            GlStateManager.enableTexture2D();
-            GlStateManager.enableDepth();
-            GlStateManager.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
-            GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
-            GlStateManager.disableBlend();
             GlStateManager.popMatrix();
             //?} else if <1.21 {
             /*RenderSystem.depthMask(true);
@@ -189,7 +186,9 @@ public final class CirculationShielderRenderingHandler {
         }
     }
 
-    @SubscribeEvent
+    //? if >=1.20 {
+    /*@SubscribeEvent
+    *///?}
         //? if <1.20 {
     public void onRenderWorldLast(RenderWorldLastEvent event) {
         Minecraft mc = Minecraft.getMinecraft();

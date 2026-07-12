@@ -48,6 +48,9 @@ public class CirculationShielderBlockEntity extends BaseCFNBlockEntity implement
         this.min.set(this.getBlockPos().getX() - clamped, this.getBlockPos().getY() - clamped, this.getBlockPos().getZ() - clamped);
         this.max.set(this.getBlockPos().getX() + clamped, this.getBlockPos().getY() + clamped, this.getBlockPos().getZ() + clamped);
         this.scope = clamped;
+        if (level != null && !level.isClientSide) {
+            CirculationShielderManager.INSTANCE.refreshActiveState(this, level.dimension().location().hashCode());
+        }
     }
 
     @Override

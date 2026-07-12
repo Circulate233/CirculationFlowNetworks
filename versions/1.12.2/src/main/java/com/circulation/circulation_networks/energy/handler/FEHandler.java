@@ -2,21 +2,28 @@ package com.circulation.circulation_networks.energy.handler;
 
 import com.circulation.circulation_networks.api.EnergyAmount;
 import com.circulation.circulation_networks.api.EnergyAmounts;
+import com.circulation.circulation_networks.api.HandlerTickResult;
 import com.circulation.circulation_networks.api.IEnergyHandler;
+import com.circulation.circulation_networks.manager.HandlerBindingPolicy;
+import com.circulation.circulation_networks.manager.HandlerInvalidationSink;
 import com.circulation.circulation_networks.network.nodes.HubNode;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraftforge.energy.CapabilityEnergy;
 import net.minecraftforge.energy.IEnergyStorage;
-
 import org.jetbrains.annotations.Nullable;
+
+import java.util.Objects;
 
 public class FEHandler implements IEnergyHandler {
 
-    private static final int ROLE_UNKNOWN = 0;
-    private static final int ROLE_SUPPORTED = 1;
-    private static final int ROLE_UNSUPPORTED = 2;
+    private static final HandlerBindingPolicy BINDING_POLICY = HandlerBindingPolicy.of(
+        HandlerBindingPolicy.TickLifecycle.BEGIN_TICK,
+        HandlerBindingPolicy.RoleScope.FIXED,
+        HandlerBindingPolicy.MappingScope.NONE,
+        HandlerBindingPolicy.PairMatching.NONE
+    );
 
     @Nullable
     private IEnergyStorage send;
@@ -26,109 +33,179 @@ public class FEHandler implements IEnergyHandler {
     private EnumFacing sendFacing;
     @Nullable
     private EnumFacing receiveFacing;
-    private int sendState = ROLE_UNKNOWN;
-    private int receiveState = ROLE_UNKNOWN;
-    private boolean initialized;
-    private EnergyType energyType;
+    @Nullable
+    private TileEntity blockEntity;
+    private long activeEpoch = Long.MIN_VALUE;
+    private boolean itemBound;
+    private boolean supportsSend;
+    private boolean supportsReceive;
+    private EnergyType energyType = EnergyType.INVALID;
 
-    private static boolean hasEnergy(IEnergyStorage storage) {
-        return storage.getEnergyStored() > 0;
+    public static boolean supports(TileEntity tileEntity) {
+        for (EnumFacing facing : EnumFacing.VALUES) {
+            IEnergyStorage storage = tileEntity.getCapability(CapabilityEnergy.ENERGY, facing);
+            if (storage != null && (storage.canExtract() || storage.canReceive())) {
+                return true;
+            }
+        }
+        return tileEntity instanceof IEnergyStorage storage && (storage.canExtract() || storage.canReceive());
     }
 
-    private static boolean hasRoom(IEnergyStorage storage) {
-        return storage.getEnergyStored() < storage.getMaxEnergyStored();
+    private static EnergyType structuralType(boolean send, boolean receive) {
+        if (send) {
+            return receive ? EnergyType.STORAGE : EnergyType.SEND;
+        }
+        return receive ? EnergyType.RECEIVE : EnergyType.INVALID;
     }
 
-    private static boolean canExtractEffectively(IEnergyStorage storage) {
-        return storage.extractEnergy(1, true) > 0;
-    }
-
-    private static boolean canReceiveEffectively(IEnergyStorage storage) {
-        return storage.receiveEnergy(1, true) > 0;
-    }
-
-    private void bindHint(TileEntity tileEntity) {
-        if (sendState == ROLE_SUPPORTED && sendFacing != null) {
-            IEnergyStorage storage = tileEntity.getCapability(CapabilityEnergy.ENERGY, sendFacing);
-            if (storage != null && hasEnergy(storage)) {
+    private void discoverStructure(TileEntity tileEntity) {
+        send = null;
+        receive = null;
+        sendFacing = null;
+        receiveFacing = null;
+        for (EnumFacing facing : EnumFacing.VALUES) {
+            IEnergyStorage storage = tileEntity.getCapability(CapabilityEnergy.ENERGY, facing);
+            if (storage == null) {
+                continue;
+            }
+            if (send == null && storage.canExtract()) {
                 send = storage;
-            } else if (storage == null) {
-                sendState = ROLE_UNKNOWN;
+                sendFacing = facing;
             }
-        }
-        if (receiveState == ROLE_SUPPORTED && receiveFacing != null) {
-            IEnergyStorage storage = tileEntity.getCapability(CapabilityEnergy.ENERGY, receiveFacing);
-            if (storage != null && hasRoom(storage)) {
+            if (receive == null && storage.canReceive()) {
                 receive = storage;
-            } else if (storage == null) {
-                receiveState = ROLE_UNKNOWN;
+                receiveFacing = facing;
             }
         }
+        if (tileEntity instanceof IEnergyStorage storage) {
+            if (send == null && storage.canExtract()) {
+                send = storage;
+            }
+            if (receive == null && storage.canReceive()) {
+                receive = storage;
+            }
+        }
+        supportsSend = send != null;
+        supportsReceive = receive != null;
+        energyType = structuralType(supportsSend, supportsReceive);
     }
 
-    private int bindSide(TileEntity tileEntity, EnumFacing facing, boolean needSendScan, boolean needReceiveScan) {
-        if (!needSendScan && !needReceiveScan) {
-            return 0;
+    private boolean refreshCachedCapabilities() {
+        IEnergyStorage refreshedSend = capability(sendFacing);
+        IEnergyStorage refreshedReceive = sendFacing == receiveFacing
+            ? refreshedSend
+            : capability(receiveFacing);
+        boolean sendValid = !supportsSend || refreshedSend != null && refreshedSend.canExtract();
+        boolean receiveValid = !supportsReceive || refreshedReceive != null && refreshedReceive.canReceive();
+        send = sendValid && supportsSend ? refreshedSend : null;
+        receive = receiveValid && supportsReceive ? refreshedReceive : null;
+        return sendValid && receiveValid;
+    }
+
+    private boolean rediscoverRequiredCapabilities() {
+        TileEntity boundBlockEntity = Objects.requireNonNull(blockEntity, "blockEntity");
+        send = null;
+        receive = null;
+        sendFacing = null;
+        receiveFacing = null;
+        for (EnumFacing facing : EnumFacing.VALUES) {
+            IEnergyStorage storage = boundBlockEntity.getCapability(CapabilityEnergy.ENERGY, facing);
+            if (storage == null) {
+                continue;
+            }
+            if (supportsSend && send == null && storage.canExtract()) {
+                send = storage;
+                sendFacing = facing;
+            }
+            if (supportsReceive && receive == null && storage.canReceive()) {
+                receive = storage;
+                receiveFacing = facing;
+            }
         }
-        IEnergyStorage storage = tileEntity.getCapability(CapabilityEnergy.ENERGY, facing);
-        if (storage == null) {
-            return 0;
+        if (boundBlockEntity instanceof IEnergyStorage storage) {
+            if (supportsSend && send == null && storage.canExtract()) {
+                send = storage;
+            }
+            if (supportsReceive && receive == null && storage.canReceive()) {
+                receive = storage;
+            }
         }
-        int attempted = 0;
-        boolean hasEnergy = hasEnergy(storage);
-        boolean hasRoom = hasRoom(storage);
-        if (needSendScan && hasEnergy) {
-            attempted |= 1;
+        return (!supportsSend || send != null) && (!supportsReceive || receive != null);
+    }
+
+    @Nullable
+    private IEnergyStorage capability(@Nullable EnumFacing facing) {
+        if (blockEntity == null) {
+            return null;
         }
-        if (needReceiveScan && hasRoom) {
-            attempted |= 2;
+        if (facing == null && blockEntity instanceof IEnergyStorage storage) {
+            return storage;
         }
-        if (needSendScan && send == null && hasEnergy(storage) && canExtractEffectively(storage)) {
-            send = storage;
-            sendFacing = facing;
-            sendState = ROLE_SUPPORTED;
+        return facing == null ? null : blockEntity.getCapability(CapabilityEnergy.ENERGY, facing);
+    }
+
+    @Override
+    public HandlerBindingPolicy bindingPolicy() {
+        return BINDING_POLICY;
+    }
+
+    @Override
+    public void bindBlockEntity(TileEntity tileEntity, HandlerInvalidationSink invalidationSink) {
+        if (blockEntity != null || itemBound) {
+            throw new IllegalStateException("FE handler is already bound");
         }
-        if (needReceiveScan && receive == null && hasRoom(storage) && canReceiveEffectively(storage)) {
+        blockEntity = Objects.requireNonNull(tileEntity, "tileEntity");
+        Objects.requireNonNull(invalidationSink, "invalidationSink");
+        discoverStructure(tileEntity);
+    }
+
+    @Override
+    public HandlerTickResult beginServerTick(long epoch) {
+        if (blockEntity == null) {
+            throw new IllegalStateException("FE handler has no block-entity binding");
+        }
+        if (epoch <= activeEpoch) {
+            throw new IllegalArgumentException("FE handler epoch must increase: previous " + activeEpoch + ", got " + epoch);
+        }
+        activeEpoch = epoch;
+        if (energyType == EnergyType.INVALID
+            || !refreshCachedCapabilities() && !rediscoverRequiredCapabilities()) {
+            send = null;
+            receive = null;
+            energyType = EnergyType.INVALID;
+            return HandlerTickResult.SUSPEND_UNTIL_REBIND;
+        }
+        return HandlerTickResult.UNCHANGED;
+    }
+
+    @Override
+    public void endServerTick(long epoch) {
+        throw new IllegalStateException("FE handler uses begin-only tick lifecycle");
+    }
+
+    @Override
+    public void unbindBlockEntity() {
+        send = null;
+        receive = null;
+        sendFacing = null;
+        receiveFacing = null;
+        blockEntity = null;
+        activeEpoch = Long.MIN_VALUE;
+        supportsSend = false;
+        supportsReceive = false;
+        energyType = EnergyType.INVALID;
+    }
+
+    @Override
+    public void bindItem(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
+        if (blockEntity != null || itemBound) {
+            throw new IllegalStateException("FE handler is already bound");
+        }
+        IEnergyStorage storage = Objects.requireNonNull(itemStack, "itemStack")
+                                        .getCapability(CapabilityEnergy.ENERGY, null);
+        itemBound = true;
+        if (storage != null && storage.canReceive()) {
             receive = storage;
-            receiveFacing = facing;
-            receiveState = ROLE_SUPPORTED;
-        }
-        return attempted;
-    }
-
-    @Override
-    public void init(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
-        if (initialized) {
-            return;
-        }
-        initialized = true;
-        bindHint(tileEntity);
-        boolean needSendScan = send == null && sendState == ROLE_UNKNOWN;
-        boolean needReceiveScan = receive == null && receiveState == ROLE_UNKNOWN;
-        boolean attemptedSend = false;
-        boolean attemptedReceive = false;
-        for (int i = 0; i < EnumFacing.VALUES.length; i++) {
-            if (!needSendScan && !needReceiveScan) break;
-            int attempted = bindSide(tileEntity, EnumFacing.VALUES[i], needSendScan, needReceiveScan);
-            attemptedSend |= (attempted & 1) != 0;
-            attemptedReceive |= (attempted & 2) != 0;
-            needSendScan = send == null && sendState == ROLE_UNKNOWN;
-            needReceiveScan = receive == null && receiveState == ROLE_UNKNOWN;
-        }
-        if (send == null && sendState == ROLE_UNKNOWN && attemptedSend) {
-            sendState = ROLE_UNSUPPORTED;
-        }
-        if (receive == null && receiveState == ROLE_UNKNOWN && attemptedReceive) {
-            receiveState = ROLE_UNSUPPORTED;
-        }
-    }
-
-    @Override
-    public void init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
-        var ies = itemStack.getCapability(CapabilityEnergy.ENERGY, null);
-        if (ies == null) return;
-        if (canReceiveEffectively(ies)) {
-            this.receive = ies;
             energyType = EnergyType.RECEIVE;
         } else {
             energyType = EnergyType.INVALID;
@@ -136,31 +213,23 @@ public class FEHandler implements IEnergyHandler {
     }
 
     @Override
-    public void clear() {
+    public void unbindItem() {
         send = null;
         receive = null;
-        energyType = null;
-        initialized = false;
+        itemBound = false;
+        energyType = EnergyType.INVALID;
     }
 
     @Override
     public EnergyAmount extractEnergy(EnergyAmount maxExtract, @Nullable HubNode.HubMetadata hubMetadata) {
-        if (send == null) return EnergyAmounts.ZERO;
-        int extracted = send.extractEnergy((int) maxExtract.asLongClamped(), false);
-        if (extracted == 0 && maxExtract.isPositive()) {
-            sendState = ROLE_UNKNOWN;
-        }
-        return EnergyAmount.obtain(extracted);
+        return send == null ? EnergyAmounts.ZERO
+            : EnergyAmount.obtain(send.extractEnergy((int) maxExtract.asLongClamped(), false));
     }
 
     @Override
     public EnergyAmount receiveEnergy(EnergyAmount maxReceive, @Nullable HubNode.HubMetadata hubMetadata) {
-        if (receive == null) return EnergyAmounts.ZERO;
-        int received = receive.receiveEnergy(maxReceive.intValue(), false);
-        if (received == 0 && maxReceive.isPositive()) {
-            receiveState = ROLE_UNKNOWN;
-        }
-        return EnergyAmount.obtain(received);
+        return receive == null ? EnergyAmounts.ZERO
+            : EnergyAmount.obtain(Math.max(0, receive.receiveEnergy((int) maxReceive.asLongClamped(), false)));
     }
 
     @Override
@@ -170,30 +239,32 @@ public class FEHandler implements IEnergyHandler {
 
     @Override
     public EnergyAmount canReceiveValue(@Nullable HubNode.HubMetadata hubMetadata) {
-        return receive == null ? EnergyAmounts.ZERO : EnergyAmount.obtain(Math.max(0, receive.receiveEnergy(Integer.MAX_VALUE, true)));
-    }
-
-    @Override
-    public EnergyType getType(@Nullable HubNode.HubMetadata hubMetadata) {
-        if (energyType == null) {
-            boolean receive = this.receive != null;
-            if (send != null) {
-                return energyType = receive ? EnergyType.STORAGE : EnergyType.SEND;
-            } else if (receive) {
-                return energyType = EnergyType.RECEIVE;
-            }
-            return energyType = EnergyType.INVALID;
-        }
-        return energyType;
+        return receive == null ? EnergyAmounts.ZERO
+            : EnergyAmount.obtain(Math.max(0, receive.receiveEnergy(Integer.MAX_VALUE, true)));
     }
 
     @Override
     public boolean canExtract(IEnergyHandler receiveHandler, @Nullable HubNode.HubMetadata hubMetadata) {
-        return send != null;
+        EnergyAmount amount = canExtractValue(hubMetadata);
+        try {
+            return amount.isPositive();
+        } finally {
+            amount.recycle();
+        }
     }
 
     @Override
     public boolean canReceive(IEnergyHandler sendHandler, @Nullable HubNode.HubMetadata hubMetadata) {
-        return receive != null;
+        EnergyAmount amount = canReceiveValue(hubMetadata);
+        try {
+            return amount.isPositive();
+        } finally {
+            amount.recycle();
+        }
+    }
+
+    @Override
+    public EnergyType getType(@Nullable HubNode.HubMetadata hubMetadata) {
+        return energyType;
     }
 }

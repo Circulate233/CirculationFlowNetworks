@@ -14,9 +14,27 @@ public final class MEKHandlerManager implements IEnergyHandlerManager {
 
     @Override
     public boolean isAvailable(TileEntity tile) {
-        if (tile instanceof IStrictEnergyStorage)
-            return tile instanceof IStrictEnergyAcceptor || tile instanceof IStrictEnergyOutputter;
-        else return false;
+        if (tile instanceof mekanism.common.tile.TileEntityEnergyCube) {
+            return true;
+        }
+        if (!(tile instanceof IStrictEnergyStorage)) {
+            return false;
+        }
+        if (tile instanceof IStrictEnergyAcceptor acceptor) {
+            for (net.minecraft.util.EnumFacing facing : net.minecraft.util.EnumFacing.VALUES) {
+                if (acceptor.canReceiveEnergy(facing)) {
+                    return true;
+                }
+            }
+        }
+        if (tile instanceof IStrictEnergyOutputter outputter) {
+            for (net.minecraft.util.EnumFacing facing : net.minecraft.util.EnumFacing.VALUES) {
+                if (outputter.canOutputEnergy(facing)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     @Override

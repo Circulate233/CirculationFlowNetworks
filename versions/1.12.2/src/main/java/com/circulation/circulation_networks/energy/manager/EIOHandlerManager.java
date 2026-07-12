@@ -2,79 +2,70 @@ package com.circulation.circulation_networks.energy.manager;
 
 import com.circulation.circulation_networks.api.IEnergyHandler;
 import com.circulation.circulation_networks.api.IEnergyHandlerManager;
+import com.circulation.circulation_networks.energy.handler.EIOBackendHandler;
 import com.circulation.circulation_networks.energy.handler.EIOHandler;
-import crazypants.enderio.base.machine.base.te.AbstractCapabilityMachineEntity;
-import crazypants.enderio.base.machine.modes.IoMode;
-import crazypants.enderio.base.power.IEnergyTank;
-import crazypants.enderio.base.power.forge.tile.ILegacyPoweredTile;
-import crazypants.enderio.powertools.machine.capbank.TileCapBank;
-import crazypants.enderio.powertools.machine.capbank.network.ICapBankNetwork;
+import com.circulation.circulation_networks.manager.MappedEnergyHandlerProvider;
+import crazypants.enderio.base.power.IPowerStorage;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.EnumFacing;
 
-public final class EIOHandlerManager implements IEnergyHandlerManager {
+public final class EIOHandlerManager implements IEnergyHandlerManager, MappedEnergyHandlerProvider {
 
     public static final EIOHandlerManager INSTANCE = new EIOHandlerManager();
-
-    private final Reference2ObjectMap<ICapBankNetwork, EIOHandler> networkCache = new Reference2ObjectOpenHashMap<>();
-
-    public void clearTickCache() {
-        networkCache.clear();
-    }
+    private final Reference2ObjectMap<IPowerStorage, BackendLease> identities = new Reference2ObjectOpenHashMap<>();
+    private final Reference2ObjectMap<IEnergyHandler, BackendLease> backends = new Reference2ObjectOpenHashMap<>();
 
     private EIOHandlerManager() {
     }
 
-    private IEnergyHandler claimCapBankHandler(EIOHandler handler) {
-        ICapBankNetwork network = handler.getCapBankNetwork();
-        if (network == null) {
-            return handler;
+    private static EIOHandler requireEndpoint(IEnergyHandler handler) {
+        if (!(handler instanceof EIOHandler endpoint)) {
+            throw new IllegalArgumentException("Ender IO manager received " + handler.getClass().getName());
         }
-        EIOHandler claimed = networkCache.get(network);
-        if (claimed != null) {
-            return claimed;
-        }
-        networkCache.put(network, handler);
-        return handler;
+        return endpoint;
     }
 
     @Override
-    public IEnergyHandler resolveMappedHandler(IEnergyHandler handler, IEnergyHandler.HandlerResolveContext context) {
-        if (handler instanceof EIOHandler eioHandler && context.tileEntity() instanceof TileCapBank) {
-            return claimCapBankHandler(eioHandler);
+    public IEnergyHandler resolveRuntime(IEnergyHandler value, long epoch) {
+        throw new UnsupportedOperationException("Ender IO capacitor banks use shared backend leases");
+    }
+
+    @Override
+    public IEnergyHandler acquireSharedBackend(IEnergyHandler boundHandler) {
+        EIOHandler endpoint = requireEndpoint(boundHandler);
+        IPowerStorage identity = endpoint.backendIdentity();
+        BackendLease lease = identities.get(identity);
+        if (lease == null) {
+            lease = new BackendLease(new EIOBackendHandler(identity));
+            identities.put(identity, lease);
+            backends.put(lease.backend, lease);
         }
-        return handler.resolveMappedHandler(context);
+        if (lease.references == Integer.MAX_VALUE) {
+            throw new IllegalStateException("Ender IO shared-backend reference count exhausted");
+        }
+        lease.references++;
+        return lease.backend;
+    }
+
+    @Override
+    public void releaseSharedBackend(IEnergyHandler boundHandler, IEnergyHandler sharedBackend) {
+        requireEndpoint(boundHandler);
+        BackendLease lease = backends.get(sharedBackend);
+        if (lease == null || lease.references <= 0)
+            throw new IllegalStateException("Ender IO backend lease is inconsistent");
+        lease.references--;
+        if (lease.references == 0) {
+            backends.remove(sharedBackend);
+            BackendLease retired = lease;
+            identities.values().removeIf(value -> value == retired);
+        }
     }
 
     @Override
     public boolean isAvailable(TileEntity tileEntity) {
-        if (tileEntity instanceof TileCapBank) {
-            return true;
-        }
-        if (tileEntity instanceof ILegacyPoweredTile poweredTile) {
-            for (EnumFacing facing : EnumFacing.VALUES) {
-                if (poweredTile.canConnectEnergy(facing)) {
-                    return true;
-                }
-            }
-            return poweredTile.getMaxEnergyStored() > 0;
-        }
-        if (tileEntity instanceof AbstractCapabilityMachineEntity machineEntity) {
-            IEnergyTank tank = machineEntity.getEnergy();
-            if (tank == null || tank.getMaxEnergyStored() <= 0) {
-                return false;
-            }
-            for (EnumFacing facing : EnumFacing.VALUES) {
-                IoMode mode = machineEntity.getIoMode(facing);
-                if (mode != null && mode.canInputOrOutput()) {
-                    return true;
-                }
-            }
-        }
-        return false;
+        return EIOHandler.supports(tileEntity);
     }
 
     @Override
@@ -105,5 +96,14 @@ public final class EIOHandlerManager implements IEnergyHandlerManager {
     @Override
     public String getUnit() {
         return "RF";
+    }
+
+    private static final class BackendLease {
+        private final EIOBackendHandler backend;
+        private int references;
+
+        private BackendLease(EIOBackendHandler backend) {
+            this.backend = backend;
+        }
     }
 }

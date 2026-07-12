@@ -3,6 +3,7 @@ package com.circulation.circulation_networks.client.render;
 import com.circulation.circulation_networks.api.hub.IHubPlugin;
 import com.circulation.circulation_networks.network.hub.HubCapabilitys;
 import com.circulation.circulation_networks.tiles.nodes.TileEntityHub;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.tileentity.TileEntitySpecialRenderer;
 import net.minecraft.item.ItemStack;
@@ -173,18 +174,22 @@ public final class HubRotatingRenderer extends TileEntitySpecialRenderer<TileEnt
             return;
         }
 
-        RotatingModelRenderHelper.RenderBatch batch = RotatingModelRenderHelper.beginBatch(hub, x, y, z, destroyStage);
-        if (batch == null) {
-            return;
-        }
+        try (LegacyWorldRenderStateGuard guard = LegacyWorldRenderStateGuard.openHubPass("hub TESR")) {
+            Minecraft.getMinecraft().entityRenderer.enableLightmap();
+            guard.establishHubLightmapProfile();
+            RotatingModelRenderHelper.RenderBatch batch = RotatingModelRenderHelper.beginBatch(hub, x, y, z, destroyStage);
+            if (batch == null) {
+                return;
+            }
 
-        try {
-            long clientTicks = ClientAnimationTicker.ticks();
-            renderBase(batch, clientTicks, partialTicks);
-            renderChannel(hub, batch, clientTicks, partialTicks);
-            renderPlugins(hub, batch, clientTicks, partialTicks);
-        } finally {
-            batch.end();
+            try {
+                long clientTicks = ClientAnimationTicker.ticks();
+                renderBase(batch, clientTicks, partialTicks);
+                renderChannel(hub, batch, clientTicks, partialTicks);
+                renderPlugins(hub, batch, clientTicks, partialTicks);
+            } finally {
+                batch.end();
+            }
         }
         super.render(hub, x, y, z, partialTicks, destroyStage, alpha);
     }

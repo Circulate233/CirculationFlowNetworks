@@ -4,6 +4,7 @@ import com.circulation.circulation_networks.api.EnergyAmount;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.RoundingMode;
 
 public final class EnergyAmountConversionUtils {
 
@@ -33,6 +34,16 @@ public final class EnergyAmountConversionUtils {
             return target.init((long) value);
         }
         return target.init(BigDecimal.valueOf(value).toBigInteger());
+    }
+
+    public static EnergyAmount setFromDoubleCeiling(EnergyAmount target, double value) {
+        if (!Double.isFinite(value)) {
+            throw new IllegalArgumentException("Energy amount conversion requires a finite value");
+        }
+        if (value >= Long.MIN_VALUE && value <= Long.MAX_VALUE) {
+            return target.init((long) Math.ceil(value));
+        }
+        return target.init(BigDecimal.valueOf(value).setScale(0, RoundingMode.CEILING).toBigIntegerExact());
     }
 
     public static double toDoubleClamped(EnergyAmount amount) {

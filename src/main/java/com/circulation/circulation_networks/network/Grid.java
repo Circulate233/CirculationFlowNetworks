@@ -4,6 +4,7 @@ import com.circulation.circulation_networks.api.IGrid;
 import com.circulation.circulation_networks.api.node.IHubNode;
 import com.circulation.circulation_networks.api.node.INode;
 import com.circulation.circulation_networks.manager.EnergyMachineManager;
+import com.circulation.circulation_networks.manager.GridParticipantIndex;
 import com.circulation.circulation_networks.manager.PocketNodeManager;
 import com.circulation.circulation_networks.registry.NodeTypes;
 import it.unimi.dsi.fastutil.longs.Long2ReferenceOpenHashMap;
@@ -26,11 +27,11 @@ public final class Grid implements IGrid {
 
     private final UUID id;
     private final ReferenceSet<INode> nodes = new ReferenceOpenHashSet<>();
+    private final transient EnergyMachineManager.Interaction interaction = new EnergyMachineManager.Interaction();
+    private final transient GridParticipantIndex participantIndex = new GridParticipantIndex(this);
     private long snapshotVersion = 1L;
     @Nullable
     private IHubNode hubNode;
-    @Nullable
-    private transient EnergyMachineManager.GridTickData energyTickData;
 
     public Grid(UUID id) {
         this.id = id;
@@ -146,14 +147,13 @@ public final class Grid implements IGrid {
     }
 
     @Override
-    @Nullable
-    public EnergyMachineManager.GridTickData getEnergyTickData() {
-        return energyTickData;
+    public EnergyMachineManager.Interaction getInteraction() {
+        return interaction;
     }
 
     @Override
-    public void setEnergyTickData(@Nullable EnergyMachineManager.GridTickData data) {
-        this.energyTickData = data;
+    public GridParticipantIndex getParticipantIndex() {
+        return participantIndex;
     }
 
     //? if <1.20 {

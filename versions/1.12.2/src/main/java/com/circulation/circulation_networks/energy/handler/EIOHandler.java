@@ -2,7 +2,10 @@ package com.circulation.circulation_networks.energy.handler;
 
 import com.circulation.circulation_networks.api.EnergyAmount;
 import com.circulation.circulation_networks.api.EnergyAmounts;
+import com.circulation.circulation_networks.api.HandlerTickResult;
 import com.circulation.circulation_networks.api.IEnergyHandler;
+import com.circulation.circulation_networks.manager.HandlerBindingPolicy;
+import com.circulation.circulation_networks.manager.HandlerInvalidationSink;
 import com.circulation.circulation_networks.network.nodes.HubNode;
 import crazypants.enderio.base.machine.base.te.AbstractCapabilityGeneratorEntity;
 import crazypants.enderio.base.machine.base.te.AbstractCapabilityMachineEntity;
@@ -19,511 +22,417 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import org.jetbrains.annotations.Nullable;
 
-public class EIOHandler implements IEnergyHandler {
+import java.util.Objects;
 
-    private static final int ROLE_UNKNOWN = 0;
-    private static final int ROLE_SUPPORTED = 1;
-    private static final int ROLE_UNSUPPORTED = 2;
+public final class EIOHandler implements IEnergyHandler {
+
+    private static final HandlerBindingPolicy ORDINARY_POLICY = HandlerBindingPolicy.of(
+        HandlerBindingPolicy.TickLifecycle.BEGIN_TICK,
+        HandlerBindingPolicy.RoleScope.FIXED,
+        HandlerBindingPolicy.MappingScope.NONE,
+        HandlerBindingPolicy.PairMatching.NONE
+    );
+    private static final HandlerBindingPolicy CAP_BANK_POLICY = HandlerBindingPolicy.of(
+        HandlerBindingPolicy.TickLifecycle.BEGIN_TICK,
+        HandlerBindingPolicy.RoleScope.ENDPOINT_DYNAMIC,
+        HandlerBindingPolicy.MappingScope.SHARED_BACKEND,
+        HandlerBindingPolicy.PairMatching.NONE
+    );
 
     @Nullable
-    private IPowerStorage storage;
+    private TileEntity blockEntity;
     @Nullable
-    private ICapBankNetwork capBankNetwork;
+    private HandlerInvalidationSink invalidationSink;
     @Nullable
     private TileCapBank capBank;
     @Nullable
-    private ILegacyPoweredTile legacySendTile;
+    private IPowerStorage backendIdentity;
     @Nullable
-    private ILegacyPoweredTile.Receiver legacyReceiveTile;
+    private ILegacyPoweredTile legacySend;
     @Nullable
-    private EnergyTank machineSendTank;
+    private ILegacyPoweredTile.Receiver legacyReceive;
     @Nullable
-    private EnergyTank machineReceiveTank;
+    private EnergyTank machineSend;
+    @Nullable
+    private EnergyTank machineReceive;
     @Nullable
     private EnumFacing sendFacing;
     @Nullable
     private EnumFacing receiveFacing;
-    @Nullable
-    private EnergyType energyType;
-    private boolean initialized;
-    private boolean prepared;
-    private int sendState = ROLE_UNKNOWN;
-    private int receiveState = ROLE_UNKNOWN;
+    private HandlerBindingPolicy policy = ORDINARY_POLICY;
+    private EnergyType energyType = EnergyType.INVALID;
+    private boolean supportsSend;
+    private boolean supportsReceive;
+    private long activeEpoch = Long.MIN_VALUE;
 
-    private static int clampPositive(long requested, long... limits) {
-        long clamped = Math.max(0L, requested);
-        for (long limit : limits) {
-            clamped = Math.min(clamped, Math.max(0L, limit));
+    public static boolean supports(TileEntity tileEntity) {
+        if (tileEntity instanceof TileCapBank bank) {
+            return capBankType(bank) != EnergyType.INVALID;
         }
-        if (clamped == 0L) {
-            return 0;
-        }
-        return clamped >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) clamped;
+        return ordinaryType(tileEntity) != EnergyType.INVALID;
     }
 
-    private static IPowerStorage resolveStorage(TileCapBank capBank) {
+    private static IPowerStorage resolveCapBankStorage(TileCapBank capBank, @Nullable ICapBankNetwork network) {
+        if (network != null) {
+            return network;
+        }
         IPowerStorage controller = capBank.getController();
         return controller != null ? controller : capBank;
     }
 
-    private static boolean isMachineEnergySideEnabled(AbstractCapabilityMachineEntity machineEntity, EnumFacing facing) {
-        IoMode mode = machineEntity.getIoMode(facing);
-        return mode != null && mode.canInputOrOutput();
+    private static EnergyType capBankType(TileCapBank bank) {
+        ICapBankNetwork network = bank.getNetwork();
+        return capBankType(bank, network);
     }
 
-    private static boolean canMachineSideReceiveEnergy(AbstractCapabilityMachineEntity machineEntity, EnumFacing facing) {
-        IoMode mode = machineEntity.getIoMode(facing);
-        return mode != null && mode.canRecieveInput();
+    private static EnergyType capBankType(TileCapBank bank, @Nullable ICapBankNetwork network) {
+        if (network == null) {
+            return EnergyType.STORAGE;
+        }
+        boolean inputEnabled = false;
+        boolean outputEnabled = false;
+        for (EnumFacing facing : EnumFacing.VALUES) {
+            if (!inputEnabled) inputEnabled = bank.isInputEnabled(facing);
+            if (!outputEnabled) outputEnabled = bank.isOutputEnabled(facing);
+            if (inputEnabled && outputEnabled) break;
+        }
+        return capBankEndpointType(inputEnabled, outputEnabled);
     }
 
-    private static boolean canMachineSideExtractEnergy(AbstractCapabilityMachineEntity machineEntity, EnumFacing facing) {
-        IoMode mode = machineEntity.getIoMode(facing);
+    static EnergyType capBankEndpointType(boolean inputEnabled, boolean outputEnabled) {
+        return structuralType(outputEnabled, inputEnabled);
+    }
+
+    private static EnergyType ordinaryType(TileEntity tileEntity) {
+        boolean send = false;
+        boolean receive = false;
+        if (tileEntity instanceof ILegacyPoweredTile powered) {
+            for (EnumFacing facing : EnumFacing.VALUES) {
+                if (!powered.canConnectEnergy(facing)) continue;
+                send |= powered instanceof AbstractGeneratorEntity generator && generator.getMaxEnergySent() > 0;
+                receive |= powered instanceof ILegacyPoweredTile.Receiver receiver
+                    && receiver.getMaxEnergyRecieved(facing) > 0;
+            }
+        } else if (tileEntity instanceof AbstractCapabilityMachineEntity machine) {
+            IEnergyTank tank = machine.getEnergy();
+            if (!(tank instanceof EnergyTank energyTank)) return EnergyType.INVALID;
+            for (EnumFacing facing : EnumFacing.VALUES) {
+                IoMode mode = machine.getIoMode(facing);
+                if (mode == null) continue;
+                send |= machine instanceof AbstractCapabilityGeneratorEntity && mode.canOutput()
+                    && energyTank.getMaxUsage() > 0;
+                receive |= mode.canRecieveInput() && energyTank.getMaxEnergyRecieved() > 0;
+            }
+        }
+        return structuralType(send, receive);
+    }
+
+    private static EnergyType structuralType(boolean send, boolean receive) {
+        if (send) return receive ? EnergyType.STORAGE : EnergyType.SEND;
+        return receive ? EnergyType.RECEIVE : EnergyType.INVALID;
+    }
+
+    private static boolean validLegacySend(ILegacyPoweredTile powered, @Nullable EnumFacing facing) {
+        return facing != null && powered.canConnectEnergy(facing)
+            && powered instanceof AbstractGeneratorEntity generator && generator.getMaxEnergySent() > 0;
+    }
+
+    private static boolean validLegacyReceive(ILegacyPoweredTile powered, @Nullable EnumFacing facing) {
+        return facing != null && powered.canConnectEnergy(facing)
+            && powered instanceof ILegacyPoweredTile.Receiver receiver
+            && receiver.getMaxEnergyRecieved(facing) > 0;
+    }
+
+    private static boolean validMachineSend(AbstractCapabilityMachineEntity machine, EnergyTank tank,
+                                            @Nullable EnumFacing facing) {
+        if (facing == null || !(machine instanceof AbstractCapabilityGeneratorEntity) || tank.getMaxUsage() <= 0) {
+            return false;
+        }
+        IoMode mode = machine.getIoMode(facing);
         return mode != null && mode.canOutput();
     }
 
-    private static boolean hasEnergy(ILegacyPoweredTile tile) {
-        return tile.getEnergyStored() > 0;
+    private static boolean validMachineReceive(AbstractCapabilityMachineEntity machine, EnergyTank tank,
+                                               @Nullable EnumFacing facing) {
+        if (facing == null || tank.getMaxEnergyRecieved() <= 0) return false;
+        IoMode mode = machine.getIoMode(facing);
+        return mode != null && mode.canRecieveInput();
     }
 
-    private static boolean hasRoom(ILegacyPoweredTile tile) {
-        return tile.getEnergyStored() < tile.getMaxEnergyStored();
+    private static int clamp(long value) {
+        if (value <= 0L) return 0;
+        return value >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) value;
     }
 
-    private static boolean hasEnergy(EnergyTank tank) {
-        return tank.getEnergyStored() > 0;
+    private static int clamp(long value, long firstLimit, long secondLimit) {
+        if (value <= 0L || firstLimit <= 0L || secondLimit <= 0L) return 0;
+        long result = Math.min(value, Math.min(firstLimit, secondLimit));
+        return result >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) result;
     }
 
-    private static boolean hasRoom(EnergyTank tank) {
-        return tank.getEnergyStored() < tank.getMaxEnergyStored();
-    }
-
-    private static int receiveEnergyDirect(EnergyTank tank, int maxReceive, boolean simulate) {
-        int received = Math.max(0, Math.min(maxReceive, Math.min(tank.getMaxEnergyStored() - tank.getEnergyStored(), tank.getMaxEnergyRecieved())));
-        if (received > 0 && !simulate) {
-            tank.setEnergyStored(tank.getEnergyStored() + received);
-        }
-        return received;
-    }
-
-    private static int extractEnergyDirect(ILegacyPoweredTile tile, int maxExtract, int maxOutput, boolean simulate) {
-        int extracted = Math.max(0, Math.min(maxExtract, Math.min(tile.getEnergyStored(), maxOutput)));
-        if (extracted > 0 && !simulate) {
-            tile.setEnergyStored(tile.getEnergyStored() - extracted);
-        }
-        return extracted;
-    }
-
-    private static int extractEnergyDirect(EnergyTank tank, int maxExtract, int maxOutput, boolean simulate) {
-        int extracted = Math.max(0, Math.min(maxExtract, Math.min(tank.getEnergyStored(), maxOutput)));
-        if (extracted > 0 && !simulate) {
-            tank.setEnergyStored(tank.getEnergyStored() - extracted);
-        }
-        return extracted;
-    }
-
-    private void bindLegacyPoweredTile(ILegacyPoweredTile poweredTile) {
-        if (sendState == ROLE_SUPPORTED && sendFacing != null) {
-            if (poweredTile instanceof AbstractGeneratorEntity generator
-                && poweredTile.canConnectEnergy(sendFacing)
-                && hasEnergy(poweredTile)
-                && generator.getMaxEnergySent() > 0) {
-                legacySendTile = poweredTile;
-            } else if (!poweredTile.canConnectEnergy(sendFacing)) {
-                sendState = ROLE_UNKNOWN;
+    private boolean refreshOrdinary() {
+        legacySend = null;
+        legacyReceive = null;
+        machineSend = null;
+        machineReceive = null;
+        if (blockEntity instanceof ILegacyPoweredTile powered) {
+            boolean sendValid;
+            boolean receiveValid;
+            if (supportsSend && supportsReceive && sendFacing == receiveFacing) {
+                EnumFacing facing = sendFacing;
+                boolean connected = facing != null && powered.canConnectEnergy(facing);
+                sendValid = connected && powered instanceof AbstractGeneratorEntity generator
+                    && generator.getMaxEnergySent() > 0;
+                receiveValid = connected && powered instanceof ILegacyPoweredTile.Receiver receiver
+                    && receiver.getMaxEnergyRecieved(facing) > 0;
             } else {
-                legacySendTile = null;
+                sendValid = !supportsSend || validLegacySend(powered, sendFacing);
+                receiveValid = !supportsReceive || validLegacyReceive(powered, receiveFacing);
             }
-        }
-        if (receiveState == ROLE_SUPPORTED && receiveFacing != null) {
-            if (poweredTile instanceof ILegacyPoweredTile.Receiver receiver && poweredTile.canConnectEnergy(receiveFacing) && hasRoom(poweredTile)) {
-                if (receiver.getMaxEnergyRecieved(receiveFacing) > 0) {
-                    legacyReceiveTile = receiver;
-                } else {
-                    legacyReceiveTile = null;
-                }
-            } else if (!poweredTile.canConnectEnergy(receiveFacing)) {
-                receiveState = ROLE_UNKNOWN;
-            } else {
-                legacyReceiveTile = null;
-            }
-        }
-        boolean attemptedSend = false;
-        boolean attemptedReceive = false;
-        for (EnumFacing facing : EnumFacing.VALUES) {
-            boolean needSendScan = legacySendTile == null && sendState == ROLE_UNKNOWN;
-            boolean needReceiveScan = legacyReceiveTile == null && receiveState == ROLE_UNKNOWN;
-            if (!needSendScan && !needReceiveScan) {
-                break;
-            }
-            if (!poweredTile.canConnectEnergy(facing)) {
-                continue;
-            }
-            if (needSendScan && poweredTile instanceof AbstractGeneratorEntity generator && hasEnergy(poweredTile)) {
-                attemptedSend = true;
-                if (generator.getMaxEnergySent() > 0) {
-                    legacySendTile = poweredTile;
-                    sendFacing = facing;
-                    sendState = ROLE_SUPPORTED;
-                }
-            }
-            if (needReceiveScan && poweredTile instanceof ILegacyPoweredTile.Receiver receiver && hasRoom(poweredTile)) {
-                attemptedReceive = true;
-                if (receiver.getMaxEnergyRecieved(facing) > 0) {
-                    legacyReceiveTile = receiver;
-                    receiveFacing = facing;
-                    receiveState = ROLE_SUPPORTED;
-                }
-            }
-        }
-        if (legacySendTile == null && sendState == ROLE_UNKNOWN && attemptedSend) {
-            sendState = ROLE_UNSUPPORTED;
-        }
-        if (legacyReceiveTile == null && receiveState == ROLE_UNKNOWN && attemptedReceive) {
-            receiveState = ROLE_UNSUPPORTED;
-        }
-    }
-
-    private void bindCapabilityMachine(AbstractCapabilityMachineEntity machineEntity) {
-        IEnergyTank tank = machineEntity.getEnergy();
-        if (tank == null) {
-            return;
-        }
-        if (!(tank instanceof EnergyTank energyTank)) {
-            energyType = EnergyType.INVALID;
-            sendState = ROLE_UNSUPPORTED;
-            receiveState = ROLE_UNSUPPORTED;
-            return;
-        }
-        if (sendState == ROLE_SUPPORTED && sendFacing != null) {
-            if (machineEntity instanceof AbstractCapabilityGeneratorEntity
-                && canMachineSideExtractEnergy(machineEntity, sendFacing)
-                && hasEnergy(energyTank)
-                && energyTank.getMaxUsage() > 0) {
-                machineSendTank = energyTank;
-            } else if (!canMachineSideExtractEnergy(machineEntity, sendFacing)) {
-                sendState = ROLE_UNKNOWN;
-            } else {
-                machineSendTank = null;
-            }
-        }
-        if (receiveState == ROLE_SUPPORTED && receiveFacing != null) {
-            if (canMachineSideReceiveEnergy(machineEntity, receiveFacing) && hasRoom(energyTank) && energyTank.getMaxEnergyRecieved() > 0) {
-                machineReceiveTank = energyTank;
-            } else if (!canMachineSideReceiveEnergy(machineEntity, receiveFacing)) {
-                receiveState = ROLE_UNKNOWN;
-            } else {
-                machineReceiveTank = null;
-            }
-        }
-        boolean attemptedSend = false;
-        boolean attemptedReceive = false;
-        for (EnumFacing facing : EnumFacing.VALUES) {
-            boolean needSendScan = machineSendTank == null && sendState == ROLE_UNKNOWN;
-            boolean needReceiveScan = machineReceiveTank == null && receiveState == ROLE_UNKNOWN;
-            if (!needSendScan && !needReceiveScan) {
-                break;
-            }
-            if (!isMachineEnergySideEnabled(machineEntity, facing)) {
-                continue;
-            }
-            if (needSendScan && machineEntity instanceof AbstractCapabilityGeneratorEntity
-                && canMachineSideExtractEnergy(machineEntity, facing)
-                && hasEnergy(energyTank)) {
-                attemptedSend = true;
-                if (energyTank.getMaxUsage() > 0) {
-                    machineSendTank = energyTank;
-                    sendFacing = facing;
-                    sendState = ROLE_SUPPORTED;
-                }
-            }
-            if (needReceiveScan && canMachineSideReceiveEnergy(machineEntity, facing) && hasRoom(energyTank)) {
-                attemptedReceive = true;
-                if (energyTank.getMaxEnergyRecieved() > 0) {
-                    machineReceiveTank = energyTank;
-                    receiveFacing = facing;
-                    receiveState = ROLE_SUPPORTED;
-                }
-            }
-        }
-        if (machineSendTank == null && sendState == ROLE_UNKNOWN && attemptedSend) {
-            sendState = ROLE_UNSUPPORTED;
-        }
-        if (machineReceiveTank == null && receiveState == ROLE_UNKNOWN && attemptedReceive) {
-            receiveState = ROLE_UNSUPPORTED;
-        }
-    }
-
-    private void updateStorageEnergyType() {
-        boolean send = legacySendTile != null || machineSendTank != null;
-        boolean receive = legacyReceiveTile != null || machineReceiveTank != null;
-        if (send) {
-            energyType = receive ? EnergyType.STORAGE : EnergyType.SEND;
-        } else if (receive) {
-            energyType = EnergyType.RECEIVE;
-        } else {
-            energyType = EnergyType.INVALID;
-        }
-    }
-
-    private void prepareLegacyPoweredTile(ILegacyPoweredTile poweredTile) {
-        bindLegacyPoweredTile(poweredTile);
-        updateStorageEnergyType();
-        prepared = true;
-    }
-
-    private void prepareCapabilityMachine(AbstractCapabilityMachineEntity machineEntity) {
-        bindCapabilityMachine(machineEntity);
-        updateStorageEnergyType();
-        prepared = true;
-    }
-
-    @Override
-    public void asyncInit(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
-        if (tileEntity instanceof TileCapBank) {
-            return;
-        }
-        if (tileEntity instanceof ILegacyPoweredTile poweredTile) {
-            prepareLegacyPoweredTile(poweredTile);
-            return;
-        }
-        if (tileEntity instanceof AbstractCapabilityMachineEntity machineEntity) {
-            prepareCapabilityMachine(machineEntity);
-            return;
-        }
-        energyType = EnergyType.INVALID;
-        prepared = true;
-    }
-
-    @Override
-    public boolean shouldRunAsyncInit(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
-        return tileEntity instanceof ILegacyPoweredTile || tileEntity instanceof AbstractCapabilityMachineEntity;
-    }
-
-    @Override
-    public void init(TileEntity tileEntity, @Nullable HubNode.HubMetadata hubMetadata) {
-        if (initialized) {
-            return;
-        }
-        initialized = true;
-        if (prepared) {
-            return;
-        }
-        if (tileEntity instanceof TileCapBank tcapBank) {
-            capBank = tcapBank;
-            ICapBankNetwork activeNetwork = capBank.getNetwork();
-            storage = activeNetwork != null ? activeNetwork : resolveStorage(capBank);
-            if (storage instanceof ICapBankNetwork networkStorage) {
-                capBankNetwork = networkStorage;
-            }
-            energyType = EnergyType.STORAGE;
-            prepared = true;
-            return;
-        }
-        if (tileEntity instanceof ILegacyPoweredTile poweredTile) {
-            prepareLegacyPoweredTile(poweredTile);
-            return;
-        }
-        if (tileEntity instanceof AbstractCapabilityMachineEntity machineEntity) {
-            prepareCapabilityMachine(machineEntity);
-            return;
-        }
-        energyType = EnergyType.INVALID;
-        prepared = true;
-    }
-
-    private void refreshNetworkStorage() {
-        if (capBank == null) {
-            return;
-        }
-        ICapBankNetwork activeNetwork = capBank.getNetwork();
-        if (activeNetwork != null) {
-            if (activeNetwork == capBankNetwork) {
-                return;
-            }
-            capBankNetwork = activeNetwork;
-            storage = activeNetwork;
-            return;
-        }
-        if (capBankNetwork != null) {
-            capBankNetwork = null;
-            storage = resolveStorage(capBank);
-        }
-    }
-
-    @Nullable
-    public ICapBankNetwork getCapBankNetwork() {
-        return capBankNetwork;
-    }
-
-    @Override
-    public void init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
-        energyType = EnergyType.INVALID;
-    }
-
-    @Override
-    public void clear() {
-        storage = null;
-        capBankNetwork = null;
-        capBank = null;
-        legacySendTile = null;
-        legacyReceiveTile = null;
-        machineSendTank = null;
-        machineReceiveTank = null;
-        sendFacing = null;
-        receiveFacing = null;
-        energyType = null;
-        initialized = false;
-        prepared = false;
-        sendState = ROLE_UNKNOWN;
-        receiveState = ROLE_UNKNOWN;
-    }
-
-    @Nullable
-    private EnumFacing findInputFace() {
-        if (capBank == null) {
-            return null;
-        }
-        for (EnumFacing facing : EnumFacing.VALUES) {
-            if (capBank.isInputEnabled(facing)) {
-                return facing;
-            }
-        }
-        return null;
-    }
-
-    private boolean canInput() {
-        if (capBankNetwork != null) {
-            return capBankNetwork.isInputEnabled();
-        }
-        return findInputFace() != null;
-    }
-
-    private boolean canOutput() {
-        if (capBankNetwork != null) {
-            return capBankNetwork.isOutputEnabled();
-        }
-        if (capBank == null) {
-            return false;
-        }
-        for (EnumFacing facing : EnumFacing.VALUES) {
-            if (capBank.isOutputEnabled(facing)) {
+            if (sendValid && receiveValid) {
+                if (supportsSend) legacySend = powered;
+                if (supportsReceive) legacyReceive = (ILegacyPoweredTile.Receiver) powered;
                 return true;
             }
+            return scanLegacy(powered);
+        }
+        if (blockEntity instanceof AbstractCapabilityMachineEntity machine) {
+            IEnergyTank tank = machine.getEnergy();
+            if (!(tank instanceof EnergyTank energyTank)) return false;
+            boolean sendValid;
+            boolean receiveValid;
+            if (supportsSend && supportsReceive && sendFacing == receiveFacing) {
+                EnumFacing facing = sendFacing;
+                boolean sendLimitValid = machine instanceof AbstractCapabilityGeneratorEntity
+                    && energyTank.getMaxUsage() > 0;
+                boolean receiveLimitValid = energyTank.getMaxEnergyRecieved() > 0;
+                IoMode mode = facing != null && (sendLimitValid || receiveLimitValid) ? machine.getIoMode(facing) : null;
+                sendValid = sendLimitValid && mode != null && mode.canOutput();
+                receiveValid = receiveLimitValid && mode != null && mode.canRecieveInput();
+            } else {
+                sendValid = !supportsSend || validMachineSend(machine, energyTank, sendFacing);
+                receiveValid = !supportsReceive || validMachineReceive(machine, energyTank, receiveFacing);
+            }
+            if (sendValid && receiveValid) {
+                if (supportsSend) machineSend = energyTank;
+                if (supportsReceive) machineReceive = energyTank;
+                return true;
+            }
+            return scanMachine(machine, energyTank);
         }
         return false;
     }
 
+    private boolean scanLegacy(ILegacyPoweredTile powered) {
+        for (EnumFacing facing : EnumFacing.VALUES) {
+            if (supportsSend && legacySend == null && validLegacySend(powered, facing)) {
+                legacySend = powered;
+                sendFacing = facing;
+            }
+            if (supportsReceive && legacyReceive == null && validLegacyReceive(powered, facing)) {
+                legacyReceive = (ILegacyPoweredTile.Receiver) powered;
+                receiveFacing = facing;
+            }
+        }
+        return (!supportsSend || legacySend != null) && (!supportsReceive || legacyReceive != null);
+    }
+
+    private boolean scanMachine(AbstractCapabilityMachineEntity machine, EnergyTank tank) {
+        for (EnumFacing facing : EnumFacing.VALUES) {
+            if (supportsSend && machineSend == null && validMachineSend(machine, tank, facing)) {
+                machineSend = tank;
+                sendFacing = facing;
+            }
+            if (supportsReceive && machineReceive == null && validMachineReceive(machine, tank, facing)) {
+                machineReceive = tank;
+                receiveFacing = facing;
+            }
+        }
+        return (!supportsSend || machineSend != null) && (!supportsReceive || machineReceive != null);
+    }
+
     @Override
-    public EnergyAmount receiveEnergy(EnergyAmount maxReceive, @Nullable HubNode.HubMetadata hubMetadata) {
-        refreshNetworkStorage();
-        if (legacyReceiveTile != null && receiveFacing != null) {
-            int received = legacyReceiveTile.receiveEnergy(receiveFacing, clampPositive(maxReceive.asLongClamped(), legacyReceiveTile.getMaxEnergyStored() - legacyReceiveTile.getEnergyStored(), legacyReceiveTile.getMaxEnergyRecieved(receiveFacing)), false);
-            if (received == 0 && maxReceive.isPositive()) {
-                receiveState = ROLE_UNKNOWN;
+    public HandlerBindingPolicy bindingPolicy() {
+        return policy;
+    }
+
+    @Override
+    public void bindBlockEntity(TileEntity tileEntity, HandlerInvalidationSink invalidationSink) {
+        if (blockEntity != null) throw new IllegalStateException("Ender IO handler is already bound");
+        blockEntity = Objects.requireNonNull(tileEntity, "tileEntity");
+        this.invalidationSink = Objects.requireNonNull(invalidationSink, "invalidationSink");
+        if (tileEntity instanceof TileCapBank bank) {
+            policy = CAP_BANK_POLICY;
+            capBank = bank;
+            ICapBankNetwork network = bank.getNetwork();
+            backendIdentity = resolveCapBankStorage(bank, network);
+            energyType = capBankType(bank, network);
+            if (energyType == EnergyType.INVALID) {
+                throw new IllegalArgumentException("Ender IO capacitor bank has no active storage role");
             }
-            return received > 0 ? EnergyAmount.obtain(received) : EnergyAmounts.ZERO;
+            return;
         }
-        if (machineReceiveTank != null) {
-            int received = receiveEnergyDirect(machineReceiveTank, clampPositive(maxReceive.asLongClamped()), false);
-            if (received == 0 && maxReceive.isPositive()) {
-                receiveState = ROLE_UNKNOWN;
-            }
-            return received > 0 ? EnergyAmount.obtain(received) : EnergyAmounts.ZERO;
+        policy = ORDINARY_POLICY;
+        energyType = ordinaryType(tileEntity);
+        supportsSend = energyType == EnergyType.SEND || energyType == EnergyType.STORAGE;
+        supportsReceive = energyType == EnergyType.RECEIVE || energyType == EnergyType.STORAGE;
+        if (energyType == EnergyType.INVALID || !refreshOrdinary()) {
+            throw new IllegalArgumentException("Ender IO block entity has no structural energy role");
         }
-        if (storage != null && canInput()) {
-            long before = storage.getEnergyStoredL();
-            int requested = clampPositive(maxReceive.asLongClamped(), storage.getMaxEnergyStoredL() - before, storage.getMaxInput());
-            if (requested <= 0) {
-                return EnergyAmounts.ZERO;
+    }
+
+    @Override
+    public HandlerTickResult beginServerTick(long epoch) {
+        if (blockEntity == null || invalidationSink == null) {
+            throw new IllegalStateException("Ender IO handler has no block-entity binding");
+        }
+        if (epoch <= activeEpoch) {
+            throw new IllegalArgumentException("Ender IO epoch must increase: previous " + activeEpoch + ", got " + epoch);
+        }
+        activeEpoch = epoch;
+        if (capBank != null) {
+            ICapBankNetwork network = capBank.getNetwork();
+            IPowerStorage currentBackend = resolveCapBankStorage(capBank, network);
+            EnergyType currentType = capBankType(capBank, network);
+            if (currentType == EnergyType.INVALID) {
+                energyType = EnergyType.INVALID;
+                backendIdentity = null;
+                return HandlerTickResult.SUSPEND_UNTIL_REBIND;
             }
-            int accepted;
-            if (capBankNetwork != null) {
-                accepted = capBankNetwork.receiveEnergy(requested, false);
-            } else {
-                EnumFacing inputFace = findInputFace();
-                accepted = inputFace == null || capBank == null ? 0 : capBank.receiveEnergy(inputFace, requested, false);
-            }
+            boolean changed = currentBackend != backendIdentity || currentType != energyType;
+            if (currentBackend != backendIdentity) invalidationSink.backendChanged();
+            backendIdentity = currentBackend;
+            energyType = currentType;
+            return changed ? HandlerTickResult.STATE_CHANGED : HandlerTickResult.UNCHANGED;
+        }
+        if (!refreshOrdinary()) {
+            energyType = EnergyType.INVALID;
+            return HandlerTickResult.SUSPEND_UNTIL_REBIND;
+        }
+        return HandlerTickResult.UNCHANGED;
+    }
+
+    @Override
+    public void endServerTick(long epoch) {
+        throw new IllegalStateException("Ender IO endpoint handler uses begin-only tick lifecycle");
+    }
+
+    @Override
+    public void unbindBlockEntity() {
+        blockEntity = null;
+        invalidationSink = null;
+        capBank = null;
+        backendIdentity = null;
+        legacySend = null;
+        legacyReceive = null;
+        machineSend = null;
+        machineReceive = null;
+        sendFacing = null;
+        receiveFacing = null;
+        policy = ORDINARY_POLICY;
+        energyType = EnergyType.INVALID;
+        supportsSend = false;
+        supportsReceive = false;
+        activeEpoch = Long.MIN_VALUE;
+    }
+
+    public IPowerStorage backendIdentity() {
+        return Objects.requireNonNull(backendIdentity, "Capacitor bank endpoint has no backend identity");
+    }
+
+    @Override
+    public void bindItem(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
+        throw new UnsupportedOperationException("Ender IO does not support item energy bindings");
+    }
+
+    @Override
+    public void unbindItem() {
+        throw new UnsupportedOperationException("Ender IO does not support item energy bindings");
+    }
+
+    private void requireOrdinaryBackend() {
+        if (capBank != null) throw new IllegalStateException("Capacitor bank endpoint cannot be used as its backend");
+    }
+
+    @Override
+    public EnergyAmount receiveEnergy(EnergyAmount maximum, @Nullable HubNode.HubMetadata metadata) {
+        requireOrdinaryBackend();
+        if (legacyReceive != null && receiveFacing != null) {
+            int accepted = legacyReceive.receiveEnergy(receiveFacing, clamp(maximum.asLongClamped()), false);
+            return accepted > 0 ? EnergyAmount.obtain(accepted) : EnergyAmounts.ZERO;
+        }
+        if (machineReceive != null) {
+            int stored = machineReceive.getEnergyStored();
+            int accepted = clamp(maximum.asLongClamped(), (long) machineReceive.getMaxEnergyStored() - stored,
+                machineReceive.getMaxEnergyRecieved());
+            if (accepted > 0) machineReceive.setEnergyStored(stored + accepted);
             return accepted > 0 ? EnergyAmount.obtain(accepted) : EnergyAmounts.ZERO;
         }
         return EnergyAmounts.ZERO;
     }
 
     @Override
-    public EnergyAmount extractEnergy(EnergyAmount maxExtract, @Nullable HubNode.HubMetadata hubMetadata) {
-        refreshNetworkStorage();
-        if (legacySendTile != null) {
-            int maxOutput = legacySendTile instanceof AbstractGeneratorEntity generator ? generator.getMaxEnergySent() : legacySendTile.getEnergyStored();
-            int extracted = extractEnergyDirect(legacySendTile, clampPositive(maxExtract.asLongClamped()), maxOutput, false);
-            if (extracted == 0 && maxExtract.isPositive()) {
-                sendState = ROLE_UNKNOWN;
-            }
+    public EnergyAmount extractEnergy(EnergyAmount maximum, @Nullable HubNode.HubMetadata metadata) {
+        requireOrdinaryBackend();
+        if (legacySend != null) {
+            int output = ((AbstractGeneratorEntity) legacySend).getMaxEnergySent();
+            int stored = legacySend.getEnergyStored();
+            int extracted = clamp(maximum.asLongClamped(), stored, output);
+            if (extracted > 0) legacySend.setEnergyStored(stored - extracted);
             return extracted > 0 ? EnergyAmount.obtain(extracted) : EnergyAmounts.ZERO;
         }
-        if (machineSendTank != null) {
-            int maxOutput = machineSendTank.getMaxUsage();
-            int extracted = extractEnergyDirect(machineSendTank, clampPositive(maxExtract.asLongClamped()), maxOutput, false);
-            if (extracted == 0 && maxExtract.isPositive()) {
-                sendState = ROLE_UNKNOWN;
-            }
+        if (machineSend != null) {
+            int stored = machineSend.getEnergyStored();
+            int extracted = clamp(maximum.asLongClamped(), stored, machineSend.getMaxUsage());
+            if (extracted > 0) machineSend.setEnergyStored(stored - extracted);
             return extracted > 0 ? EnergyAmount.obtain(extracted) : EnergyAmounts.ZERO;
         }
-        if (storage != null && canOutput()) {
-            long before = storage.getEnergyStoredL();
-            int requested = clampPositive(maxExtract.asLongClamped(), before, storage.getMaxOutput());
-            if (requested <= 0) {
-                return EnergyAmounts.ZERO;
-            }
-            storage.addEnergy(-requested);
-            long extracted = storage.isCreative() ? requested : Math.max(0L, before - storage.getEnergyStoredL());
-            return extracted > 0L ? EnergyAmount.obtain(extracted) : EnergyAmounts.ZERO;
-        }
         return EnergyAmounts.ZERO;
     }
 
     @Override
-    public EnergyAmount canExtractValue(@Nullable HubNode.HubMetadata hubMetadata) {
-        refreshNetworkStorage();
-        if (legacySendTile != null) {
-            int maxOutput = legacySendTile instanceof AbstractGeneratorEntity generator ? generator.getMaxEnergySent() : legacySendTile.getEnergyStored();
-            return EnergyAmount.obtain(extractEnergyDirect(legacySendTile, Integer.MAX_VALUE, maxOutput, true));
-        }
-        if (machineSendTank != null) {
-            return EnergyAmount.obtain(extractEnergyDirect(machineSendTank, Integer.MAX_VALUE, machineSendTank.getMaxUsage(), true));
-        }
-        if (storage != null && canOutput()) {
-            return EnergyAmount.obtain(Math.max(0L, Math.min(storage.getEnergyStoredL(), storage.getMaxOutput())));
-        }
+    public EnergyAmount canExtractValue(@Nullable HubNode.HubMetadata metadata) {
+        requireOrdinaryBackend();
+        if (legacySend != null) return EnergyAmount.obtain(clamp(Integer.MAX_VALUE, legacySend.getEnergyStored(),
+            ((AbstractGeneratorEntity) legacySend).getMaxEnergySent()));
+        if (machineSend != null)
+            return EnergyAmount.obtain(clamp(Integer.MAX_VALUE, machineSend.getEnergyStored(), machineSend.getMaxUsage()));
         return EnergyAmounts.ZERO;
     }
 
     @Override
-    public EnergyAmount canReceiveValue(@Nullable HubNode.HubMetadata hubMetadata) {
-        refreshNetworkStorage();
-        if (legacyReceiveTile != null && receiveFacing != null) {
-            return EnergyAmount.obtain(legacyReceiveTile.receiveEnergy(receiveFacing, clampPositive(Integer.MAX_VALUE, legacyReceiveTile.getMaxEnergyStored() - legacyReceiveTile.getEnergyStored(), legacyReceiveTile.getMaxEnergyRecieved(receiveFacing)), true));
+    public EnergyAmount canReceiveValue(@Nullable HubNode.HubMetadata metadata) {
+        requireOrdinaryBackend();
+        if (legacyReceive != null && receiveFacing != null) {
+            return EnergyAmount.obtain(Math.max(0, legacyReceive.receiveEnergy(receiveFacing, Integer.MAX_VALUE, true)));
         }
-        if (machineReceiveTank != null) {
-            return EnergyAmount.obtain(receiveEnergyDirect(machineReceiveTank, Integer.MAX_VALUE, true));
-        }
-        if (storage != null && canInput()) {
-            long room = Math.max(0L, storage.getMaxEnergyStoredL() - storage.getEnergyStoredL());
-            return EnergyAmount.obtain(Math.min(room, storage.getMaxInput()));
-        }
+        if (machineReceive != null) return EnergyAmount.obtain(clamp(Integer.MAX_VALUE,
+            machineReceive.getMaxEnergyStored() - machineReceive.getEnergyStored(), machineReceive.getMaxEnergyRecieved()));
         return EnergyAmounts.ZERO;
     }
 
     @Override
-    public boolean canExtract(IEnergyHandler receiveHandler, @Nullable HubNode.HubMetadata hubMetadata) {
-        return canExtractValue(hubMetadata).isPositive();
+    public boolean canExtract(IEnergyHandler receiver, @Nullable HubNode.HubMetadata metadata) {
+        EnergyAmount value = canExtractValue(metadata);
+        try {
+            return value.isPositive();
+        } finally {
+            value.recycle();
+        }
     }
 
     @Override
-    public boolean canReceive(IEnergyHandler sendHandler, @Nullable HubNode.HubMetadata hubMetadata) {
-        return canReceiveValue(hubMetadata).isPositive();
+    public boolean canReceive(IEnergyHandler sender, @Nullable HubNode.HubMetadata metadata) {
+        EnergyAmount value = canReceiveValue(metadata);
+        try {
+            return value.isPositive();
+        } finally {
+            value.recycle();
+        }
     }
 
     @Override
-    public EnergyType getType(@Nullable HubNode.HubMetadata hubMetadata) {
-        return energyType == null ? EnergyType.INVALID : energyType;
+    public EnergyType getType(@Nullable HubNode.HubMetadata metadata) {
+        return energyType;
     }
 }

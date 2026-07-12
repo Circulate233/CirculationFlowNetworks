@@ -17,7 +17,7 @@ public final class FEHandlerManager implements IEnergyHandlerManager {
         for (Direction direction : DIRECTIONS) {
             if (blockEntity.getCapability(ForgeCapabilities.ENERGY, direction).isPresent()) return true;
         }
-        return false;
+        return blockEntity.getCapability(ForgeCapabilities.ENERGY, null).isPresent();
     }
 
     @Override

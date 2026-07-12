@@ -1,112 +1,140 @@
 package com.circulation.circulation_networks.energy.handler;
 
-import appeng.api.config.Actionable;
-import appeng.api.config.PowerUnits;
 import appeng.api.networking.IGrid;
 import appeng.api.networking.energy.IEnergyService;
+import appeng.me.energy.IEnergyOverlayGridConnection;
+import appeng.me.service.EnergyService;
 import appeng.blockentity.grid.AENetworkPowerBlockEntity;
 import appeng.blockentity.networking.ControllerBlockEntity;
 import appeng.blockentity.networking.EnergyAcceptorBlockEntity;
 import com.circulation.circulation_networks.api.EnergyAmount;
 import com.circulation.circulation_networks.api.EnergyAmounts;
+import com.circulation.circulation_networks.api.HandlerTickResult;
 import com.circulation.circulation_networks.api.IEnergyHandler;
-import com.circulation.circulation_networks.energy.manager.AE2HandlerManager;
+import com.circulation.circulation_networks.manager.HandlerBindingPolicy;
+import com.circulation.circulation_networks.manager.HandlerInvalidationSink;
 import com.circulation.circulation_networks.network.nodes.HubNode;
-import com.circulation.circulation_networks.utils.EnergyAmountConversionUtils;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import org.jetbrains.annotations.Nullable;
+import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
+import it.unimi.dsi.fastutil.objects.ReferenceSet;
 
-public class AE2Handler implements IEnergyHandler {
+import java.util.Objects;
 
-    public final EnergyAmount receivedValue = EnergyAmount.obtain(0);
-    public final EnergyAmount acceptableValue = EnergyAmount.obtain(0);
+/**
+ * AE2 endpoint binding. Transfer state belongs to an independent backend keyed
+ * by {@link IEnergyService} identity; this object only observes endpoint grid
+ * changes and never owns a transfer budget.
+ */
+public final class AE2Handler implements IEnergyHandler {
+
+    private static final HandlerBindingPolicy BINDING_POLICY = HandlerBindingPolicy.of(
+        HandlerBindingPolicy.TickLifecycle.BEGIN_TICK,
+        HandlerBindingPolicy.RoleScope.FIXED,
+        HandlerBindingPolicy.MappingScope.SHARED_BACKEND,
+        HandlerBindingPolicy.PairMatching.NONE
+    );
+
     @Nullable
-    private IEnergyService energyGrid;
+    private AENetworkPowerBlockEntity blockEntity;
     @Nullable
-    private AENetworkPowerBlockEntity probedTile;
-    private boolean probed;
-    private boolean fullyInitialized;
+    private IEnergyService energyService;
+    @Nullable
+    private HandlerInvalidationSink invalidationSink;
+    private final ReferenceOpenHashSet<IEnergyService> componentServices = new ReferenceOpenHashSet<>();
+    private final ReferenceOpenHashSet<IEnergyService> componentScratch = new ReferenceOpenHashSet<>();
+    private final ReferenceOpenHashSet<IEnergyOverlayGridConnection> connectionScratch = new ReferenceOpenHashSet<>();
+    private final ObjectArrayList<EnergyService> serviceQueue = new ObjectArrayList<>();
+    private boolean itemBound;
 
     @Override
-    public void init(BlockEntity blockEntity, @Nullable HubNode.HubMetadata hubMetadata) {
-        if (!(blockEntity instanceof ControllerBlockEntity) && !(blockEntity instanceof EnergyAcceptorBlockEntity)) {
-            clear();
-            probed = true;
-            return;
-        }
-        clear();
-        AENetworkPowerBlockEntity tile = (AENetworkPowerBlockEntity) blockEntity;
-        var n = tile.getMainNode();
-        if (n == null) {
-            probed = true;
-            return;
-        }
-        IGrid grid = n.getGrid();
-        if (grid == null) {
-            probed = true;
-            return;
-        }
-        energyGrid = grid.getEnergyService();
-        probedTile = tile;
-        probed = true;
+    public HandlerBindingPolicy bindingPolicy() {
+        return BINDING_POLICY;
     }
 
     @Override
-    public void init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
-        clear();
-        probed = true;
-        fullyInitialized = true;
+    public void bindBlockEntity(BlockEntity blockEntity, HandlerInvalidationSink invalidationSink) {
+        if (this.blockEntity != null || itemBound) {
+            throw new IllegalStateException("AE2 endpoint handler is already bound");
+        }
+        this.invalidationSink = Objects.requireNonNull(invalidationSink, "invalidationSink");
+        if (!(blockEntity instanceof ControllerBlockEntity)
+            && !(blockEntity instanceof EnergyAcceptorBlockEntity)) {
+            throw new IllegalArgumentException("AE2 endpoint requires a controller or energy acceptor");
+        }
+        this.blockEntity = (AENetworkPowerBlockEntity) blockEntity;
+        energyService = resolveComponent(this.blockEntity, componentServices);
+        if (energyService == null || componentServices.isEmpty()) {
+            this.blockEntity = null;
+            this.invalidationSink = null;
+            throw new IllegalStateException("AE2 endpoint is not attached to an energy service");
+        }
     }
 
     @Override
-    public IEnergyHandler resolveMappedHandler(HandlerResolveContext context) {
-        if (energyGrid == null) {
-            return this;
+    public HandlerTickResult beginServerTick(long epoch) {
+        AENetworkPowerBlockEntity endpoint = requireBlockBinding();
+        componentScratch.clear();
+        IEnergyService resolved = resolveComponent(endpoint, componentScratch);
+        if (resolved == null) {
+            energyService = null;
+            return HandlerTickResult.SUSPEND_UNTIL_REBIND;
         }
-        var claimed = AE2HandlerManager.INSTANCE.claim(energyGrid, this);
-        if (claimed != this) {
-            clear();
-            probed = true;
-            return claimed;
+        if (resolved == energyService && componentServices.equals(componentScratch)) {
+            return HandlerTickResult.UNCHANGED;
         }
-        completeInit();
-        return this;
-    }
-
-    private void completeInit() {
-        if (!probed || fullyInitialized || probedTile == null) {
-            return;
-        }
-        var e = probedTile.getExternalPowerDemand(PowerUnits.FE, Double.MAX_VALUE);
-        EnergyAmountConversionUtils.setFromDoubleFloor(acceptableValue, e);
-        fullyInitialized = true;
+        energyService = resolved;
+        componentServices.clear();
+        componentServices.addAll(componentScratch);
+        Objects.requireNonNull(invalidationSink, "AE2 endpoint invalidation sink").backendChanged();
+        return HandlerTickResult.STATE_CHANGED;
     }
 
     @Override
-    public void clear() {
-        if (fullyInitialized && energyGrid != null) energyGrid.injectPower(receivedValue.doubleValue() / 2, Actionable.MODULATE);
-        energyGrid = null;
-        probedTile = null;
-        acceptableValue.setZero();
-        receivedValue.setZero();
-        probed = false;
-        fullyInitialized = false;
+    public void endServerTick(long epoch) {
+        requireBlockBinding();
+    }
+
+    @Override
+    public void unbindBlockEntity() {
+        energyService = null;
+        invalidationSink = null;
+        blockEntity = null;
+        componentServices.clear();
+        componentScratch.clear();
+        connectionScratch.clear();
+        serviceQueue.clear();
+    }
+
+    @Override
+    public void bindItem(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
+        if (blockEntity != null || itemBound) {
+            throw new IllegalStateException("AE2 endpoint handler is already bound");
+        }
+        itemBound = true;
+    }
+
+    @Override
+    public void unbindItem() {
+        itemBound = false;
+    }
+
+    public IEnergyService energyService() {
+        return Objects.requireNonNull(energyService, "AE2 endpoint energy service");
+    }
+
+    public ReferenceSet<IEnergyService> componentServices() {
+        if (componentServices.isEmpty()) {
+            throw new IllegalStateException("AE2 endpoint has no overlay component identity");
+        }
+        return componentServices;
     }
 
     @Override
     public EnergyAmount receiveEnergy(EnergyAmount maxReceive, @Nullable HubNode.HubMetadata hubMetadata) {
-        if (acceptableValue.compareTo(maxReceive) >= 0) {
-            receivedValue.add(maxReceive);
-            acceptableValue.subtract(maxReceive);
-            return EnergyAmount.obtain(maxReceive);
-        }
-        receivedValue.add(acceptableValue);
-        try {
-            return EnergyAmount.obtain(acceptableValue);
-        } finally {
-            acceptableValue.setZero();
-        }
+        return EnergyAmounts.ZERO;
     }
 
     @Override
@@ -121,7 +149,7 @@ public class AE2Handler implements IEnergyHandler {
 
     @Override
     public EnergyAmount canReceiveValue(@Nullable HubNode.HubMetadata hubMetadata) {
-        return EnergyAmount.obtain(acceptableValue);
+        return EnergyAmounts.ZERO;
     }
 
     @Override
@@ -131,13 +159,65 @@ public class AE2Handler implements IEnergyHandler {
 
     @Override
     public boolean canReceive(IEnergyHandler sendHandler, @Nullable HubNode.HubMetadata hubMetadata) {
-        return energyGrid != null;
+        return false;
     }
 
     @Override
     public EnergyType getType(@Nullable HubNode.HubMetadata hubMetadata) {
-        if (acceptableValue.compareTo(0) > 0) return EnergyType.RECEIVE;
-        return EnergyType.INVALID;
+        return blockEntity == null || energyService == null ? EnergyType.INVALID : EnergyType.RECEIVE;
     }
 
+    private AENetworkPowerBlockEntity requireBlockBinding() {
+        if (blockEntity == null) {
+            throw new IllegalStateException("AE2 endpoint handler has no block-entity binding");
+        }
+        return blockEntity;
+    }
+
+    private @Nullable IEnergyService resolveComponent(AENetworkPowerBlockEntity blockEntity,
+                                                       ReferenceSet<IEnergyService> destination) {
+        var mainNode = blockEntity.getMainNode();
+        if (mainNode == null || mainNode.getNode() == null) {
+            return null;
+        }
+        IGrid grid = mainNode.getGrid();
+        IEnergyService ownService = grid == null ? null : grid.getEnergyService();
+        if (ownService == null) {
+            return null;
+        }
+        destination.add(ownService);
+        serviceQueue.clear();
+        connectionScratch.clear();
+        if (ownService instanceof EnergyService service) {
+            serviceQueue.add(service);
+        }
+        IEnergyOverlayGridConnection endpointConnection = mainNode.getNode()
+            .getService(IEnergyOverlayGridConnection.class);
+        if (endpointConnection != null) {
+            connectionScratch.add(endpointConnection);
+        }
+        for (int index = 0; index < serviceQueue.size(); index++) {
+            connectionScratch.addAll(serviceQueue.get(index).getOverlayGridConnections());
+        }
+        for (IEnergyOverlayGridConnection connection : connectionScratch) {
+            for (EnergyService connected : connection.connectedEnergyServices()) {
+                if (destination.add(connected)) {
+                    serviceQueue.add(connected);
+                }
+            }
+        }
+        for (int index = 0; index < serviceQueue.size(); index++) {
+            for (IEnergyOverlayGridConnection connection : serviceQueue.get(index).getOverlayGridConnections()) {
+                if (!connectionScratch.add(connection)) {
+                    continue;
+                }
+                for (EnergyService connected : connection.connectedEnergyServices()) {
+                    if (destination.add(connected)) {
+                        serviceQueue.add(connected);
+                    }
+                }
+            }
+        }
+        return ownService;
+    }
 }

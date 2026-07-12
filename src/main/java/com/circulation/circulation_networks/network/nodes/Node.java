@@ -4,6 +4,7 @@ import com.circulation.circulation_networks.api.IGrid;
 import com.circulation.circulation_networks.api.node.INode;
 import com.circulation.circulation_networks.api.node.NodeContext;
 import com.circulation.circulation_networks.api.node.NodeType;
+import com.circulation.circulation_networks.manager.MachineBindingIndex;
 import com.circulation.circulation_networks.math.Vec3d;
 import com.circulation.circulation_networks.math.Vec3i;
 import it.unimi.dsi.fastutil.objects.Reference2DoubleMap;
@@ -23,6 +24,8 @@ import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.NotNull;
 import java.lang.ref.WeakReference;
 import java.util.Objects;
+
+import static com.circulation.circulation_networks.utils.SideCompat.isServerWorld;
 
 public class Node implements INode {
 
@@ -178,9 +181,17 @@ public class Node implements INode {
     }
 
     public void setActive(boolean active) {
+        if (this.active == active) {
+            return;
+        }
+        boolean oldActive = this.active;
+        IGrid oldGrid = grid;
+        if (isServerWorld(getWorld())) {
+            MachineBindingIndex.INSTANCE.onNodeActiveChanged(this, oldActive, active, oldGrid);
+        }
         this.active = active;
         if (!active) {
-            grid = null;
+            setGrid(null);
             clearNeighbors();
         }
     }
@@ -284,6 +295,13 @@ public class Node implements INode {
 
     @Override
     public void setGrid(IGrid grid) {
+        IGrid oldGrid = this.grid;
+        if (oldGrid == grid) {
+            return;
+        }
+        if (isServerWorld(getWorld())) {
+            MachineBindingIndex.INSTANCE.onNodeGridChanged(this, oldGrid, grid);
+        }
         this.grid = grid;
     }
 

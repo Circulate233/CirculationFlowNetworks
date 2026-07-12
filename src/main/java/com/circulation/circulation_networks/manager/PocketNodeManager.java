@@ -52,9 +52,8 @@ public final class PocketNodeManager {
 
     public static final PocketNodeManager INSTANCE = new PocketNodeManager();
     private final Int2ObjectMap<Long2ObjectMap<PocketNodeHost>> activeHosts = new Int2ObjectOpenHashMap<>();
-    private final Int2ObjectMap<Long2ObjectMap<PocketNodeRecord>> pendingHosts = new Int2ObjectOpenHashMap<>();
+    private final PocketNodePendingIndex pendingHosts = new PocketNodePendingIndex();
     private final Int2ObjectMap<Long2ObjectMap<LongSet>> activeChunkIndex = new Int2ObjectOpenHashMap<>();
-    private final Int2ObjectMap<Long2ObjectMap<LongSet>> pendingChunkIndex = new Int2ObjectOpenHashMap<>();
     private final LongArrayList chunkLoadIterationScratch = new LongArrayList();
     private boolean loaded;
     private boolean dirty;
@@ -134,7 +133,7 @@ public final class PocketNodeManager {
         if (world == null || !ChunkCoordUtils.isChunkLoaded(world, pos)) {
             return null;
         }
-        for (net.minecraft.util.EnumFacing face : net.minecraft.util.EnumFacing.values()) {
+        for (net.minecraft.util.EnumFacing face : net.minecraft.util.EnumFacing.VALUES) {
             BlockPos adjacentPos = pos.offset(face);
             if (!ChunkCoordUtils.isChunkLoaded(world, adjacentPos)) {
                 continue;
@@ -331,11 +330,7 @@ public final class PocketNodeManager {
             }
         }
 
-        for (var dimEntry : new ObjectArrayList<>(pendingHosts.int2ObjectEntrySet())) {
-            for (var record : new ObjectArrayList<>(dimEntry.getValue().values())) {
-                tryActivate(record, true);
-            }
-        }
+        pendingHosts.retryLoaded(this::isActivationChunkLoaded, record -> tryActivate(record, true));
 
         recoverPocketHostsFromLoadedNodes();
     }
@@ -360,11 +355,7 @@ public final class PocketNodeManager {
                 list.appendTag(host.toRecord().serialize());
             }
         }
-        for (var dimEntry : pendingHosts.int2ObjectEntrySet()) {
-            for (var record : dimEntry.getValue().values()) {
-                list.appendTag(record.serialize());
-            }
-        }
+        pendingHosts.forEach(record -> list.appendTag(record.serialize()));
 
         nbt.setTag("nodes", list);
 
@@ -426,21 +417,14 @@ public final class PocketNodeManager {
             }
         }
 
-        LongSet positions = getChunkPositions(pendingChunkIndex.get(dimId), chunkCoord);
-        if (positions == null || positions.isEmpty()) {
-            return;
-        }
-        chunkLoadIterationScratch.clear();
-        chunkLoadIterationScratch.addAll(positions);
-        for (int i = 0; i < chunkLoadIterationScratch.size(); i++) {
-            long posLong = chunkLoadIterationScratch.getLong(i);
-            PocketNodeRecord record = getPendingDimMap(dimId).get(posLong);
-            if (record != null) {
-                tryActivate(record, true);
-            }
-        }
+        pendingHosts.retryChunk(dimId, chunkCoord, record -> tryActivate(record, true));
     }
     //~}
+
+    private boolean isActivationChunkLoaded(PocketNodeRecord record) {
+        var world = resolveWorld(record.dimensionId());
+        return world != null && isHostChunkLoaded(world, record.pos());
+    }
 
     //~ if >=1.20 'net.minecraft.util.EnumFacing' -> 'net.minecraft.core.Direction' {
     //~ if >=1.20 'World ' -> 'Level ' {
@@ -452,7 +436,7 @@ public final class PocketNodeManager {
 
         int dimId = getDimensionId(world);
         long posLong = pos.toLong();
-        if (getActiveDimMap(dimId).containsKey(posLong) || getPendingDimMap(dimId).containsKey(posLong)) {
+        if (getActiveDimMap(dimId).containsKey(posLong) || pendingHosts.contains(dimId, posLong)) {
             return RegisterPocketNodeResult.OCCUPIED;
         }
         if (API.getNodeAt(world, pos) != null) {
@@ -541,8 +525,7 @@ public final class PocketNodeManager {
             }
         }
 
-        Long2ObjectMap<PocketNodeRecord> pendingDimMap = pendingHosts.get(dimId);
-        PocketNodeRecord pendingRecord = pendingDimMap == null ? null : pendingDimMap.get(posLong);
+        PocketNodeRecord pendingRecord = pendingHosts.get(dimId, posLong);
         if (pendingRecord == null) {
             return;
         }
@@ -553,7 +536,7 @@ public final class PocketNodeManager {
             return;
         }
         if (resolvedPendingRecord != pendingRecord) {
-            pendingDimMap.put(posLong, resolvedPendingRecord);
+            pendingHosts.put(resolvedPendingRecord);
             markDirty();
         }
     }
@@ -602,6 +585,12 @@ public final class PocketNodeManager {
     private RegisterPocketNodeResult tryActivate(PocketNodeRecord record, boolean dropItemOnConflict) {
         var world = resolveWorld(record.dimensionId());
         if (world == null) {
+            return RegisterPocketNodeResult.FAILED;
+        }
+
+        // Startup restore must not turn a pending pocket node into a synchronous chunk load.
+        // The existing chunk-load callback retries records indexed by their host chunk.
+        if (!isHostChunkLoaded(world, record.pos())) {
             return RegisterPocketNodeResult.FAILED;
         }
 
@@ -705,36 +694,17 @@ public final class PocketNodeManager {
 
     //~ if >=1.20 '.toLong()' -> '.asLong()' {
     private void putPending(PocketNodeRecord record) {
-        int dimId = record.dimensionId();
-        long posLong = record.pos().toLong();
-        long chunkCoord = ChunkCoordUtils.mergeChunkCoords(record.pos());
-        getPendingDimMap(dimId).put(posLong, record);
-        indexChunkPosition(getChunkIndex(pendingChunkIndex, dimId), chunkCoord, posLong);
+        pendingHosts.put(record);
     }
 
     private @org.jetbrains.annotations.Nullable PocketNodeRecord removePending(int dimId, long posLong) {
-        Long2ObjectMap<PocketNodeRecord> dimMap = pendingHosts.get(dimId);
-        if (dimMap == null) {
-            return null;
-        }
-        PocketNodeRecord removed = dimMap.remove(posLong);
-        if (removed != null) {
-            unindexChunkPosition(pendingChunkIndex.get(dimId), ChunkCoordUtils.mergeChunkCoords(removed.pos()), posLong);
-            if (dimMap.isEmpty()) {
-                pendingHosts.remove(dimId);
-                pendingChunkIndex.remove(dimId);
-            }
-        }
-        return removed;
+        return pendingHosts.remove(dimId, posLong);
     }
 
     private Long2ObjectMap<PocketNodeHost> getActiveDimMap(int dimId) {
         return activeHosts.computeIfAbsent(dimId, ignored -> new Long2ObjectOpenHashMap<>());
     }
 
-    private Long2ObjectMap<PocketNodeRecord> getPendingDimMap(int dimId) {
-        return pendingHosts.computeIfAbsent(dimId, ignored -> new Long2ObjectOpenHashMap<>());
-    }
     //~}
 
     //~ if >=1.20 'World ' -> 'Level ' {
@@ -793,7 +763,7 @@ public final class PocketNodeManager {
             }
             int dimId = getDimensionId(world);
             long posLong = node.getPos().toLong();
-            if (getActiveDimMap(dimId).containsKey(posLong) || getPendingDimMap(dimId).containsKey(posLong)) {
+            if (getActiveDimMap(dimId).containsKey(posLong) || pendingHosts.contains(dimId, posLong)) {
                 continue;
             }
             PocketNodeRecord record = new PocketNodeRecord(
@@ -820,7 +790,6 @@ public final class PocketNodeManager {
         activeHosts.clear();
         pendingHosts.clear();
         activeChunkIndex.clear();
-        pendingChunkIndex.clear();
     }
 
     private File getSaveFile() {

@@ -24,9 +24,9 @@ import com.circulation.circulation_networks.registry.CFNCreativeTabs;
 import com.circulation.circulation_networks.registry.RegistryBlocks;
 import com.circulation.circulation_networks.registry.RegistryEnergyHandler;
 import com.circulation.circulation_networks.registry.RegistryItems;
+import com.circulation.circulation_networks.utils.BlockEntityLifecycleHooks;
 import com.circulation.circulation_networks.utils.HubPlatformServices;
 import com.circulation.circulation_networks.utils.HubTeamServices;
-import com.circulation.circulation_networks.utils.BlockEntityLifecycleHooks;
 import com.circulation.circulation_networks.utils.Packet;
 import dev.ftb.mods.ftbteams.api.FTBTeamsAPI;
 import net.minecraft.server.level.ServerPlayer;
@@ -38,6 +38,7 @@ import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent.PlayerChangedDimensionEvent;
 import net.minecraftforge.event.level.BlockEvent;
 import net.minecraftforge.event.level.ChunkEvent;
+import net.minecraftforge.event.level.LevelEvent;
 import net.minecraftforge.event.server.ServerAboutToStartEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.fml.ModList;
@@ -78,6 +79,8 @@ public final class CirculationFlowNetworks {
         installPlatformServices();
         MinecraftForge.EVENT_BUS.addListener(this::onServerAboutToStart);
         MinecraftForge.EVENT_BUS.addListener(this::onChunkLoad);
+        MinecraftForge.EVENT_BUS.addListener(this::onChunkUnload);
+        MinecraftForge.EVENT_BUS.addListener(this::onLevelUnload);
         MinecraftForge.EVENT_BUS.addListener(this::onBlockBreak);
         MinecraftForge.EVENT_BUS.addListener(this::onServerStopping);
         MinecraftForge.EVENT_BUS.addListener(this::onPlayerLoggedIn);
@@ -114,57 +117,59 @@ public final class CirculationFlowNetworks {
     }
 
     private void installPlatformServices() {
-        HubPlatformServices.INSTANCE = new HubPlatformServices() {
-            @Override
-            public List<PlayerIdentity> getOnlinePlayers() {
-                var server = ServerLifecycleHooks.getCurrentServer();
-                if (server == null) {
-                    return Collections.emptyList();
-                }
-                List<PlayerIdentity> players = new ArrayList<>();
-                for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-                    players.add(new PlayerIdentity(player.getUUID(), player.getGameProfile().getName()));
-                }
-                return players;
-            }
-
-            @Override
-            public boolean hasChannelManagementOverride(net.minecraft.world.entity.player.Player player) {
-                if (!(player instanceof ServerPlayer serverPlayer)) {
-                    return false;
-                }
-                if (serverPlayer.server.isSingleplayer()) {
-                    return serverPlayer.server.isSingleplayerOwner(serverPlayer.getGameProfile())
-                        && serverPlayer.getAbilities().instabuild;
-                }
-                return serverPlayer.server.getPlayerList().isOp(serverPlayer.getGameProfile());
-            }
-        };
+        HubPlatformServices.INSTANCE = new ForgeHubPlatformServices();
 
         if (ModList.get().isLoaded("ftbteams")) {
-            HubTeamServices.INSTANCE = new HubTeamServices() {
-                @Override
-                protected boolean arePlayersInSameTeamInternal(UUID firstPlayerId, UUID secondPlayerId) {
-                    var api = FTBTeamsAPI.api();
-                    return api != null
-                        && api.isManagerLoaded()
-                        && api.getManager().arePlayersInSameTeam(firstPlayerId, secondPlayerId);
-                }
-            };
+            HubTeamServices.INSTANCE = new FtbHubTeamServices();
+        }
+    }
+
+    private static final class ForgeHubPlatformServices extends HubPlatformServices {
+        @Override
+        public List<PlayerIdentity> getOnlinePlayers() {
+            var server = ServerLifecycleHooks.getCurrentServer();
+            if (server == null) {
+                return Collections.emptyList();
+            }
+            List<PlayerIdentity> players = new ArrayList<>();
+            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                players.add(new PlayerIdentity(player.getUUID(), player.getGameProfile().getName()));
+            }
+            return players;
+        }
+
+        @Override
+        public boolean hasChannelManagementOverride(net.minecraft.world.entity.player.Player player) {
+            if (!(player instanceof ServerPlayer serverPlayer)) {
+                return false;
+            }
+            if (serverPlayer.server.isSingleplayer()) {
+                return serverPlayer.server.isSingleplayerOwner(serverPlayer.getGameProfile())
+                    && serverPlayer.getAbilities().instabuild;
+            }
+            return serverPlayer.server.getPlayerList().isOp(serverPlayer.getGameProfile());
+        }
+    }
+
+    private static final class FtbHubTeamServices extends HubTeamServices {
+        @Override
+        protected boolean arePlayersInSameTeamInternal(UUID firstPlayerId, UUID secondPlayerId) {
+            var api = FTBTeamsAPI.api();
+            return api != null
+                && api.isManagerLoaded()
+                && api.getManager().arePlayersInSameTeam(firstPlayerId, secondPlayerId);
         }
     }
 
     private void onServerAboutToStart(ServerAboutToStartEvent event) {
         HubChannelManager.INSTANCE.load();
+        EnergyTypeOverrideManager.get();
     }
 
     private void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase == TickEvent.Phase.START) {
             EnergyMachineManager.INSTANCE.onServerTick();
         } else {
-            if (AE2_LOADED) {
-                AE2HandlerManager.INSTANCE.clearTickCache();
-            }
             DatPersistenceScheduler.INSTANCE.onServerTick();
         }
     }
@@ -173,6 +178,9 @@ public final class CirculationFlowNetworks {
         if (!(event.getLevel() instanceof Level level) || level.isClientSide() || !(event.getChunk() instanceof LevelChunk chunk)) {
             return;
         }
+        EnergyMachineManager.INSTANCE.markChunkLoaded(
+            level.dimension().location().hashCode(), chunk.getPos().x, chunk.getPos().z
+        );
         syncLoadedChunkNodeBlockEntities(level, chunk);
         NetworkManager.INSTANCE.validatePendingNodesInChunk(level, chunk.getPos().x, chunk.getPos().z);
         PocketNodeManager.INSTANCE.onChunkLoad(level, chunk.getPos().x, chunk.getPos().z);
@@ -188,7 +196,25 @@ public final class CirculationFlowNetworks {
             }
             nodeBlockEntity.syncNodeAfterNetworkInit();
             BlockEntityLifecycleHooks.dispatchValidate(
-                new BlockEntityLifeCycleEvent.Validate(level, blockEntity.getBlockPos(), blockEntity));
+                new BlockEntityLifeCycleEvent.Validate(level, blockEntity.getBlockPos(), blockEntity)
+            );
+        }
+    }
+
+    private void onChunkUnload(ChunkEvent.Unload event) {
+        if (!(event.getLevel() instanceof Level level) || level.isClientSide() || !(event.getChunk() instanceof LevelChunk chunk)) {
+            return;
+        }
+        EnergyMachineManager.INSTANCE.markChunkUnloaded(
+            level.dimension().location().hashCode(), chunk.getPos().x, chunk.getPos().z
+        );
+    }
+
+    private void onLevelUnload(LevelEvent.Unload event) {
+        if (event.getLevel() instanceof Level level && !level.isClientSide()) {
+            EnergyMachineManager.INSTANCE.clearDimensionChunkResidency(
+                level.dimension().location().hashCode()
+            );
         }
     }
 
@@ -203,9 +229,9 @@ public final class CirculationFlowNetworks {
         PocketNodeManager.INSTANCE.save();
         HubChannelManager.INSTANCE.save();
         EnergyTypeOverrideManager.save();
+        EnergyMachineManager.INSTANCE.onServerStop();
         NetworkManager.INSTANCE.onServerStop();
         PocketNodeManager.INSTANCE.onServerStop();
-        EnergyMachineManager.INSTANCE.onServerStop();
         EnergyTypeOverrideManager.onServerStop();
         ChargingManager.INSTANCE.onServerStop();
         HubChannelManager.INSTANCE.onServerStop();

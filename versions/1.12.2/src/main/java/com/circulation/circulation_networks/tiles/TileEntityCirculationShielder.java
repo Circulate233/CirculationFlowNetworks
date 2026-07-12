@@ -35,6 +35,9 @@ public class TileEntityCirculationShielder extends BlockTickTileEntity implement
         this.min.setPos(this.getPos().getX() - clamped, this.getPos().getY() - clamped, this.getPos().getZ() - clamped);
         this.max.setPos(this.getPos().getX() + clamped, this.getPos().getY() + clamped, this.getPos().getZ() + clamped);
         this.scope = clamped;
+        if (world != null && !world.isRemote) {
+            CirculationShielderManager.INSTANCE.refreshActiveState(this, world.provider.getDimension());
+        }
     }
 
     @Override

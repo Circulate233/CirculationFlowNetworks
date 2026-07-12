@@ -96,16 +96,24 @@ public final class EnergyTypeOverrideManager {
 
     //~ if >=1.20 '.toLong()' -> '.asLong()' {
     public void setOverride(int dim, BlockPos pos, IEnergyHandler.EnergyType type) {
-        overrides.computeIfAbsent(dim, k -> new Long2ObjectOpenHashMap<>()).put(pos.toLong(), type);
+        if (type == null) {
+            throw new IllegalArgumentException("type must not be null");
+        }
+        long packedPos = pos.toLong();
+        IEnergyHandler.EnergyType oldType = overrides.computeIfAbsent(dim, k -> new Long2ObjectOpenHashMap<>()).put(packedPos, type);
+        MachineBindingIndex.INSTANCE.onEnergyTypeOverrideChanged(dim, packedPos, oldType, type);
         markDirty();
     }
 
     public void clearOverride(int dim, BlockPos pos) {
         var dimMap = overrides.get(dim);
+        IEnergyHandler.EnergyType oldType = null;
+        long packedPos = pos.toLong();
         if (dimMap != null) {
-            dimMap.remove(pos.toLong());
+            oldType = dimMap.remove(packedPos);
             if (dimMap.isEmpty()) overrides.remove(dim);
         }
+        MachineBindingIndex.INSTANCE.onEnergyTypeOverrideChanged(dim, packedPos, oldType, null);
         markDirty();
     }
 
@@ -125,6 +133,15 @@ public final class EnergyTypeOverrideManager {
     @Nullable
     public Long2ObjectMap<IEnergyHandler.EnergyType> getOverridesForDim(int dim) {
         return overrides.get(dim);
+    }
+
+    public boolean isEmpty() {
+        return overrides.isEmpty();
+    }
+
+    public boolean hasOverridesForDim(int dim) {
+        var dimMap = overrides.get(dim);
+        return dimMap != null && !dimMap.isEmpty();
     }
 
     public void onBlockEntityInvalidate(BlockEntityLifeCycleEvent.Invalidate event) {
@@ -155,12 +172,17 @@ public final class EnergyTypeOverrideManager {
     private void loadFromFile() {
         File saveFile = new File(NetworkManager.getSaveFile(), "EnergyTypeOverride.dat");
         if (!saveFile.exists()) {
+            MachineBindingIndex.INSTANCE.onEnergyTypeOverridesLoaded(this);
             return;
         }
 
         try {
             NBTTagCompound nbt = CompressedStreamTools.read(saveFile);
-            if (nbt == null) return;
+            if (nbt == null) {
+                CirculationFlowNetworks.LOGGER.warn("Energy type override file {} contains no data", saveFile.getAbsolutePath());
+                MachineBindingIndex.INSTANCE.onEnergyTypeOverridesLoaded(this);
+                return;
+            }
 
             overrides.clear();
             NBTTagList dims = nbt.getTagList("overrides", Constants.NBT.TAG_COMPOUND);
@@ -180,8 +202,10 @@ public final class EnergyTypeOverrideManager {
                 }
                 if (!dimMap.isEmpty()) overrides.put(dim, dimMap);
             }
-        } catch (IOException ignored) {
+        } catch (IOException exception) {
+            CirculationFlowNetworks.LOGGER.error("Failed to load energy type overrides from {}", saveFile.getAbsolutePath(), exception);
         }
+        MachineBindingIndex.INSTANCE.onEnergyTypeOverridesLoaded(this);
     }
 
     private boolean saveToFile() {
@@ -218,12 +242,17 @@ public final class EnergyTypeOverrideManager {
     /*private void loadFromFile() {
         File saveFile = new File(NetworkManager.getSaveFile(), "EnergyTypeOverride.dat");
         if (!saveFile.exists()) {
+            MachineBindingIndex.INSTANCE.onEnergyTypeOverridesLoaded(this);
             return;
         }
 
         try {
             CompoundTag nbt = NetworkManager.readCompressedNbt(saveFile);
-            if (nbt == null) return;
+            if (nbt == null) {
+                CirculationFlowNetworks.LOGGER.warn("Energy type override file {} contains no data", saveFile.getAbsolutePath());
+                MachineBindingIndex.INSTANCE.onEnergyTypeOverridesLoaded(this);
+                return;
+            }
 
             overrides.clear();
             ListTag dims = nbt.getList("overrides", Tag.TAG_COMPOUND);
@@ -243,8 +272,10 @@ public final class EnergyTypeOverrideManager {
                 }
                 if (!dimMap.isEmpty()) overrides.put(dim, dimMap);
             }
-        } catch (IOException ignored) {
+        } catch (IOException exception) {
+            CirculationFlowNetworks.LOGGER.error("Failed to load energy type overrides from {}", saveFile.getAbsolutePath(), exception);
         }
+        MachineBindingIndex.INSTANCE.onEnergyTypeOverridesLoaded(this);
     }
 
     private boolean saveToFile() {
@@ -275,7 +306,8 @@ public final class EnergyTypeOverrideManager {
             NetworkManager.writeCompressedNbt(nbt, saveFile);
             m = false;
             return true;
-        } catch (IOException ignored) {
+        } catch (IOException exception) {
+            CirculationFlowNetworks.LOGGER.error("Failed to save energy type overrides to {}", saveFile.getAbsolutePath(), exception);
             return false;
         }
     }

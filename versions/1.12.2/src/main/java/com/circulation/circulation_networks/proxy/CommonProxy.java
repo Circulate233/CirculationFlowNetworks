@@ -2,8 +2,8 @@ package com.circulation.circulation_networks.proxy;
 
 import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.api.INodeBlockEntity;
-import com.circulation.circulation_networks.energy.manager.AE2HandlerManager;
 import com.circulation.circulation_networks.energy.manager.EIOHandlerManager;
+import com.circulation.circulation_networks.energy.manager.AE2HandlerManager;
 import com.circulation.circulation_networks.energy.manager.EUHandlerManager;
 import com.circulation.circulation_networks.energy.manager.FEHandlerManager;
 import com.circulation.circulation_networks.energy.manager.MEKHandlerManager;
@@ -102,7 +102,7 @@ public class CommonProxy implements IGuiHandler {
         if (Loader.isModLoaded("enderio")) {
             RegistryEnergyHandler.registerEnergyHandler(EIOHandlerManager.INSTANCE);
         }
-        if (AE2_LOADED) {
+        if (AE2_LOADED && !Loader.isModLoaded("ae2")) {
             RegistryEnergyHandler.registerEnergyHandler(AE2HandlerManager.INSTANCE);
         }
         RegistryEnergyHandler.registerEnergyHandler(new FEHandlerManager());
@@ -172,10 +172,6 @@ public class CommonProxy implements IGuiHandler {
         if (event.phase == TickEvent.Phase.START) {
             EnergyMachineManager.INSTANCE.onServerTick();
         } else {
-            if (AE2_LOADED) {
-                AE2HandlerManager.INSTANCE.clearTickCache();
-            }
-            EIOHandlerManager.INSTANCE.clearTickCache();
             DatPersistenceScheduler.INSTANCE.onServerTick();
         }
     }
@@ -190,6 +186,9 @@ public class CommonProxy implements IGuiHandler {
         if (event.getWorld().isRemote) {
             return;
         }
+        EnergyMachineManager.INSTANCE.markChunkLoaded(
+            event.getWorld().provider.getDimension(), event.getChunk().x, event.getChunk().z
+        );
         syncLoadedChunkNodeBlockEntities(event);
         NetworkManager.INSTANCE.validatePendingNodesInChunk(event.getWorld(), event.getChunk().x, event.getChunk().z);
         PocketNodeManager.INSTANCE.onChunkLoad(event.getWorld(), event.getChunk().x, event.getChunk().z);
@@ -205,8 +204,20 @@ public class CommonProxy implements IGuiHandler {
                 continue;
             }
             nodeBlockEntity.syncNodeAfterNetworkInit();
-            BlockEntityLifecycleHooks.dispatchValidate(new BlockEntityLifeCycleEvent.Validate(world, blockEntity.getPos(), blockEntity));
+            BlockEntityLifecycleHooks.dispatchValidate(
+                new BlockEntityLifeCycleEvent.Validate(world, blockEntity.getPos(), blockEntity)
+            );
         }
+    }
+
+    @SubscribeEvent
+    public void onChunkUnload(ChunkEvent.Unload event) {
+        if (event.getWorld().isRemote) {
+            return;
+        }
+        EnergyMachineManager.INSTANCE.markChunkUnloaded(
+            event.getWorld().provider.getDimension(), event.getChunk().x, event.getChunk().z
+        );
     }
 
     public void revalidateLoadedNodeBlockEntities() {
@@ -245,6 +256,15 @@ public class CommonProxy implements IGuiHandler {
         }
         if (!event.getWorld().isRemote && NetworkManager.INSTANCE.isInit()) {
             revalidateLoadedNodeBlockEntities(event.getWorld());
+        }
+    }
+
+    @SubscribeEvent
+    public void onWorldUnload(WorldEvent.Unload event) {
+        if (!event.getWorld().isRemote) {
+            EnergyMachineManager.INSTANCE.clearDimensionChunkResidency(
+                event.getWorld().provider.getDimension()
+            );
         }
     }
 

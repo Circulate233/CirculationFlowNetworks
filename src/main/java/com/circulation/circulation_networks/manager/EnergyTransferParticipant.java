@@ -21,7 +21,7 @@ final class EnergyTransferParticipant {
     private HubNode.HubMetadata hubMetadata;
     @Nullable
     private EnergyMachineManager.Interaction interaction;
-    private boolean pairMatch;
+    private HandlerBindingPolicy policy;
 
     private EnergyTransferParticipant() {
     }
@@ -33,7 +33,7 @@ final class EnergyTransferParticipant {
         p.handler = handler;
         p.grid = grid;
         p.hubMetadata = hubMetadata;
-        p.pairMatch = handler.requiresPairMatch(hubMetadata);
+        p.policy = EnergyHandlerRuntime.policy(handler);
         return p;
     }
 
@@ -42,7 +42,7 @@ final class EnergyTransferParticipant {
     }
 
     boolean requiresPairMatch() {
-        return pairMatch;
+        return policy.pairMatching() == HandlerBindingPolicy.PairMatching.REQUIRED;
     }
 
     IEnergyHandler handler() {
@@ -50,31 +50,46 @@ final class EnergyTransferParticipant {
     }
 
     IEnergyHandler.EnergyType getType() {
-        return handler.getType(hubMetadata);
+        return EnergyHandlerRuntime.type(handler, hubMetadata);
     }
 
     EnergyAmount canExtractValue() {
-        return handler.canExtractValue(hubMetadata);
+        return EnergyHandlerRuntime.canExtract(handler, hubMetadata);
     }
 
     EnergyAmount canReceiveValue() {
-        return handler.canReceiveValue(hubMetadata);
+        return EnergyHandlerRuntime.canReceive(handler, hubMetadata);
     }
 
     boolean canExtract(EnergyTransferParticipant receiveParticipant) {
-        return handler.canExtract(receiveParticipant.handler, hubMetadata);
+        return EnergyHandlerRuntime.canExtract(handler, receiveParticipant.handler, hubMetadata);
     }
 
     boolean canReceive(EnergyTransferParticipant sendParticipant) {
-        return handler.canReceive(sendParticipant.handler, hubMetadata);
+        return EnergyHandlerRuntime.canReceive(handler, sendParticipant.handler, hubMetadata);
+    }
+
+    boolean canReceive(EnergyMachineManager.MachineTransferSlot sendSlot) {
+        return EnergyHandlerRuntime.canReceive(handler, sendSlot.handler(), hubMetadata);
     }
 
     EnergyAmount extractEnergy(EnergyAmount maxExtract) {
-        return handler.extractEnergy(maxExtract, hubMetadata);
+        return EnergyHandlerRuntime.extract(handler, maxExtract, hubMetadata);
     }
 
     EnergyAmount receiveEnergy(EnergyAmount maxReceive) {
-        return handler.receiveEnergy(maxReceive, hubMetadata);
+        EnergyAmount received = EnergyHandlerRuntime.receive(handler, maxReceive, hubMetadata);
+        if (!received.isNegative() && received.compareTo(maxReceive) <= 0) {
+            return received;
+        }
+        IllegalStateException violation = new IllegalStateException(
+            "Item energy handler returned " + received + " for receive request " + maxReceive
+        );
+        EnergyHandlerRuntime.logContractViolation(
+            handler, "receiveEnergy", EnergyHandlerRuntime.FailureContext.UNKNOWN, violation
+        );
+        received.recycle();
+        throw violation;
     }
 
     @Nullable
@@ -91,6 +106,7 @@ final class EnergyTransferParticipant {
         if (handler == null) {
             return;
         }
+        EnergyHandlerRuntime.unbindItem(handler);
         POOL.recycle(this);
     }
 
@@ -99,6 +115,6 @@ final class EnergyTransferParticipant {
         grid = null;
         hubMetadata = null;
         interaction = null;
-        pairMatch = false;
+        policy = null;
     }
 }

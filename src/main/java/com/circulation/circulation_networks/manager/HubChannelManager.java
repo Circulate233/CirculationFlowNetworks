@@ -112,7 +112,7 @@ public final class HubChannelManager {
         }
 
         channel.addGrid(grid);
-        hubChannels.put(hub, channelId);
+        updateHubChannelBinding(hub, channelId);
     }
 
     public void unregister(IHubNode hub) {
@@ -120,8 +120,8 @@ public final class HubChannelManager {
             return;
         }
         ensureLoaded();
-        UUID oldChannelId = hubChannels.remove(hub);
-        if (oldChannelId == EMPTY) {
+        UUID oldChannelId = removeHubChannelBinding(hub);
+        if (oldChannelId.equals(EMPTY)) {
             return;
         }
 
@@ -269,7 +269,7 @@ public final class HubChannelManager {
         if (grid != null) {
             channel.addGrid(grid);
         }
-        hubChannels.put(hub, channelId);
+        updateHubChannelBinding(hub, channelId);
         persistChannelPluginData(hub);
         return true;
     }
@@ -300,7 +300,7 @@ public final class HubChannelManager {
         if (grid != null) {
             channel.addGrid(grid);
         }
-        hubChannels.put(hub, channel.getChannelId());
+        updateHubChannelBinding(hub, channel.getChannelId());
         markSnapshotsDirty();
         markDirty();
         return true;
@@ -357,7 +357,7 @@ public final class HubChannelManager {
         List<IHubNode> boundHubs = getBoundHubs(channelId);
         for (IHubNode boundHub : boundHubs) {
             clearChannelBinding(boundHub);
-            hubChannels.remove(boundHub);
+            removeHubChannelBinding(boundHub);
         }
         channels.remove(channelId);
         markSnapshotsDirty();
@@ -470,6 +470,20 @@ public final class HubChannelManager {
         loadFromFile();
         snapshotVersion++;
         loaded = true;
+    }
+
+    private void updateHubChannelBinding(IHubNode hub, UUID channelId) {
+        UUID oldChannelId = hubChannels.get(hub);
+        hubChannels.put(hub, channelId);
+        MachineBindingIndex.INSTANCE.onHubChannelBindingChanged(hub, oldChannelId, channelId);
+    }
+
+    private UUID removeHubChannelBinding(IHubNode hub) {
+        UUID oldChannelId = hubChannels.remove(hub);
+        if (!oldChannelId.equals(EMPTY)) {
+            MachineBindingIndex.INSTANCE.onHubChannelBindingChanged(hub, oldChannelId, EMPTY);
+        }
+        return oldChannelId;
     }
 
     private void markSnapshotsDirty() {

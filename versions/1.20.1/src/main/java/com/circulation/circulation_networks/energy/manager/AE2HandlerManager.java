@@ -3,53 +3,85 @@ package com.circulation.circulation_networks.energy.manager;
 import appeng.api.networking.energy.IEnergyService;
 import appeng.blockentity.networking.ControllerBlockEntity;
 import appeng.blockentity.networking.EnergyAcceptorBlockEntity;
-import appeng.me.energy.IEnergyOverlayGridConnection;
-import appeng.me.service.EnergyService;
 import com.circulation.circulation_networks.api.IEnergyHandler;
 import com.circulation.circulation_networks.api.IEnergyHandlerManager;
+import com.circulation.circulation_networks.energy.handler.AE2BackendHandler;
 import com.circulation.circulation_networks.energy.handler.AE2Handler;
-import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import com.circulation.circulation_networks.manager.MappedEnergyHandlerProvider;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import org.jetbrains.annotations.NotNull;
 
-public final class AE2HandlerManager implements IEnergyHandlerManager {
+public final class AE2HandlerManager implements IEnergyHandlerManager, MappedEnergyHandlerProvider {
 
     public static final AE2HandlerManager INSTANCE = new AE2HandlerManager();
 
-    private final Reference2ObjectMap<IEnergyService, AE2Handler> gridCache = new Reference2ObjectOpenHashMap<>();
+    private final Reference2ObjectMap<IEnergyService, BackendReference> identities =
+        new Reference2ObjectOpenHashMap<>();
+    private final Reference2ObjectMap<IEnergyHandler, BackendReference> backends =
+        new Reference2ObjectOpenHashMap<>();
 
     private AE2HandlerManager() {
     }
 
-    public void clearTickCache() {
-        gridCache.clear();
+    @Override
+    public @NotNull IEnergyHandler resolveRuntime(IEnergyHandler boundHandler, long epoch) {
+        throw new UnsupportedOperationException("AE2 uses shared backend leases, not runtime mapping");
     }
 
-    public AE2Handler claim(IEnergyService grid, AE2Handler aeGrid) {
-        var a = gridCache.get(grid);
-        if (a != null) {
-            return a;
-        }
-        ReferenceSet<IEnergyService> visited = new ReferenceOpenHashSet<>();
-        ObjectArrayList<IEnergyService> queue = new ObjectArrayList<>();
-        queue.add(grid);
-        while (!queue.isEmpty()) {
-            IEnergyService current = queue.remove(queue.size() - 1);
-            if (!visited.add(current)) {
-                continue;
-            }
-            gridCache.put(current, aeGrid);
-            if (current instanceof EnergyService service) {
-                for (IEnergyOverlayGridConnection connection : service.getOverlayGridConnections()) {
-                    queue.addAll(connection.connectedEnergyServices());
-                }
+    @Override
+    public @NotNull IEnergyHandler acquireSharedBackend(IEnergyHandler boundHandler) {
+        AE2Handler endpoint = requireEndpoint(boundHandler);
+        ReferenceSet<IEnergyService> component = endpoint.componentServices();
+        BackendReference reference = findExactComponent(component);
+        if (reference == null) {
+            reference = new BackendReference(new AE2BackendHandler(endpoint.energyService()), component);
+            backends.put(reference.backend, reference);
+            for (IEnergyService service : component) {
+                identities.put(service, reference);
             }
         }
-        return aeGrid;
+        if (reference.references == Integer.MAX_VALUE) {
+            throw new IllegalStateException("AE2 shared-backend reference count exhausted");
+        }
+        reference.references++;
+        return reference.backend;
+    }
+
+    @Override
+    public void releaseSharedBackend(IEnergyHandler boundHandler, IEnergyHandler sharedBackend) {
+        AE2Handler endpoint = requireEndpoint(boundHandler);
+        if (!(sharedBackend instanceof AE2BackendHandler backend)) {
+            throw new IllegalArgumentException("AE2 manager received non-AE2 shared backend "
+                + sharedBackend.getClass().getName());
+        }
+        BackendReference reference = backends.get(backend);
+        if (reference == null || reference.backend != backend || reference.references == 0) {
+            throw new IllegalStateException("AE2 backend reference is inconsistent for endpoint "
+                + endpoint.getClass().getName());
+        }
+        reference.references--;
+        if (reference.references == 0) {
+            backends.remove(backend);
+            removeIdentityMappings(reference);
+            backend.close();
+        }
+    }
+
+    private void removeIdentityMappings(BackendReference retired) {
+        identities.reference2ObjectEntrySet().removeIf(entry -> entry.getValue() == retired);
+    }
+
+    private BackendReference findExactComponent(ReferenceSet<IEnergyService> component) {
+        if (component.isEmpty()) {
+            throw new IllegalStateException("AE2 endpoint has an empty overlay component");
+        }
+        BackendReference candidate = identities.get(component.iterator().next());
+        return candidate != null && candidate.matches(component) ? candidate : null;
     }
 
     @Override
@@ -90,5 +122,27 @@ public final class AE2HandlerManager implements IEnergyHandlerManager {
     @Override
     public double getMultiplying() {
         return 2.0D;
+    }
+
+    private static AE2Handler requireEndpoint(IEnergyHandler handler) {
+        if (!(handler instanceof AE2Handler endpoint)) {
+            throw new IllegalArgumentException("AE2 manager received " + handler.getClass().getName());
+        }
+        return endpoint;
+    }
+
+    private static final class BackendReference {
+        private final AE2BackendHandler backend;
+        private final ReferenceOpenHashSet<IEnergyService> services;
+        private int references;
+
+        private BackendReference(AE2BackendHandler backend, ReferenceSet<IEnergyService> services) {
+            this.backend = backend;
+            this.services = new ReferenceOpenHashSet<>(services);
+        }
+
+        private boolean matches(ReferenceSet<IEnergyService> candidate) {
+            return services.size() == candidate.size() && services.containsAll(candidate);
+        }
     }
 }

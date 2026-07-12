@@ -48,6 +48,7 @@ import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerChangedDimensionEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
 import net.neoforged.neoforge.event.level.ChunkEvent;
+import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
@@ -84,6 +85,8 @@ public final class CirculationFlowNetworks {
         installPlatformServices();
         NeoForge.EVENT_BUS.addListener(this::onServerAboutToStart);
         NeoForge.EVENT_BUS.addListener(this::onChunkLoad);
+        NeoForge.EVENT_BUS.addListener(this::onChunkUnload);
+        NeoForge.EVENT_BUS.addListener(this::onLevelUnload);
         NeoForge.EVENT_BUS.addListener(this::onBlockBreak);
         NeoForge.EVENT_BUS.addListener(this::onServerStopping);
         NeoForge.EVENT_BUS.addListener(this::onPlayerLoggedIn);
@@ -169,6 +172,7 @@ public final class CirculationFlowNetworks {
 
     private void onServerAboutToStart(ServerAboutToStartEvent event) {
         HubChannelManager.INSTANCE.load();
+        EnergyTypeOverrideManager.get();
     }
 
     private void onRegisterPayloadHandlers(RegisterPayloadHandlersEvent event) {
@@ -180,9 +184,6 @@ public final class CirculationFlowNetworks {
     }
 
     private void onServerTickPost(ServerTickEvent.Post event) {
-        if (AE2_LOADED) {
-            AE2HandlerManager.INSTANCE.clearTickCache();
-        }
         DatPersistenceScheduler.INSTANCE.onServerTick();
     }
 
@@ -190,6 +191,9 @@ public final class CirculationFlowNetworks {
         if (!(event.getLevel() instanceof Level level) || level.isClientSide() || !(event.getChunk() instanceof LevelChunk chunk)) {
             return;
         }
+        EnergyMachineManager.INSTANCE.markChunkLoaded(
+            level.dimension().location().hashCode(), chunk.getPos().x, chunk.getPos().z
+        );
         syncLoadedChunkNodeBlockEntities(level, chunk);
         NetworkManager.INSTANCE.validatePendingNodesInChunk(level, chunk.getPos().x, chunk.getPos().z);
         PocketNodeManager.INSTANCE.onChunkLoad(level, chunk.getPos().x, chunk.getPos().z);
@@ -205,7 +209,25 @@ public final class CirculationFlowNetworks {
             }
             nodeBlockEntity.syncNodeAfterNetworkInit();
             BlockEntityLifecycleHooks.dispatchValidate(
-                new BlockEntityLifeCycleEvent.Validate(level, blockEntity.getBlockPos(), blockEntity));
+                new BlockEntityLifeCycleEvent.Validate(level, blockEntity.getBlockPos(), blockEntity)
+            );
+        }
+    }
+
+    private void onChunkUnload(ChunkEvent.Unload event) {
+        if (!(event.getLevel() instanceof Level level) || level.isClientSide() || !(event.getChunk() instanceof LevelChunk chunk)) {
+            return;
+        }
+        EnergyMachineManager.INSTANCE.markChunkUnloaded(
+            level.dimension().location().hashCode(), chunk.getPos().x, chunk.getPos().z
+        );
+    }
+
+    private void onLevelUnload(LevelEvent.Unload event) {
+        if (event.getLevel() instanceof Level level && !level.isClientSide()) {
+            EnergyMachineManager.INSTANCE.clearDimensionChunkResidency(
+                level.dimension().location().hashCode()
+            );
         }
     }
 
@@ -220,9 +242,9 @@ public final class CirculationFlowNetworks {
         PocketNodeManager.INSTANCE.save();
         HubChannelManager.INSTANCE.save();
         EnergyTypeOverrideManager.save();
+        EnergyMachineManager.INSTANCE.onServerStop();
         NetworkManager.INSTANCE.onServerStop();
         PocketNodeManager.INSTANCE.onServerStop();
-        EnergyMachineManager.INSTANCE.onServerStop();
         EnergyTypeOverrideManager.onServerStop();
         ChargingManager.INSTANCE.onServerStop();
         HubChannelManager.INSTANCE.onServerStop();

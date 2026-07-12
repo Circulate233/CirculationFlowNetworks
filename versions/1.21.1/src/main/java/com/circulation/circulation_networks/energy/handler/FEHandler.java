@@ -2,205 +2,205 @@ package com.circulation.circulation_networks.energy.handler;
 
 import com.circulation.circulation_networks.api.EnergyAmount;
 import com.circulation.circulation_networks.api.EnergyAmounts;
+import com.circulation.circulation_networks.api.HandlerTickResult;
 import com.circulation.circulation_networks.api.IEnergyHandler;
+import com.circulation.circulation_networks.manager.HandlerBindingPolicy;
+import com.circulation.circulation_networks.manager.HandlerInvalidationSink;
 import com.circulation.circulation_networks.network.nodes.HubNode;
+import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.minecraft.core.Direction;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.neoforged.neoforge.capabilities.BlockCapabilityCache;
 import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.energy.IEnergyStorage;
-
 import org.jetbrains.annotations.Nullable;
 
-public class FEHandler implements IEnergyHandler {
+import java.util.Objects;
+
+/** Forge Energy binding with a role frozen from capability structure. */
+public final class FEHandler implements IEnergyHandler {
 
     private static final Direction[] DIRECTIONS = Direction.values();
-    private static final int ROLE_UNKNOWN = 0;
-    private static final int ROLE_SUPPORTED = 1;
-    private static final int ROLE_UNSUPPORTED = 2;
+    private static final HandlerBindingPolicy BINDING_POLICY = HandlerBindingPolicy.of(
+        HandlerBindingPolicy.TickLifecycle.STATIC,
+        HandlerBindingPolicy.RoleScope.FIXED,
+        HandlerBindingPolicy.MappingScope.NONE,
+        HandlerBindingPolicy.PairMatching.NONE
+    );
 
+    private final ObjectArrayList<BlockCapabilityCache<IEnergyStorage, Direction>> capabilityCaches =
+        new ObjectArrayList<>(DIRECTIONS.length);
     @Nullable
     private IEnergyStorage send;
     @Nullable
     private IEnergyStorage receive;
     @Nullable
-    private Direction sendDirection;
-    @Nullable
-    private Direction receiveDirection;
-    private int sendState = ROLE_UNKNOWN;
-    private int receiveState = ROLE_UNKNOWN;
-    private boolean initialized;
-    private EnergyType energyType;
+    private BlockEntity blockEntity;
+    private boolean itemBound;
+    private EnergyType energyType = EnergyType.INVALID;
 
-    private static boolean hasEnergy(IEnergyStorage storage) {
-        return storage.getEnergyStored() > 0;
-    }
-
-    private static boolean hasRoom(IEnergyStorage storage) {
-        return storage.getEnergyStored() < storage.getMaxEnergyStored();
-    }
-
-    private static boolean canExtractEffectively(IEnergyStorage storage) {
-        return storage.extractEnergy(1, true) > 0;
-    }
-
-    private static boolean canReceiveEffectively(IEnergyStorage storage) {
-        return storage.receiveEnergy(1, true) > 0;
-    }
-
-    private void bindHint(BlockEntity blockEntity) {
-        var level = blockEntity.getLevel();
-        if (level == null) {
-            return;
-        }
-        var pos = blockEntity.getBlockPos();
-        if (sendState == ROLE_SUPPORTED && sendDirection != null) {
-            IEnergyStorage storage = level.getCapability(Capabilities.EnergyStorage.BLOCK, pos, sendDirection);
-            if (storage != null && hasEnergy(storage)) {
-                send = storage;
-            } else if (storage == null) {
-                sendState = ROLE_UNKNOWN;
-            }
-        }
-        if (receiveState == ROLE_SUPPORTED && receiveDirection != null) {
-            IEnergyStorage storage = level.getCapability(Capabilities.EnergyStorage.BLOCK, pos, receiveDirection);
-            if (storage != null && hasRoom(storage)) {
-                receive = storage;
-            } else if (storage == null) {
-                receiveState = ROLE_UNKNOWN;
-            }
-        }
-    }
-
-    private int bindDirection(BlockEntity blockEntity, Direction direction, boolean needSendScan, boolean needReceiveScan) {
-        if (!needSendScan && !needReceiveScan) {
-            return 0;
-        }
-        var level = blockEntity.getLevel();
-        if (level == null) {
-            return 0;
-        }
-        IEnergyStorage storage = level.getCapability(Capabilities.EnergyStorage.BLOCK, blockEntity.getBlockPos(), direction);
-        if (storage == null) {
-            return 0;
-        }
-        int attempted = 0;
-        boolean hasEnergy = hasEnergy(storage);
-        boolean hasRoom = hasRoom(storage);
-        if (needSendScan && hasEnergy) {
-            attempted |= 1;
-        }
-        if (needReceiveScan && hasRoom) {
-            attempted |= 2;
-        }
-        if (needSendScan && send == null && hasEnergy(storage) && canExtractEffectively(storage)) {
-            send = storage;
-            sendDirection = direction;
-            sendState = ROLE_SUPPORTED;
-        }
-        if (needReceiveScan && receive == null && hasRoom(storage) && canReceiveEffectively(storage)) {
-            receive = storage;
-            receiveDirection = direction;
-            receiveState = ROLE_SUPPORTED;
-        }
-        return attempted;
+    @Override
+    public HandlerBindingPolicy bindingPolicy() {
+        return BINDING_POLICY;
     }
 
     @Override
-    public void init(BlockEntity blockEntity, @Nullable HubNode.HubMetadata hubMetadata) {
-        if (initialized) {
-            return;
+    public void bindBlockEntity(BlockEntity blockEntity, HandlerInvalidationSink invalidationSink) {
+        requireUnbound();
+        Objects.requireNonNull(invalidationSink, "invalidationSink");
+        if (!(blockEntity.getLevel() instanceof ServerLevel level)) {
+            throw new IllegalArgumentException("FE handler requires a server-level block entity");
         }
-        initialized = true;
-        bindHint(blockEntity);
-        boolean needSendScan = send == null && sendState == ROLE_UNKNOWN;
-        boolean needReceiveScan = receive == null && receiveState == ROLE_UNKNOWN;
-        boolean attemptedSend = false;
-        boolean attemptedReceive = false;
+        this.blockEntity = blockEntity;
         for (Direction direction : DIRECTIONS) {
-            if (!needSendScan && !needReceiveScan) break;
-            int attempted = bindDirection(blockEntity, direction, needSendScan, needReceiveScan);
-            attemptedSend |= (attempted & 1) != 0;
-            attemptedReceive |= (attempted & 2) != 0;
-            needSendScan = send == null && sendState == ROLE_UNKNOWN;
-            needReceiveScan = receive == null && receiveState == ROLE_UNKNOWN;
+            BlockCapabilityCache<IEnergyStorage, Direction> cache = BlockCapabilityCache.create(
+                Capabilities.EnergyStorage.BLOCK,
+                level,
+                blockEntity.getBlockPos(),
+                direction,
+                () -> this.blockEntity == blockEntity,
+                invalidationSink::suspendUntilRebind
+            );
+            capabilityCaches.add(cache);
+            IEnergyStorage storage = cache.getCapability();
+            if (storage == null) {
+                continue;
+            }
+            if (send == null && storage.canExtract()) {
+                send = storage;
+            }
+            if (receive == null && storage.canReceive()) {
+                receive = storage;
+            }
         }
-        if (send == null && sendState == ROLE_UNKNOWN && attemptedSend) {
-            sendState = ROLE_UNSUPPORTED;
-        }
-        if (receive == null && receiveState == ROLE_UNKNOWN && attemptedReceive) {
-            receiveState = ROLE_UNSUPPORTED;
+        energyType = roleOf(send != null, receive != null);
+        if (energyType == EnergyType.INVALID) {
+            throw new IllegalArgumentException("FE block entity has no usable energy capability");
         }
     }
 
     @Override
-    public void init(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
-        var ies = itemStack.getCapability(Capabilities.EnergyStorage.ITEM);
-        if (ies == null) return;
-        if (hasRoom(ies) && canReceiveEffectively(ies)) {
-            this.receive = ies;
-        }
+    public HandlerTickResult beginServerTick(long epoch) {
+        throw new IllegalStateException("STATIC FE handler does not receive tick callbacks");
     }
 
     @Override
-    public void clear() {
+    public void endServerTick(long epoch) {
+        throw new IllegalStateException("STATIC FE handler does not receive tick callbacks");
+    }
+
+    @Override
+    public void unbindBlockEntity() {
         send = null;
         receive = null;
-        energyType = null;
-        initialized = false;
+        capabilityCaches.clear();
+        blockEntity = null;
+        energyType = EnergyType.INVALID;
     }
 
     @Override
-    public EnergyAmount extractEnergy(EnergyAmount maxExtract, @Nullable HubNode.HubMetadata hubMetadata) {
-        if (send == null) return EnergyAmounts.ZERO;
-        int extracted = send.extractEnergy((int) maxExtract.asLongClamped(), false);
-        if (extracted == 0 && maxExtract.isPositive()) {
-            sendState = ROLE_UNKNOWN;
+    public void bindItem(ItemStack itemStack, @Nullable HubNode.HubMetadata hubMetadata) {
+        requireUnbound();
+        Objects.requireNonNull(itemStack, "itemStack");
+        itemBound = true;
+        IEnergyStorage storage = itemStack.getCapability(Capabilities.EnergyStorage.ITEM);
+        if (storage != null && storage.canReceive()) {
+            receive = storage;
+            energyType = EnergyType.RECEIVE;
+        } else {
+            energyType = EnergyType.INVALID;
         }
-        return EnergyAmount.obtain(extracted);
+    }
+
+    @Override
+    public void unbindItem() {
+        send = null;
+        receive = null;
+        itemBound = false;
+        energyType = EnergyType.INVALID;
     }
 
     @Override
     public EnergyAmount receiveEnergy(EnergyAmount maxReceive, @Nullable HubNode.HubMetadata hubMetadata) {
-        if (receive == null) return EnergyAmounts.ZERO;
-        int received = receive.receiveEnergy((int) maxReceive.asLongClamped(), false);
-        if (received == 0 && maxReceive.isPositive()) {
-            receiveState = ROLE_UNKNOWN;
+        Objects.requireNonNull(maxReceive, "maxReceive");
+        if (receive == null) {
+            return EnergyAmounts.ZERO;
         }
-        return EnergyAmount.obtain(received);
+        return EnergyAmount.obtain(receive.receiveEnergy((int) maxReceive.asLongClamped(), false));
+    }
+
+    @Override
+    public EnergyAmount extractEnergy(EnergyAmount maxExtract, @Nullable HubNode.HubMetadata hubMetadata) {
+        Objects.requireNonNull(maxExtract, "maxExtract");
+        if (send == null) {
+            return EnergyAmounts.ZERO;
+        }
+        return EnergyAmount.obtain(send.extractEnergy((int) maxExtract.asLongClamped(), false));
     }
 
     @Override
     public EnergyAmount canExtractValue(@Nullable HubNode.HubMetadata hubMetadata) {
-        return send == null ? EnergyAmounts.ZERO : EnergyAmount.obtain(send.extractEnergy(Integer.MAX_VALUE, true));
+        return send == null
+            ? EnergyAmounts.ZERO
+            : EnergyAmount.obtain(Math.max(0, send.extractEnergy(Integer.MAX_VALUE, true)));
     }
 
     @Override
     public EnergyAmount canReceiveValue(@Nullable HubNode.HubMetadata hubMetadata) {
-        return receive == null ? EnergyAmounts.ZERO : EnergyAmount.obtain(Math.max(0, receive.receiveEnergy(Integer.MAX_VALUE, true)));
-    }
-
-    @Override
-    public EnergyType getType(@Nullable HubNode.HubMetadata hubMetadata) {
-        if (energyType == null) {
-            boolean receive = this.receive != null;
-            if (send != null) {
-                return energyType = receive ? EnergyType.STORAGE : EnergyType.SEND;
-            } else if (receive) {
-                return energyType = EnergyType.RECEIVE;
-            }
-            return energyType = EnergyType.INVALID;
-        }
-        return energyType;
+        return receive == null
+            ? EnergyAmounts.ZERO
+            : EnergyAmount.obtain(Math.max(0, receive.receiveEnergy(Integer.MAX_VALUE, true)));
     }
 
     @Override
     public boolean canExtract(IEnergyHandler receiveHandler, @Nullable HubNode.HubMetadata hubMetadata) {
-        return send != null;
+        if (send == null || !send.canExtract()) {
+            return false;
+        }
+        EnergyAmount available = canExtractValue(hubMetadata);
+        try {
+            return available.isPositive();
+        } finally {
+            available.recycle();
+        }
     }
 
     @Override
     public boolean canReceive(IEnergyHandler sendHandler, @Nullable HubNode.HubMetadata hubMetadata) {
-        return receive != null;
+        if (receive == null || !receive.canReceive()) {
+            return false;
+        }
+        EnergyAmount available = canReceiveValue(hubMetadata);
+        try {
+            return available.isPositive();
+        } finally {
+            available.recycle();
+        }
+    }
+
+    @Override
+    public EnergyType getType(@Nullable HubNode.HubMetadata hubMetadata) {
+        return energyType;
+    }
+
+    private static EnergyType roleOf(boolean canSend, boolean canReceive) {
+        if (canSend) {
+            return canReceive ? EnergyType.STORAGE : EnergyType.SEND;
+        }
+        return canReceive ? EnergyType.RECEIVE : EnergyType.INVALID;
+    }
+
+    private void requireUnbound() {
+        if (blockEntity != null || itemBound) {
+            throw new IllegalStateException("FE handler is already bound");
+        }
+    }
+
+    private void requireBlockBinding() {
+        if (blockEntity == null) {
+            throw new IllegalStateException("FE handler has no block-entity binding");
+        }
     }
 }
