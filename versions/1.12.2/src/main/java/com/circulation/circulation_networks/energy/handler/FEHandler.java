@@ -30,6 +30,8 @@ public class FEHandler implements IEnergyHandler {
     @Nullable
     private IEnergyStorage receive;
     @Nullable
+    private IEnergyStorage directStorage;
+    @Nullable
     private EnumFacing sendFacing;
     @Nullable
     private EnumFacing receiveFacing;
@@ -61,6 +63,7 @@ public class FEHandler implements IEnergyHandler {
     private void discoverStructure(TileEntity tileEntity) {
         send = null;
         receive = null;
+        directStorage = tileEntity instanceof IEnergyStorage storage ? storage : null;
         sendFacing = null;
         receiveFacing = null;
         for (EnumFacing facing : EnumFacing.VALUES) {
@@ -77,12 +80,12 @@ public class FEHandler implements IEnergyHandler {
                 receiveFacing = facing;
             }
         }
-        if (tileEntity instanceof IEnergyStorage storage) {
-            if (send == null && storage.canExtract()) {
-                send = storage;
+        if (directStorage != null) {
+            if (send == null && directStorage.canExtract()) {
+                send = directStorage;
             }
-            if (receive == null && storage.canReceive()) {
-                receive = storage;
+            if (receive == null && directStorage.canReceive()) {
+                receive = directStorage;
             }
         }
         supportsSend = send != null;
@@ -91,10 +94,13 @@ public class FEHandler implements IEnergyHandler {
     }
 
     private boolean refreshCachedCapabilities() {
-        IEnergyStorage refreshedSend = capability(sendFacing);
-        IEnergyStorage refreshedReceive = sendFacing == receiveFacing
-            ? refreshedSend
-            : capability(receiveFacing);
+        IEnergyStorage refreshedSend = supportsSend ? storage(sendFacing) : null;
+        IEnergyStorage refreshedReceive = null;
+        if (supportsReceive) {
+            refreshedReceive = supportsSend && sendFacing == receiveFacing
+                ? refreshedSend
+                : storage(receiveFacing);
+        }
         boolean sendValid = !supportsSend || refreshedSend != null && refreshedSend.canExtract();
         boolean receiveValid = !supportsReceive || refreshedReceive != null && refreshedReceive.canReceive();
         send = sendValid && supportsSend ? refreshedSend : null;
@@ -106,6 +112,7 @@ public class FEHandler implements IEnergyHandler {
         TileEntity boundBlockEntity = Objects.requireNonNull(blockEntity, "blockEntity");
         send = null;
         receive = null;
+        directStorage = boundBlockEntity instanceof IEnergyStorage storage ? storage : null;
         sendFacing = null;
         receiveFacing = null;
         for (EnumFacing facing : EnumFacing.VALUES) {
@@ -122,26 +129,22 @@ public class FEHandler implements IEnergyHandler {
                 receiveFacing = facing;
             }
         }
-        if (boundBlockEntity instanceof IEnergyStorage storage) {
-            if (supportsSend && send == null && storage.canExtract()) {
-                send = storage;
+        if (directStorage != null) {
+            if (supportsSend && send == null && directStorage.canExtract()) {
+                send = directStorage;
             }
-            if (supportsReceive && receive == null && storage.canReceive()) {
-                receive = storage;
+            if (supportsReceive && receive == null && directStorage.canReceive()) {
+                receive = directStorage;
             }
         }
         return (!supportsSend || send != null) && (!supportsReceive || receive != null);
     }
 
     @Nullable
-    private IEnergyStorage capability(@Nullable EnumFacing facing) {
-        if (blockEntity == null) {
-            return null;
-        }
-        if (facing == null && blockEntity instanceof IEnergyStorage storage) {
-            return storage;
-        }
-        return facing == null ? null : blockEntity.getCapability(CapabilityEnergy.ENERGY, facing);
+    private IEnergyStorage storage(@Nullable EnumFacing facing) {
+        return facing == null
+            ? directStorage
+            : Objects.requireNonNull(blockEntity, "blockEntity").getCapability(CapabilityEnergy.ENERGY, facing);
     }
 
     @Override
@@ -187,6 +190,7 @@ public class FEHandler implements IEnergyHandler {
     public void unbindBlockEntity() {
         send = null;
         receive = null;
+        directStorage = null;
         sendFacing = null;
         receiveFacing = null;
         blockEntity = null;

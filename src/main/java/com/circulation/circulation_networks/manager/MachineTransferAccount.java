@@ -116,25 +116,40 @@ final class MachineTransferAccount {
         return receiveBudget.isPositive(epoch);
     }
 
-    public boolean claimReceiveCandidate(long passId, long epoch) {
+    public boolean claimReceiveCandidate(long passId,
+                                         long epoch,
+                                         @Nullable HubNode.HubMetadata metadata) {
+        activate(epoch);
+        if (!isActive(epoch)) {
+            return false;
+        }
         requireTransferPassId(passId);
         requireEpoch(epoch);
         if (receiveCandidatePassId == passId) {
             return false;
         }
         receiveCandidatePassId = passId;
-        return true;
+        initializeReceive(epoch, metadata);
+        return receiveBudget.isPositive(epoch);
     }
 
     public boolean hasExtractCandidate(long passId,
                                        long epoch,
                                        @Nullable HubNode.HubMetadata metadata) {
+        activate(epoch);
+        if (!isActive(epoch)) {
+            return false;
+        }
         requireTransferPassId(passId);
         requireEpoch(epoch);
         if (exhaustedExtractPassId == passId) {
             return false;
         }
-        if (hasRemainingExtract(epoch, metadata)) {
+        if (reservedExtract.compareTo(deferredExtract) > 0) {
+            return true;
+        }
+        initializeExtract(epoch, metadata);
+        if (extractBudget.isPositive(epoch)) {
             return true;
         }
         exhaustedExtractPassId = passId;

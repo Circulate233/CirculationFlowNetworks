@@ -2837,11 +2837,15 @@ public final class EnergyMachineManager {
         }
 
         boolean claimReceiveCandidate(long passId, long epoch) {
-            return requireAccount().claimReceiveCandidate(passId, epoch);
+            MachineTransferAccount currentAccount = account;
+            return currentAccount != null
+                && currentAccount.claimReceiveCandidate(passId, epoch, hubMetadata);
         }
 
         boolean hasExtractCandidate(long passId, long epoch) {
-            return requireAccount().hasExtractCandidate(passId, epoch, hubMetadata);
+            MachineTransferAccount currentAccount = account;
+            return currentAccount != null
+                && currentAccount.hasExtractCandidate(passId, epoch, hubMetadata);
         }
 
         boolean canExtract(MachineTransferSlot receiveSlot) {
@@ -3014,8 +3018,7 @@ public final class EnergyMachineManager {
             return;
         }
         for (MachineTransferSlot receiver = receiveTraversal.next(); receiver != null; receiver = receiveTraversal.next()) {
-            if (!receiver.isActive(epoch) || !receiver.claimReceiveCandidate(passId, epoch)
-                || !receiver.hasReceiveBudget(epoch)) {
+            if (!receiver.claimReceiveCandidate(passId, epoch)) {
                 continue;
             }
             while (sender != null) {
@@ -3045,7 +3048,7 @@ public final class EnergyMachineManager {
                                                         long epoch,
                                                         long passId) {
         for (MachineTransferSlot sender = sendTraversal.next(); sender != null; sender = sendTraversal.next()) {
-            if (sender.isActive(epoch) && sender.hasExtractCandidate(passId, epoch)) {
+            if (sender.hasExtractCandidate(passId, epoch)) {
                 return sender;
             }
         }
@@ -3194,13 +3197,13 @@ public final class EnergyMachineManager {
                 throw new IllegalStateException("Priority role cursor is not in use");
             }
             bucket = firstBucket;
-            index = bucket != null ? bucket.firstAliveIndex() : -1;
+            index = 0;
         }
 
         void close() {
             firstBucket = null;
             bucket = null;
-            index = -1;
+            index = 0;
             inUse = false;
         }
 
@@ -3209,15 +3212,15 @@ public final class EnergyMachineManager {
             if (!inUse) {
                 throw new IllegalStateException("Priority role cursor is not in use");
             }
-            while (bucket != null && index < 0) {
+            while (bucket != null && index >= bucket.participantCount()) {
                 bucket = bucket.next();
-                index = bucket != null ? bucket.firstAliveIndex() : -1;
+                index = 0;
             }
             if (bucket == null) {
                 return null;
             }
             MachineTransferSlot participant = bucket.participantAt(index);
-            index = bucket.nextAliveIndex(index);
+            index++;
             return participant;
         }
     }

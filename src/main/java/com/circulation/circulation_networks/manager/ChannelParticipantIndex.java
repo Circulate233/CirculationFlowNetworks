@@ -9,7 +9,6 @@ import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
-import it.unimi.dsi.fastutil.objects.ReferenceSets;
 
 import java.util.Objects;
 import java.util.UUID;
@@ -30,9 +29,6 @@ public final class ChannelParticipantIndex {
     private final Object2ObjectOpenHashMap<UUID, ChannelEntry> channels = new Object2ObjectOpenHashMap<>();
     private final Reference2ObjectOpenHashMap<IGrid, UUID> gridChannels = new Reference2ObjectOpenHashMap<>();
     private final ObjectArrayList<ChannelEntry> routingChannels = new ObjectArrayList<>();
-    private long participantAdditions;
-    private long participantRemovals;
-    private long participantMoves;
     public void migrateGrid(IGrid grid, UUID oldChannelId, UUID newChannelId) {
         Objects.requireNonNull(grid, "grid");
         Objects.requireNonNull(oldChannelId, "oldChannelId");
@@ -72,10 +68,10 @@ public final class ChannelParticipantIndex {
             removeGridFromChannel(grid, channelId);
         }
     }
-    public void onGridParticipantAdded(IGrid grid,
-                                       EnergyMachineManager.MachineTransferSlot participant,
-                                       IEnergyHandler.EnergyType role,
-                                       int priority) {
+    void onGridParticipantAdded(IGrid grid,
+                                EnergyMachineManager.MachineTransferSlot participant,
+                                IEnergyHandler.EnergyType role,
+                                int priority) {
         UUID channelId = gridChannels.get(Objects.requireNonNull(grid, "grid"));
         if (channelId == null) {
             return;
@@ -83,64 +79,56 @@ public final class ChannelParticipantIndex {
         ChannelEntry entry = requireChannel(channelId);
         entry.add(participant, role, priority);
     }
-    public void validateGridParticipantAddition(IGrid grid,
-                                                EnergyMachineManager.MachineTransferSlot participant,
-                                                IEnergyHandler.EnergyType role,
-                                                int priority) {
+    void validateGridParticipantAddition(IGrid grid,
+                                         EnergyMachineManager.MachineTransferSlot participant,
+                                         IEnergyHandler.EnergyType role,
+                                         int priority) {
         ChannelEntry entry = entryForGrid(grid);
         if (entry != null) {
             entry.validateAddition(participant, role, priority);
         }
     }
-    public void onGridParticipantRemoved(IGrid grid, EnergyMachineManager.MachineTransferSlot participant) {
+    void onGridParticipantRemoved(IGrid grid, EnergyMachineManager.MachineTransferSlot participant) {
         UUID channelId = gridChannels.get(Objects.requireNonNull(grid, "grid"));
         if (channelId == null) {
             return;
         }
         requireChannel(channelId).remove(participant);
     }
-    public void validateGridParticipantRemoval(IGrid grid, EnergyMachineManager.MachineTransferSlot participant) {
+    void validateGridParticipantRemoval(IGrid grid, EnergyMachineManager.MachineTransferSlot participant) {
         ChannelEntry entry = entryForGrid(grid);
         if (entry != null) {
             entry.validateRemoval(participant);
         }
     }
-    public void onGridParticipantMoved(IGrid grid,
-                                       EnergyMachineManager.MachineTransferSlot participant,
-                                       IEnergyHandler.EnergyType role,
-                                       int priority) {
+    void onGridParticipantMoved(IGrid grid,
+                                EnergyMachineManager.MachineTransferSlot participant,
+                                IEnergyHandler.EnergyType role,
+                                int priority) {
         UUID channelId = gridChannels.get(Objects.requireNonNull(grid, "grid"));
         if (channelId == null) {
             return;
         }
         requireChannel(channelId).move(participant, role, priority);
     }
-    public void validateGridParticipantMove(IGrid grid,
-                                            EnergyMachineManager.MachineTransferSlot participant,
-                                            IEnergyHandler.EnergyType role,
-                                            int priority) {
+    void validateGridParticipantMove(IGrid grid,
+                                     EnergyMachineManager.MachineTransferSlot participant,
+                                     IEnergyHandler.EnergyType role,
+                                     int priority) {
         ChannelEntry entry = entryForGrid(grid);
         if (entry != null) {
             entry.validateMove(participant, role, priority);
         }
     }
-    public ChannelEntry channel(UUID channelId) {
-        return channelView(channels.get(Objects.requireNonNull(channelId, "channelId")));
+    ChannelEntry channel(UUID channelId) {
+        return channels.get(Objects.requireNonNull(channelId, "channelId"));
     }
     public int routingChannelCount() {
         return routingChannels.size();
     }
 
-    /**
-     * Captures channel participant mutation counters for stable-routing
-     * regression tests. It is sampled only by tests and never by routing ticks.
-     */
-    @SuppressWarnings("unused")
-    StructuralMetrics structuralMetrics() {
-        return new StructuralMetrics(participantAdditions, participantRemovals, participantMoves);
-    }
-    public ChannelEntry routingChannelAt(int index) {
-        return channelView(routingChannels.get(index));
+    ChannelEntry routingChannelAt(int index) {
+        return routingChannels.get(index);
     }
     public void beginRouting(UUID channelId, long epoch) {
         requireChannel(channelId).beginRouting(epoch);
@@ -189,7 +177,7 @@ public final class ChannelParticipantIndex {
         ChannelEntry entry = channels.get(channelId);
         boolean newChannel = entry == null;
         if (entry == null) {
-            entry = new ChannelEntry(channelId);
+            entry = new ChannelEntry(this, channelId);
         }
         entry.validateGridAddition(grid);
         try {
@@ -249,7 +237,7 @@ public final class ChannelParticipantIndex {
 
     private void mirrorRole(ChannelEntry entry, PriorityRoleIndex roleIndex) {
         for (PriorityRoleIndex.Bucket bucket = roleIndex.firstBucket(); bucket != null; bucket = bucket.next()) {
-            for (int index = bucket.firstAliveIndex(); index >= 0; index = bucket.nextAliveIndex(index)) {
+            for (int index = 0; index < bucket.participantCount(); index++) {
                 EnergyMachineManager.MachineTransferSlot participant = bucket.participantAt(index);
                 entry.add(participant, participant.membership().role(), participant.membership().priority());
             }
@@ -264,7 +252,7 @@ public final class ChannelParticipantIndex {
 
     private void removeMirroredRole(ChannelEntry entry, PriorityRoleIndex roleIndex) {
         for (PriorityRoleIndex.Bucket bucket = roleIndex.firstBucket(); bucket != null; bucket = bucket.next()) {
-            for (int index = bucket.firstAliveIndex(); index >= 0; index = bucket.nextAliveIndex(index)) {
+            for (int index = 0; index < bucket.participantCount(); index++) {
                 entry.remove(bucket.participantAt(index));
             }
         }
@@ -275,10 +263,6 @@ public final class ChannelParticipantIndex {
         if (entry == null) {
             throw new IllegalStateException("Channel has no participant index");
         }
-        return entry;
-    }
-
-    private ChannelEntry channelView(ChannelEntry entry) {
         return entry;
     }
 
@@ -319,14 +303,14 @@ public final class ChannelParticipantIndex {
         return HubNode.EMPTY.equals(channelId);
     }
 
-    final class ChannelEntry {
+    static final class ChannelEntry {
 
+        private final ChannelParticipantIndex owner;
         private final UUID channelId;
         private final PriorityRoleIndex send = new PriorityRoleIndex(ParticipantMembershipScope.CHANNEL);
         private final PriorityRoleIndex storage = new PriorityRoleIndex(ParticipantMembershipScope.CHANNEL);
         private final PriorityRoleIndex receive = new PriorityRoleIndex(ParticipantMembershipScope.CHANNEL);
         private final ReferenceSet<IGrid> grids = new ReferenceOpenHashSet<>();
-        private final ReferenceSet<IGrid> gridView = ReferenceSets.unmodifiable(grids);
         private final ObjectArrayList<IGrid> gridList = new ObjectArrayList<>();
         private final Reference2IntOpenHashMap<IGrid> gridPositions = new Reference2IntOpenHashMap<>();
         private int routingIndex = -1;
@@ -334,29 +318,27 @@ public final class ChannelParticipantIndex {
         private long routingEpoch = Long.MIN_VALUE;
         private long chargingEpoch = Long.MIN_VALUE;
 
-        private ChannelEntry(UUID channelId) {
+        private ChannelEntry(ChannelParticipantIndex owner, UUID channelId) {
+            this.owner = Objects.requireNonNull(owner, "owner");
             this.channelId = channelId;
             gridPositions.defaultReturnValue(-1);
         }
-        public UUID channelId() {
+        UUID channelId() {
             return channelId;
         }
-        public PriorityRoleIndex send() {
+        PriorityRoleIndex send() {
             return send;
         }
-        public PriorityRoleIndex storage() {
+        PriorityRoleIndex storage() {
             return storage;
         }
-        public PriorityRoleIndex receive() {
+        PriorityRoleIndex receive() {
             return receive;
         }
-        public ReferenceSet<IGrid> grids() {
-            return gridView;
-        }
-        public int gridCount() {
+        int gridCount() {
             return gridList.size();
         }
-        public IGrid gridAt(int index) {
+        IGrid gridAt(int index) {
             return gridList.get(index);
         }
 
@@ -380,10 +362,10 @@ public final class ChannelParticipantIndex {
                 gridPositions.put(last, position);
             }
         }
-        public boolean isRoutingActive() {
+        boolean isRoutingActive() {
             return routingActive;
         }
-        public long routingEpoch() {
+        long routingEpoch() {
             if (!routingActive) {
                 throw new IllegalStateException("Channel routing is inactive");
             }
@@ -433,9 +415,8 @@ public final class ChannelParticipantIndex {
             }
             PriorityRoleIndex roleIndex = roleIndex(role);
             roleIndex.add(participant, priority);
-            participant.membership().bindChannel(ChannelParticipantIndex.this, channelId, roleIndex,
+            participant.membership().bindChannel(owner, channelId, roleIndex,
                 roleIndex.insertedBucket(priority), role, priority);
-            participantAdditions++;
         }
 
         private void remove(EnergyMachineManager.MachineTransferSlot participant) {
@@ -447,8 +428,7 @@ public final class ChannelParticipantIndex {
             if (!roleIndex.remove(participant)) {
                 throw new IllegalStateException("Participant channel membership is inconsistent with its role index");
             }
-            participant.membership().clearChannel(ChannelParticipantIndex.this, channelId);
-            participantRemovals++;
+            participant.membership().clearChannel(owner, channelId);
         }
 
         private void move(EnergyMachineManager.MachineTransferSlot participant, IEnergyHandler.EnergyType role, int priority) {
@@ -457,7 +437,6 @@ public final class ChannelParticipantIndex {
             PriorityRoleIndex destination = roleIndex(role);
             PriorityRoleIndex.Bucket destinationBucket = source.transferTo(participant, destination, priority);
             participant.membership().moveChannel(destination, destinationBucket, role, priority);
-            participantMoves++;
         }
 
         private void clear() {
@@ -556,7 +535,7 @@ public final class ChannelParticipantIndex {
 
         private void validateGridRoleAddition(PriorityRoleIndex roleIndex) {
             for (PriorityRoleIndex.Bucket bucket = roleIndex.firstBucket(); bucket != null; bucket = bucket.next()) {
-                for (int index = bucket.firstAliveIndex(); index >= 0; index = bucket.nextAliveIndex(index)) {
+                for (int index = 0; index < bucket.participantCount(); index++) {
                     EnergyMachineManager.MachineTransferSlot participant = bucket.participantAt(index);
                     GridParticipantMembership membership = participant.membership();
                     if (membership.isChannelBound()) {
@@ -573,7 +552,7 @@ public final class ChannelParticipantIndex {
 
         private void validateGridRoleRemoval(PriorityRoleIndex roleIndex) {
             for (PriorityRoleIndex.Bucket bucket = roleIndex.firstBucket(); bucket != null; bucket = bucket.next()) {
-                for (int index = bucket.firstAliveIndex(); index >= 0; index = bucket.nextAliveIndex(index)) {
+                for (int index = 0; index < bucket.participantCount(); index++) {
                     validateRemoval(bucket.participantAt(index));
                 }
             }
@@ -581,7 +560,7 @@ public final class ChannelParticipantIndex {
 
         private void validateGridRoleMigrationTarget(PriorityRoleIndex roleIndex, ChannelEntry source) {
             for (PriorityRoleIndex.Bucket bucket = roleIndex.firstBucket(); bucket != null; bucket = bucket.next()) {
-                for (int index = bucket.firstAliveIndex(); index >= 0; index = bucket.nextAliveIndex(index)) {
+                for (int index = 0; index < bucket.participantCount(); index++) {
                     GridParticipantMembership membership = bucket.participantAt(index).membership();
                     if (membership.isChannelBound()
                         && (source == null || !source.channelId.equals(membership.channelId()))) {
@@ -605,15 +584,4 @@ public final class ChannelParticipantIndex {
         }
     }
 
-    static final class StructuralMetrics {
-        final long participantAdditions;
-        final long participantRemovals;
-        final long participantMoves;
-
-        private StructuralMetrics(long participantAdditions, long participantRemovals, long participantMoves) {
-            this.participantAdditions = participantAdditions;
-            this.participantRemovals = participantRemovals;
-            this.participantMoves = participantMoves;
-        }
-    }
 }

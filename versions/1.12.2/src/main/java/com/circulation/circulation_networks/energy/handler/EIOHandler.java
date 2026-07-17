@@ -299,8 +299,9 @@ public final class EIOHandler implements IEnergyHandler {
                 backendIdentity = null;
                 return HandlerTickResult.SUSPEND_UNTIL_REBIND;
             }
-            boolean changed = currentBackend != backendIdentity || currentType != energyType;
-            if (currentBackend != backendIdentity) invalidationSink.backendChanged();
+            boolean backendChanged = currentBackend != backendIdentity;
+            boolean changed = backendChanged || currentType != energyType;
+            if (backendChanged) invalidationSink.backendChanged();
             backendIdentity = currentBackend;
             energyType = currentType;
             return changed ? HandlerTickResult.STATE_CHANGED : HandlerTickResult.UNCHANGED;

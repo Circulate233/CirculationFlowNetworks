@@ -33,11 +33,22 @@ versions/1.12.2/src/test/java/com/circulation/circulation_networks/client/render
 versions/1.12.2/src/test/java/com/circulation/circulation_networks/manager/*
 !versions/1.12.2/src/test/java/com/circulation/circulation_networks/manager/MachineChunkResidencyIndexTest.java
 !versions/1.12.2/src/test/java/com/circulation/circulation_networks/manager/MachineBindingIndexSharedBackendTest.java
+!versions/1.12.2/src/test/java/com/circulation/circulation_networks/manager/PriorityRoutingAccountTest.java
 !versions/1.12.2/src/test/java/com/circulation/circulation_networks/energy/
 versions/1.12.2/src/test/java/com/circulation/circulation_networks/energy/*
 !versions/1.12.2/src/test/java/com/circulation/circulation_networks/energy/handler/
 versions/1.12.2/src/test/java/com/circulation/circulation_networks/energy/handler/*
+!versions/1.12.2/src/test/java/com/circulation/circulation_networks/energy/handler/FEHandlerTest.java
 !versions/1.12.2/src/test/java/com/circulation/circulation_networks/energy/handler/MMCEHandlerLargeTransferTest.java
+!versions/1.12.2/src/test/java/net/
+versions/1.12.2/src/test/java/net/*
+!versions/1.12.2/src/test/java/net/minecraftforge/
+versions/1.12.2/src/test/java/net/minecraftforge/*
+!versions/1.12.2/src/test/java/net/minecraftforge/common/
+versions/1.12.2/src/test/java/net/minecraftforge/common/*
+!versions/1.12.2/src/test/java/net/minecraftforge/common/capabilities/
+versions/1.12.2/src/test/java/net/minecraftforge/common/capabilities/*
+!versions/1.12.2/src/test/java/net/minecraftforge/common/capabilities/TestCapabilityFactory.java
 
 # gradle
 build

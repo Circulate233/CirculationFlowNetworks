@@ -219,8 +219,6 @@ public class MEKHandler implements IEnergyHandler {
         if (!(tileEntity instanceof IStrictEnergyStorage storage)) {
             return false;
         }
-        send = null;
-        receive = null;
         if (supportsSend && sendFacing != null && tileEntity instanceof IStrictEnergyOutputter outputter
             && outputter.canOutputEnergy(sendFacing)) {
             send = storage;

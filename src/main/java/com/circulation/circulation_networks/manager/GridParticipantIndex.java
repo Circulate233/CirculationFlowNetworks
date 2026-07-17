@@ -23,9 +23,6 @@ public final class GridParticipantIndex {
     private final PriorityRoleIndex storage = new PriorityRoleIndex();
     private final PriorityRoleIndex receive = new PriorityRoleIndex();
     private int size;
-    private long additions;
-    private long removals;
-    private long moves;
     private boolean routingActive;
     private long routingEpoch = Long.MIN_VALUE;
     @Nullable
@@ -51,11 +48,7 @@ public final class GridParticipantIndex {
         return roleIndex(role);
     }
 
-    public void add(IEnergyHandler.EnergyType role, EnergyMachineManager.MachineTransferSlot participant) {
-        add(role, participant, DEFAULT_PRIORITY);
-    }
-
-    public void add(IEnergyHandler.EnergyType role, EnergyMachineManager.MachineTransferSlot participant, int priority) {
+    void add(IEnergyHandler.EnergyType role, EnergyMachineManager.MachineTransferSlot participant, int priority) {
         Objects.requireNonNull(participant, "participant");
         requireStructuralMutationAllowed();
         GridParticipantMembership membership = participant.membership();
@@ -73,17 +66,16 @@ public final class GridParticipantIndex {
             ChannelParticipantIndex.INSTANCE.onGridParticipantAdded(ownerGrid, participant, role, priority);
             LocalParticipantRoutingIndex.INSTANCE.refresh(ownerGrid);
         }
-        additions++;
     }
 
-    public boolean remove(EnergyMachineManager.MachineTransferSlot participant) {
+    void remove(EnergyMachineManager.MachineTransferSlot participant) {
         if (participant == null) {
-            return false;
+            return;
         }
         requireStructuralMutationAllowed();
         GridParticipantMembership membership = participant.membership();
         if (membership.owner() != this) {
-            return false;
+            return;
         }
         PriorityRoleIndex roleIndex = requireRoleIndex(membership);
         if (ownerGrid != null) {
@@ -98,11 +90,9 @@ public final class GridParticipantIndex {
         if (ownerGrid != null) {
             LocalParticipantRoutingIndex.INSTANCE.refresh(ownerGrid);
         }
-        removals++;
-        return true;
     }
 
-    public void move(EnergyMachineManager.MachineTransferSlot participant, int priority) {
+    void move(EnergyMachineManager.MachineTransferSlot participant, int priority) {
         Objects.requireNonNull(participant, "participant");
         requireStructuralMutationAllowed();
         GridParticipantMembership membership = requireMembership(participant);
@@ -116,10 +106,9 @@ public final class GridParticipantIndex {
         if (ownerGrid != null) {
             ChannelParticipantIndex.INSTANCE.onGridParticipantMoved(ownerGrid, participant, role, priority);
         }
-        moves++;
     }
 
-    public void move(EnergyMachineManager.MachineTransferSlot participant, IEnergyHandler.EnergyType role, int priority) {
+    void move(EnergyMachineManager.MachineTransferSlot participant, IEnergyHandler.EnergyType role, int priority) {
         Objects.requireNonNull(participant, "participant");
         Objects.requireNonNull(role, "role");
         requireStructuralMutationAllowed();
@@ -138,31 +127,10 @@ public final class GridParticipantIndex {
         if (ownerGrid != null) {
             ChannelParticipantIndex.INSTANCE.onGridParticipantMoved(ownerGrid, participant, role, priority);
         }
-        moves++;
-    }
-
-    public IEnergyHandler.EnergyType roleOf(EnergyMachineManager.MachineTransferSlot participant) {
-        if (participant == null || participant.membership().owner() != this) {
-            return null;
-        }
-        return participant.membership().role();
-    }
-
-    public int priorityOf(EnergyMachineManager.MachineTransferSlot participant) {
-        return requireMembership(Objects.requireNonNull(participant, "participant")).priority();
     }
 
     public int size() {
         return size;
-    }
-
-    /**
-     * Captures participant mutation counters for stable-routing regression
-     * tests. It is sampled only by tests and is not part of the tick path.
-     */
-    @SuppressWarnings("unused")
-    StructuralMetrics structuralMetrics() {
-        return new StructuralMetrics(additions, removals, moves);
     }
 
     public void beginRouting(long epoch) {
@@ -254,19 +222,6 @@ public final class GridParticipantIndex {
     }
 
     private PriorityRoleIndex requireRoleIndex(GridParticipantMembership membership) {
-        PriorityRoleIndex roleIndex = membership.ownerRoleIndex();
-        return roleIndex;
-    }
-
-    static final class StructuralMetrics {
-        final long additions;
-        final long removals;
-        final long moves;
-
-        private StructuralMetrics(long additions, long removals, long moves) {
-            this.additions = additions;
-            this.removals = removals;
-            this.moves = moves;
-        }
+        return membership.ownerRoleIndex();
     }
 }
