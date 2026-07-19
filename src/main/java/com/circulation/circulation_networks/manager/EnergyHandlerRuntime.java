@@ -2,6 +2,7 @@ package com.circulation.circulation_networks.manager;
 
 import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.api.EnergyAmount;
+import com.circulation.circulation_networks.api.CFNBlockEntityEx;
 import com.circulation.circulation_networks.api.IEnergyHandler;
 import com.circulation.circulation_networks.network.nodes.HubNode;
 //? if <1.20
@@ -10,7 +11,6 @@ import com.github.bsideup.jabel.Desugar;
 import it.unimi.dsi.fastutil.objects.Object2LongMap;
 import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap;
 import net.minecraft.item.ItemStack;
-import net.minecraft.tileentity.TileEntity;
 //~ if >=1.20 'net.minecraft.util.math.BlockPos' -> 'net.minecraft.core.BlockPos' {
 import net.minecraft.util.math.BlockPos;
 //~}
@@ -44,13 +44,11 @@ final class EnergyHandlerRuntime {
         return new FailureContext(dimensionId, packedPosition, bindingGeneration);
     }
 
-    //~ if >=1.20 '(TileEntity ' -> '(BlockEntity ' {
     @Nullable
-    static MachineBindingIndex.Binding bindBlockEntity(TileEntity blockEntity,
+    static MachineBindingIndex.Binding bindBlockEntity(CFNBlockEntityEx blockEntity,
                                                          IEnergyHandler handler,
                                                          @Nullable MappedEnergyHandlerProvider mappedProvider,
                                                          FailureContext failureContext) {
-        //~}
         Objects.requireNonNull(failureContext, "failureContext");
         try {
             return MachineBindingIndex.INSTANCE.bindBlockEntity(blockEntity, handler, mappedProvider);
@@ -62,9 +60,7 @@ final class EnergyHandlerRuntime {
         }
     }
 
-    //~ if >=1.20 '(TileEntity ' -> '(BlockEntity ' {
-    static void unbindBlockEntity(TileEntity blockEntity) {
-        //~}
+    static void unbindBlockEntity(CFNBlockEntityEx blockEntity) {
         try {
             MachineBindingIndex.INSTANCE.unbindBlockEntity(blockEntity);
         } catch (RuntimeException exception) {
@@ -72,13 +68,15 @@ final class EnergyHandlerRuntime {
         }
     }
 
-    static void beginBindings(long epoch) {
+    static boolean beginBindings(long epoch) {
         currentEpoch = epoch;
         pruneFailureLogEpochs(epoch);
         try {
             MachineBindingIndex.INSTANCE.beginServerTick(epoch);
+            return true;
         } catch (RuntimeException exception) {
             logIndex("beginServerTick", exception);
+            return false;
         }
     }
 

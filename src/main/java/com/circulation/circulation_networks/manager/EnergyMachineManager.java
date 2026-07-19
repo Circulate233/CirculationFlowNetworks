@@ -2,6 +2,7 @@ package com.circulation.circulation_networks.manager;
 
 import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.api.EnergyAmount;
+import com.circulation.circulation_networks.api.CFNBlockEntityEx;
 import com.circulation.circulation_networks.api.IEnergyHandler;
 import com.circulation.circulation_networks.api.IEnergyHandlerManager;
 import com.circulation.circulation_networks.api.IGrid;
@@ -13,7 +14,6 @@ import com.circulation.circulation_networks.events.BlockEntityLifeCycleEvent;
 import com.circulation.circulation_networks.packets.NodeNetworkRendering;
 import com.circulation.circulation_networks.packets.EnergyWarningRendering;
 import com.circulation.circulation_networks.network.nodes.HubNode;
-import com.circulation.circulation_networks.registry.RegistryEnergyHandler;
 import com.circulation.circulation_networks.utils.ChunkCoordUtils;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
@@ -39,7 +39,6 @@ import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSets;
 //~ mc_imports
-import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 //~ if >=1.20 'net.minecraft.world.World' -> 'net.minecraft.world.level.Level' {
 import net.minecraft.world.World;
@@ -82,24 +81,20 @@ public final class EnergyMachineManager {
     private static final int POSITION_READY_MAX_RESOLUTION_ATTEMPTS = 2;
     private final Int2ObjectMap<Long2ObjectMap<ReferenceSet<IEnergySupplyNode>>> scopeNode = new Int2ObjectOpenHashMap<>();
     private final Int2ObjectMap<Object2ObjectMap<IEnergySupplyNode, LongSet>> nodeScope = new Int2ObjectOpenHashMap<>();
-    //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-    private final Reference2ObjectMap<INode, ReferenceSet<TileEntity>> gridMachineMap = new Reference2ObjectOpenHashMap<>();
-    private final Reference2ObjectMap<TileEntity, ReferenceSet<INode>> machineGridMap = new Reference2ObjectOpenHashMap<>();
-    private final Reference2ObjectMap<TileEntity, ReferenceSet<IEnergySupplyNode>> machineSupplyNodes = new Reference2ObjectOpenHashMap<>();
-    private final Reference2ObjectMap<IEnergySupplyNode, ReferenceSet<TileEntity>> supplyNodeMachines = new Reference2ObjectOpenHashMap<>();
-    private final Reference2ObjectMap<TileEntity, MachineRoute> machineRoutes = new Reference2ObjectOpenHashMap<>();
+    private final Reference2ObjectMap<INode, ReferenceSet<CFNBlockEntityEx>> gridMachineMap = new Reference2ObjectOpenHashMap<>();
+    private final Reference2ObjectMap<CFNBlockEntityEx, ReferenceSet<INode>> machineGridMap = new Reference2ObjectOpenHashMap<>();
+    private final Reference2ObjectMap<CFNBlockEntityEx, ReferenceSet<IEnergySupplyNode>> machineSupplyNodes = new Reference2ObjectOpenHashMap<>();
+    private final Reference2ObjectMap<IEnergySupplyNode, ReferenceSet<CFNBlockEntityEx>> supplyNodeMachines = new Reference2ObjectOpenHashMap<>();
+    private final Reference2ObjectMap<CFNBlockEntityEx, MachineRoute> machineRoutes = new Reference2ObjectOpenHashMap<>();
     private final Int2ObjectMap<Long2ObjectMap<MachineRoute>> machineRoutesByPosition = new Int2ObjectOpenHashMap<>();
-    private final Reference2ObjectMap<TileEntity, MachineHandlerRuntime> machineHandlerRuntimes = new Reference2ObjectOpenHashMap<>();
     private final Reference2LongMap<IEnergySupplyNode> nodeRescanTicks = new Reference2LongOpenHashMap<>();
     private final Object2ObjectMap<String, LongSet> warningPositionsScratch = new Object2ObjectOpenHashMap<>();
     private final WarningSnapshotSynchronizer warningSnapshots =
         new WarningSnapshotSynchronizer(WARNING_RANGE_SYNC_INTERVAL_TICKS);
     private final ObjectOpenHashSet<UUID> onlineWarningPlayerIdsScratch = new ObjectOpenHashSet<>();
     private final Object lifecycleLock = new Object();
-    //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-    private final MachineLifecyclePositionIndex<TileEntity> lifecyclePositions =
+    private final MachineLifecyclePositionIndex<CFNBlockEntityEx> lifecyclePositions =
         new MachineLifecyclePositionIndex<>();
-    //~}
     private final MachineChunkResidencyIndex<MachinePositionRecord> machineChunkResidency =
         new MachineChunkResidencyIndex<>();
     private final MachineChunkResidencyIndex.TransitionSink<MachinePositionRecord> machineChunkTransitions =
@@ -141,8 +136,6 @@ public final class EnergyMachineManager {
         supplyNodeMachines.defaultReturnValue(ReferenceSets.emptySet());
     }
 
-    //~}
-
     //? if <1.20 {
     private static MinecraftServer getServer() {
         return CirculationFlowNetworks.server;
@@ -170,10 +163,6 @@ public final class EnergyMachineManager {
 
     private static double getPlayerDistanceSq(EntityPlayerMP player, BlockPos pos) {
         return player.getDistanceSq(pos.getX() + 0.5D, pos.getY() + 1.25D, pos.getZ() + 0.5D);
-    }
-
-    private static long getPackedPos(BlockPos pos) {
-        return pos.toLong();
     }
     //?} else if <1.21 {
     /*private static MinecraftServer getServer() {
@@ -261,12 +250,10 @@ public final class EnergyMachineManager {
     }
     //~}
 
-    //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
     @SuppressWarnings("unused")
-    public Map<TileEntity, ReferenceSet<INode>> getMachineGridMap() {
+    public Map<CFNBlockEntityEx, ReferenceSet<INode>> getMachineGridMap() {
         return machineGridMap;
     }
-    //~}
 
     public void onBlockEntityValidate(BlockEntityLifeCycleEvent.Validate event) {
         if (isClientWorld(event.getWorld())) return;
@@ -278,11 +265,9 @@ public final class EnergyMachineManager {
         submitLifecycle(event, MachineLifecyclePositionIndex.Action.INVALIDATE);
     }
 
-    //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-    public void onBlockEntityReady(TileEntity blockEntity) {
+    public void onBlockEntityReady(CFNBlockEntityEx blockEntity) {
         submitLifecycle(blockEntity, MachineLifecyclePositionIndex.Action.READY);
     }
-    //~}
 
     //~ if >=1.20 'World ' -> 'Level ' {
     public void onBlockPositionReady(World world, BlockPos position) {
@@ -323,7 +308,9 @@ public final class EnergyMachineManager {
             warningTickCounter++;
             evaluateWarnings = warningTickCounter % WARNING_EVALUATION_INTERVAL_TICKS == 0L;
             interactionEpoch++;
-            EnergyHandlerRuntime.beginBindings(interactionEpoch);
+            if (!EnergyHandlerRuntime.beginBindings(interactionEpoch)) {
+                return;
+            }
             bindingWindowOpen = true;
 
             if (evaluateWarnings) {
@@ -452,21 +439,17 @@ public final class EnergyMachineManager {
         }
     }
 
-    //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-    private synchronized RegistrationResult addMachine(TileEntity blockEntity,
+    private synchronized RegistrationResult addMachine(CFNBlockEntityEx blockEntity,
                                                        @Nullable IEnergyHandlerManager excludedManager,
                                                        boolean explicitOwnerInvalidation) {
         if (blockEntity instanceof IMachineNodeBlockEntity) {
             return RegistrationResult.UNSUPPORTED;
         }
-        //~}
         if (!isCurrentBlockEntity(blockEntity)) {
             removeMachine(blockEntity);
             return RegistrationResult.STALE;
         }
-        IEnergyHandlerManager handlerManager = excludedManager == null
-            ? RegistryEnergyHandler.getEnergyManager(blockEntity)
-            : RegistryEnergyHandler.getEnergyManagerExcluding(blockEntity, excludedManager);
+        IEnergyHandlerManager handlerManager = blockEntity.cfn_getEnergyManager(excludedManager);
         if (handlerManager == null) {
             if (explicitOwnerInvalidation) {
                 removeMachine(blockEntity);
@@ -475,18 +458,14 @@ public final class EnergyMachineManager {
                 ? RegistrationResult.UNSUPPORTED
                 : RegistrationResult.WAITING_FOR_READY;
         }
-        if (RegistryEnergyHandler.isBlack(blockEntity)) {
+        if (blockEntity.cfn_isEnergyBlacklisted()) {
             removeMachine(blockEntity);
             return RegistrationResult.UNSUPPORTED;
         }
-        //~ if >=1.20 '.getPos()' -> '.getBlockPos()' {
-        var pos = blockEntity.getPos();
-        //~}
+        var pos = blockEntity.cfn_getBlockPos();
         long chunkCoord = ChunkCoordUtils.mergeChunkCoords(pos);
 
-        //~ if >=1.20 '.getWorld()' -> '.getLevel()' {
-        var dim = getDimensionId(blockEntity.getWorld());
-        //~}
+        var dim = blockEntity.cfn_getDimensionId();
         long packedPosition = packBlockPosition(pos);
         MachinePositionRecord coldRecord = machineChunkResidency.get(dim, chunkCoord, packedPosition);
         IEnergyHandlerManager selectedManager = handlerManager;
@@ -518,7 +497,7 @@ public final class EnergyMachineManager {
             removeMachine(blockEntity);
             return RegistrationResult.WAITING_FOR_SCOPE;
         }
-        MachineHandlerRuntime currentRuntime = machineHandlerRuntimes.get(blockEntity);
+        MachineHandlerRuntime currentRuntime = blockEntity.cfn_getMachineHandlerRuntime();
         if (currentRuntime != null && currentRuntime.ownerManager() != null) {
             ReferenceSet<IEnergySupplyNode> currentNodes = machineSupplyNodes.get(blockEntity);
             boolean currentValid = currentNodes != null && isValidMachineRegistration(
@@ -559,13 +538,11 @@ public final class EnergyMachineManager {
         return currentOwner == Objects.requireNonNull(expectedOwner, "expectedOwner");
     }
 
-    //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-    private RegistrationResult replaceMachineRegistration(TileEntity blockEntity,
+    private RegistrationResult replaceMachineRegistration(CFNBlockEntityEx blockEntity,
                                                           IEnergyHandlerManager handlerManager,
                                                           ReferenceSet<IEnergySupplyNode> candidateNodes,
                                                           int dimensionId,
                                                           long packedPosition) {
-        //~}
         MachineBindingIndex bindingIndex = MachineBindingIndex.INSTANCE;
         boolean transactionOpen = false;
         try {
@@ -579,11 +556,11 @@ public final class EnergyMachineManager {
                 blockEntity, Objects.requireNonNull(handlerManager.newBlockEntityInstance(), "Energy handler manager returned null"),
                 mappedProvider, handlerManager, dimensionId, packedPosition
             );
-            MachineHandlerRuntime previousRuntime = machineHandlerRuntimes.put(blockEntity, runtime);
-            if (previousRuntime != null) {
-                machineHandlerRuntimes.put(blockEntity, previousRuntime);
+            try {
+                blockEntity.cfn_installMachineHandlerRuntime(runtime);
+            } catch (RuntimeException | Error exception) {
                 runtime.unbind();
-                throw new IllegalStateException("Machine handler runtime was overwritten without removal");
+                throw exception;
             }
             for (IEnergySupplyNode node : candidateNodes) {
                 attachSupplyNodeToMachine(blockEntity, node);
@@ -606,7 +583,7 @@ public final class EnergyMachineManager {
             Throwable failure = rollback.failure();
             CirculationFlowNetworks.LOGGER.error(
                 "Failed to roll back not-ready machine registration for {} at dimension {} position {} with handler manager {}",
-                blockEntity.getClass().getName(), dimensionId, EnergyHandlerRuntime.formatPosition(packedPosition),
+                blockEntity.cfn_getTypeName(), dimensionId, EnergyHandlerRuntime.formatPosition(packedPosition),
                 handlerManager.getClass().getName(), failure
             );
             if (failure instanceof Error error) {
@@ -617,7 +594,7 @@ public final class EnergyMachineManager {
             Throwable failure = rollbackFailedMachineRegistration(blockEntity, transactionOpen, exception).failure();
             CirculationFlowNetworks.LOGGER.error(
                 "Failed to register machine {} at dimension {} position {} with handler manager {}",
-                blockEntity.getClass().getName(), dimensionId, EnergyHandlerRuntime.formatPosition(packedPosition),
+                blockEntity.cfn_getTypeName(), dimensionId, EnergyHandlerRuntime.formatPosition(packedPosition),
                 handlerManager.getClass().getName(), failure
             );
             if (failure instanceof Error error) {
@@ -628,18 +605,16 @@ public final class EnergyMachineManager {
             Throwable failure = rollbackFailedMachineRegistration(blockEntity, transactionOpen, error).failure();
             CirculationFlowNetworks.LOGGER.error(
                 "Fatal machine registration failure for {} at dimension {} position {} with handler manager {}",
-                blockEntity.getClass().getName(), dimensionId, EnergyHandlerRuntime.formatPosition(packedPosition),
+                blockEntity.cfn_getTypeName(), dimensionId, EnergyHandlerRuntime.formatPosition(packedPosition),
                 handlerManager.getClass().getName(), failure
             );
             throw (Error) failure;
         }
     }
 
-    //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-    private RegistrationRollback rollbackFailedMachineRegistration(TileEntity blockEntity,
+    private RegistrationRollback rollbackFailedMachineRegistration(CFNBlockEntityEx blockEntity,
                                                                    boolean transactionOpen,
                                                                    Throwable failure) {
-        //~}
         boolean rollbackFailed = false;
         try {
             removeMachine(blockEntity, false);
@@ -658,37 +633,38 @@ public final class EnergyMachineManager {
         return new RegistrationRollback(failure, rollbackFailed);
     }
 
-    //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-    public synchronized void removeMachine(TileEntity blockEntity) {
-        //~}
+    public synchronized void removeMachine(CFNBlockEntityEx blockEntity) {
         removeMachine(blockEntity, true);
     }
 
-    //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-    private void removeMachine(TileEntity blockEntity, boolean notify) {
-        //~}
+    private void removeMachine(CFNBlockEntityEx blockEntity, boolean notify) {
         ReferenceSet<IEnergySupplyNode> supplyNodes = machineSupplyNodes.remove(blockEntity);
-        ReferenceSet<INode> legacyNodes = machineGridMap.remove(blockEntity);
+        ReferenceSet<INode> connectedNodes = machineGridMap.remove(blockEntity);
         MachineRoute route = machineRoutes.remove(blockEntity);
         if (route != null) {
             unindexMachineRoute(route);
         }
-        MachineHandlerRuntime runtime = machineHandlerRuntimes.remove(blockEntity);
+        MachineHandlerRuntime runtime = blockEntity.cfn_removeMachineHandlerRuntime();
 
         if (supplyNodes == null) {
             supplyNodes = new ReferenceOpenHashSet<>();
         }
-        if (legacyNodes != null) {
-            for (INode node : legacyNodes) {
-                if (node instanceof IEnergySupplyNode energySupplyNode) {
-                    supplyNodes.add(energySupplyNode);
+        if (connectedNodes == null) {
+            connectedNodes = new ReferenceOpenHashSet<>();
+        } else {
+            for (INode node : connectedNodes) {
+                if (node instanceof IEnergySupplyNode supplyNode) {
+                    supplyNodes.add(supplyNode);
                 }
             }
         }
 
         CleanupAccumulator cleanup = new CleanupAccumulator();
+        for (INode node : connectedNodes) {
+            cleanup.run(() -> removeNodeMembership(blockEntity, node));
+        }
         for (IEnergySupplyNode node : supplyNodes) {
-            cleanup.run(() -> removeReverseMachineOwnership(blockEntity, node));
+            cleanup.run(() -> removeSupplyMembership(blockEntity, node));
             if (notify) {
                 cleanup.run(() -> notifyMachineLink(blockEntity, node, false));
             }
@@ -705,8 +681,7 @@ public final class EnergyMachineManager {
         cleanup.finish();
     }
 
-    //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-    public synchronized RegistrationResult addMachineNode(TileEntity blockEntity) {
+    public synchronized RegistrationResult addMachineNode(CFNBlockEntityEx blockEntity) {
         if (!(blockEntity instanceof IMachineNodeBlockEntity machineNode)) {
             return RegistrationResult.UNSUPPORTED;
         }
@@ -714,14 +689,11 @@ public final class EnergyMachineManager {
             removeMachineNode(blockEntity);
             return RegistrationResult.STALE;
         }
-        //~ if >=1.20 '.getPos()' -> '.getBlockPos()' {
-        BlockPos position = blockEntity.getPos();
-        //~}
-        //~ if >=1.20 '.getWorld()' -> '.getLevel()' {
-        int dimensionId = getDimensionId(blockEntity.getWorld());
-        //~}
+        var position = blockEntity.cfn_getBlockPos();
+        var dimensionId = blockEntity.cfn_getDimensionId();
         long packedPosition = packBlockPosition(position);
-        MachineHandlerRuntime runtime = machineHandlerRuntimes.get(blockEntity);
+        attachMachineNodeMemberships(blockEntity, machineNode.getNode());
+        MachineHandlerRuntime runtime = blockEntity.cfn_getMachineHandlerRuntime();
         MachineRoute route = machineRoutes.get(blockEntity);
         if (runtime != null && runtime.directHandler() == machineNode.getEnergyHandler() && runtime.isBound()
             && route != null && route.isValid(runtime) && route.dimensionId == dimensionId
@@ -738,7 +710,12 @@ public final class EnergyMachineManager {
                 blockEntity, Objects.requireNonNull(machineNode.getEnergyHandler(), "Machine node returned null handler"),
                 null, null, dimensionId, packedPosition
             );
-            machineHandlerRuntimes.put(blockEntity, replacement);
+            try {
+                blockEntity.cfn_installMachineHandlerRuntime(replacement);
+            } catch (RuntimeException | Error exception) {
+                replacement.unbind();
+                throw exception;
+            }
             rememberMachinePosition(blockEntity, null, true);
             refreshMachineRoute(blockEntity);
             MachineRoute replacementRoute = machineRoutes.get(blockEntity);
@@ -752,7 +729,7 @@ public final class EnergyMachineManager {
             Throwable failure = rollbackFailedMachineRegistration(blockEntity, transactionOpen, exception).failure();
             CirculationFlowNetworks.LOGGER.error(
                 "Failed to register machine node {} at dimension {} position {}",
-                blockEntity.getClass().getName(), dimensionId, EnergyHandlerRuntime.formatPosition(packedPosition), failure
+                blockEntity.cfn_getTypeName(), dimensionId, EnergyHandlerRuntime.formatPosition(packedPosition), failure
             );
             if (failure instanceof Error error) {
                 throw error;
@@ -762,28 +739,19 @@ public final class EnergyMachineManager {
             Throwable failure = rollbackFailedMachineRegistration(blockEntity, transactionOpen, error).failure();
             CirculationFlowNetworks.LOGGER.error(
                 "Fatal machine-node registration failure for {} at dimension {} position {}",
-                blockEntity.getClass().getName(), dimensionId, EnergyHandlerRuntime.formatPosition(packedPosition), failure
+                blockEntity.cfn_getTypeName(), dimensionId, EnergyHandlerRuntime.formatPosition(packedPosition), failure
             );
             throw (Error) failure;
         }
-        //~}
     }
 
-    //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-    private synchronized void removeMachineNode(TileEntity blockEntity) {
+    private synchronized void removeMachineNode(CFNBlockEntityEx blockEntity) {
         removeMachine(blockEntity, false);
-        //~}
     }
 
-    //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-    private boolean isCurrentBlockEntity(TileEntity blockEntity) {
-        //~}
-        //~ if >=1.20 'World world = blockEntity.getWorld()' -> 'Level world = blockEntity.getLevel()' {
-        World world = blockEntity.getWorld();
-        //~}
-        //~ if >=1.20 '.getPos()' -> '.getBlockPos()' {
-        BlockPos position = blockEntity.getPos();
-        //~}
+    private boolean isCurrentBlockEntity(CFNBlockEntityEx blockEntity) {
+        var world = blockEntity.cfn_getWorld();
+        var position = blockEntity.cfn_getBlockPos();
         if (world == null || position == null || !ChunkCoordUtils.isChunkLoaded(world, position)) {
             return false;
         }
@@ -792,39 +760,51 @@ public final class EnergyMachineManager {
         //~}
     }
 
-    //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-    private void attachSupplyNodeToMachine(TileEntity blockEntity, IEnergySupplyNode node) {
+    private void attachSupplyNodeToMachine(CFNBlockEntityEx blockEntity, IEnergySupplyNode node) {
         ReferenceSet<IEnergySupplyNode> supplyNodes = machineSupplyNodes.computeIfAbsent(blockEntity, k -> new ReferenceOpenHashSet<>());
         if (!supplyNodes.add(node)) {
             return;
         }
-
-        ReferenceSet<INode> legacyNodes = machineGridMap.computeIfAbsent(blockEntity, k -> new ReferenceOpenHashSet<>());
-        legacyNodes.add(node);
 
         var reverse = supplyNodeMachines.get(node);
         if (reverse == supplyNodeMachines.defaultReturnValue()) {
             supplyNodeMachines.put(node, reverse = new ReferenceOpenHashSet<>());
         }
         reverse.add(blockEntity);
-
-        var legacyReverse = gridMachineMap.get(node);
-        if (legacyReverse == gridMachineMap.defaultReturnValue()) {
-            gridMachineMap.put(node, legacyReverse = new ReferenceOpenHashSet<>());
-        }
-        legacyReverse.add(blockEntity);
+        attachNodeMembership(blockEntity, node);
 
         MachineRoute route = machineRoutes.get(blockEntity);
         if (route != null) {
             route.addSupplyNode(node);
         }
 
-        //~}
     }
 
-    //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-    private void notifyMachineLink(TileEntity blockEntity, IEnergySupplyNode node, boolean added) {
-        //~}
+    private void attachNodeMembership(CFNBlockEntityEx blockEntity, INode node) {
+        machineGridMap.computeIfAbsent(blockEntity, ignored -> new ReferenceOpenHashSet<>()).add(node);
+        var machines = gridMachineMap.get(node);
+        if (machines == gridMachineMap.defaultReturnValue()) {
+            machines = new ReferenceOpenHashSet<>();
+            gridMachineMap.put(node, machines);
+        }
+        machines.add(blockEntity);
+    }
+
+    private void attachMachineNodeMemberships(CFNBlockEntityEx blockEntity, INode machineNode) {
+        var world = blockEntity.cfn_getWorld();
+        if (world == null) {
+            throw new IllegalStateException("Cannot attach machine-node membership without a world");
+        }
+        for (INode candidate : NetworkManager.INSTANCE.getNodesCoveringPosition(
+            world, blockEntity.cfn_getBlockPos()
+        )) {
+            if (candidate.linkScopeCheck(machineNode) != INode.LinkType.DISCONNECT) {
+                attachNodeMembership(blockEntity, candidate);
+            }
+        }
+    }
+
+    private void notifyMachineLink(CFNBlockEntityEx blockEntity, IEnergySupplyNode node, boolean added) {
         var grid = node.getGrid();
         if (grid == null) {
             return;
@@ -839,8 +819,7 @@ public final class EnergyMachineManager {
         }
     }
 
-    //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-    private void removeReverseMachineOwnership(TileEntity blockEntity, IEnergySupplyNode node) {
+    private void removeSupplyMembership(CFNBlockEntityEx blockEntity, IEnergySupplyNode node) {
         var reverse = supplyNodeMachines.get(node);
         if (reverse != supplyNodeMachines.defaultReturnValue()) {
             reverse.remove(blockEntity);
@@ -848,25 +827,24 @@ public final class EnergyMachineManager {
                 supplyNodeMachines.remove(node);
             }
         }
+    }
 
-        var legacyReverse = gridMachineMap.get(node);
-        if (legacyReverse != gridMachineMap.defaultReturnValue()) {
-            legacyReverse.remove(blockEntity);
-            if (legacyReverse.isEmpty()) {
+    private void removeNodeMembership(CFNBlockEntityEx blockEntity, INode node) {
+        var machines = gridMachineMap.get(node);
+        if (machines != gridMachineMap.defaultReturnValue()) {
+            machines.remove(blockEntity);
+            if (machines.isEmpty()) {
                 gridMachineMap.remove(node);
             }
         }
-        //~}
     }
 
-    //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-    private boolean isValidMachineRegistration(TileEntity blockEntity,
+    private boolean isValidMachineRegistration(CFNBlockEntityEx blockEntity,
                                                @Nullable IEnergyHandlerManager requiredManager,
                                                ReferenceSet<IEnergySupplyNode> expectedNodes,
                                                int dimensionId,
                                                long packedPosition) {
-        //~}
-        MachineHandlerRuntime runtime = machineHandlerRuntimes.get(blockEntity);
+        MachineHandlerRuntime runtime = blockEntity.cfn_getMachineHandlerRuntime();
         MachineRoute route = machineRoutes.get(blockEntity);
         if (runtime == null || !runtime.isBound()
             || (requiredManager != null && runtime.ownerManager() != requiredManager)
@@ -894,20 +872,14 @@ public final class EnergyMachineManager {
         return true;
     }
 
-    //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-    private void rememberMachinePosition(TileEntity blockEntity,
-                                         //~}
+    private void rememberMachinePosition(CFNBlockEntityEx blockEntity,
                                          @Nullable IEnergyHandlerManager ownerManager,
                                          boolean directMachineNode) {
-        //~ if >=1.20 'World world = blockEntity.getWorld()' -> 'Level world = blockEntity.getLevel()' {
-        World world = blockEntity.getWorld();
-        //~}
+        var world = blockEntity.cfn_getWorld();
         if (world == null) {
             throw new IllegalStateException("Cannot retain a machine position without a world");
         }
-        //~ if >=1.20 '.getPos()' -> '.getBlockPos()' {
-        BlockPos position = blockEntity.getPos();
-        //~}
+        var position = blockEntity.cfn_getBlockPos();
         machineChunkResidency.put(
             getDimensionId(world), ChunkCoordUtils.mergeChunkCoords(position),
             new MachinePositionRecord(
@@ -916,19 +888,15 @@ public final class EnergyMachineManager {
         );
     }
 
-    //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-    private void rebuildMachineGrids(TileEntity blockEntity) {
+    private void rebuildMachineGrids(CFNBlockEntityEx blockEntity) {
         MachineRoute route = machineRoutes.get(blockEntity);
         if (route != null) {
             route.topologyChanged();
         }
-        //~}
     }
 
-    //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-    private void refreshMachineRoute(TileEntity blockEntity) {
-        //~}
-        MachineHandlerRuntime runtime = machineHandlerRuntimes.get(blockEntity);
+    private void refreshMachineRoute(CFNBlockEntityEx blockEntity) {
+        MachineHandlerRuntime runtime = blockEntity.cfn_getMachineHandlerRuntime();
         if (runtime == null) {
             removeMachineRoute(blockEntity);
             return;
@@ -940,21 +908,15 @@ public final class EnergyMachineManager {
         }
         int retainedPriority = current == null ? GridParticipantIndex.DEFAULT_PRIORITY : current.priority();
         removeMachineRoute(blockEntity);
-        //~ if >=1.20 'World world = blockEntity.getWorld()' -> 'Level world = blockEntity.getLevel()' {
-        //~ if >=1.20 '.getPos()' -> '.getBlockPos()' {
-        World world = blockEntity.getWorld();
-        BlockPos position = blockEntity.getPos();
-        //~}
-        //~}
+        var world = blockEntity.cfn_getWorld();
+        var position = blockEntity.cfn_getBlockPos();
         if (world == null || position == null) {
             CirculationFlowNetworks.LOGGER.error("Cannot register machine route without a world and position for {}",
-                blockEntity.getClass().getName());
+                blockEntity.cfn_getTypeName());
             return;
         }
-        //~ if >=1.20 'getPackedPos(position)' -> 'getPackedPos(blockEntity)' {
-        MachineRoute route = new MachineRoute(blockEntity, runtime, getDimensionId(world), getPackedPos(position), position,
+        MachineRoute route = new MachineRoute(blockEntity, runtime, getDimensionId(world), packBlockPosition(position), position,
             retainedPriority);
-        //~}
         evictDisplacedMachineRoute(route.dimensionId, route.packedPosition, blockEntity);
         try {
             route.register();
@@ -978,9 +940,7 @@ public final class EnergyMachineManager {
         }
     }
 
-    //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-    private void removeMachineRoute(TileEntity blockEntity) {
-        //~}
+    private void removeMachineRoute(CFNBlockEntityEx blockEntity) {
         MachineRoute route = machineRoutes.remove(blockEntity);
         if (route != null) {
             unindexMachineRoute(route);
@@ -1025,9 +985,7 @@ public final class EnergyMachineManager {
         }
     }
 
-    //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-    private void evictDisplacedMachineRoute(int dimensionId, long packedPosition, TileEntity replacement) {
-        //~}
+    private void evictDisplacedMachineRoute(int dimensionId, long packedPosition, CFNBlockEntityEx replacement) {
         Long2ObjectMap<MachineRoute> dimensionRoutes = machineRoutesByPosition.get(dimensionId);
         MachineRoute displaced = dimensionRoutes == null ? null : dimensionRoutes.get(packedPosition);
         if (displaced == null || displaced.tileEntity == replacement) {
@@ -1106,15 +1064,15 @@ public final class EnergyMachineManager {
                     continue;
                 }
                 for (var tileEntity : chunk.getTileEntityMap().values()) {
-                    onBlockEntityReady(tileEntity);
+                    onBlockEntityReady(CFNBlockEntityEx.cfn_cast(tileEntity));
                 }
                 //?} else {
-                    /*var chunk = node.getWorld().getChunkSource().getChunkNow(cx, cz);
+                /*var chunk = node.getWorld().getChunkSource().getChunkNow(cx, cz);
                 if (chunk == null) {
                     continue;
                 }
                 for (var blockEntity : chunk.getBlockEntities().values()) {
-                    onBlockEntityReady(blockEntity);
+                    onBlockEntityReady(CFNBlockEntityEx.cfn_cast(blockEntity));
                 }
                 *///?}
             }
@@ -1144,9 +1102,7 @@ public final class EnergyMachineManager {
     //~ if >=1.20 'World ' -> 'Level ' {
     private void bootstrapLoadedChunks(World world, LongSet chunkCoordinates) {
         //~}
-        //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-        ReferenceSet<TileEntity> blockEntities = new ReferenceOpenHashSet<>();
-        //~}
+        ReferenceSet<CFNBlockEntityEx> blockEntities = new ReferenceOpenHashSet<>();
         for (long chunkCoordinate : chunkCoordinates) {
             int chunkX = (int) (chunkCoordinate >> 32);
             int chunkZ = (int) chunkCoordinate;
@@ -1156,21 +1112,23 @@ public final class EnergyMachineManager {
                 continue;
             }
             markChunkLoaded(getDimensionId(world), chunkX, chunkZ);
-            blockEntities.addAll(chunk.getTileEntityMap().values());
+            for (var blockEntity : chunk.getTileEntityMap().values()) {
+                blockEntities.add(CFNBlockEntityEx.cfn_cast(blockEntity));
+            }
             //?} else {
             /*var chunk = world.getChunkSource().getChunkNow(chunkX, chunkZ);
                 if (chunk == null) {
                     continue;
                 }
                 markChunkLoaded(getDimensionId(world), chunkX, chunkZ);
-                blockEntities.addAll(chunk.getBlockEntities().values());
+                for (var blockEntity : chunk.getBlockEntities().values()) {
+                    blockEntities.add(CFNBlockEntityEx.cfn_cast(blockEntity));
+                }
             *///?}
         }
-        //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-        for (TileEntity blockEntity : blockEntities) {
+        for (CFNBlockEntityEx blockEntity : blockEntities) {
             submitLifecycle(blockEntity, MachineLifecyclePositionIndex.Action.READY);
         }
-        //~}
     }
 
     public void markChunkLoaded(int dimensionId, int chunkX, int chunkZ) {
@@ -1226,27 +1184,21 @@ public final class EnergyMachineManager {
         if (server == null) {
             return true;
         }
-        //~ if >=1.20 'World' -> 'Level' {
-        World world = resolveDimension(server, dimensionId);
-        //~}
+        var world = resolveDimension(server, dimensionId);
         if (world == null) {
             return true;
         }
         BlockPos position = blockPosFromLong(record.packedPosition());
         //~ if >=1.20 '.getTileEntity(' -> '.getBlockEntity(' {
-        //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-        TileEntity blockEntity = world.getTileEntity(position);
+        var nativeBlockEntity = world.getTileEntity(position);
         //~}
-        //~}
-        //~ if >=1.20 '.isInvalid()' -> '.isRemoved()' {
-        if (blockEntity == null || blockEntity.isInvalid()) {
-            //~}
+        if (!(nativeBlockEntity instanceof CFNBlockEntityEx blockEntity) || blockEntity.cfn_isRemoved()) {
             return hasScopeRetention(dimensionId, position, record);
         }
         try {
             if (!(blockEntity instanceof IMachineNodeBlockEntity)
-                && (RegistryEnergyHandler.isBlack(blockEntity)
-                || RegistryEnergyHandler.getEnergyManager(blockEntity) == null)) {
+                && (blockEntity.cfn_isEnergyBlacklisted()
+                || blockEntity.cfn_getEnergyManager(null) == null)) {
                 return hasScopeRetention(dimensionId, position, record);
             }
         } catch (RuntimeException exception) {
@@ -1320,21 +1272,15 @@ public final class EnergyMachineManager {
                 if (!machineChunkResidency.isMarkedLoaded(command.dimensionId(), chunkCoordinate)) {
                     continue;
                 }
-                //~ if >=1.20 'World' -> 'Level' {
-                World world = resolveDimension(server, command.dimensionId());
-                //~}
+                var world = resolveDimension(server, command.dimensionId());
                 if (world == null) {
                     retryPositionReady(command);
                     continue;
                 }
                 //~ if >=1.20 '.getTileEntity(' -> '.getBlockEntity(' {
-                //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-                TileEntity blockEntity = world.getTileEntity(position);
+                var nativeBlockEntity = world.getTileEntity(position);
                 //~}
-                //~}
-                //~ if >=1.20 '.isInvalid()' -> '.isRemoved()' {
-                if (blockEntity == null || blockEntity.isInvalid()) {
-                    //~}
+                if (!(nativeBlockEntity instanceof CFNBlockEntityEx blockEntity) || blockEntity.cfn_isRemoved()) {
                     if (command.action() == MachineLifecyclePositionIndex.Action.READY) {
                         retryPositionReady(command);
                     }
@@ -1387,33 +1333,25 @@ public final class EnergyMachineManager {
 
     private void submitLifecycle(BlockEntityLifeCycleEvent event,
                                  MachineLifecyclePositionIndex.Action action) {
-        submitLifecycle(event.getWorld(), event.getPos(), event.getBlockEntity(), action, null);
+        submitLifecycle(event.getWorld(), event.getPos(), CFNBlockEntityEx.cfn_cast(event.getBlockEntity()), action, null);
     }
 
-    //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-    private void submitLifecycle(TileEntity blockEntity,
-                                 //~}
+    private void submitLifecycle(CFNBlockEntityEx blockEntity,
                                  MachineLifecyclePositionIndex.Action action) {
-        //~ if >=1.20 'World world = blockEntity.getWorld()' -> 'Level world = blockEntity.getLevel()' {
-        World world = blockEntity.getWorld();
-        //~}
-        //~ if >=1.20 '.getPos()' -> '.getBlockPos()' {
-        BlockPos position = blockEntity.getPos();
-        //~}
+        var world = blockEntity.cfn_getWorld();
+        var position = blockEntity.cfn_getBlockPos();
         if (world == null || position == null) {
             CirculationFlowNetworks.LOGGER.error("Cannot submit {} lifecycle for {} without a world and position",
-                action, blockEntity.getClass().getName());
+                action, blockEntity.cfn_getTypeName());
             return;
         }
         submitLifecycle(world, position, blockEntity, action, null);
     }
 
     //~ if >=1.20 'World ' -> 'Level ' {
-    //~ if >=1.20 'TileEntity ' -> 'BlockEntity ' {
     private void submitLifecycle(World world,
                                  BlockPos position,
-                                 TileEntity blockEntity,
-                                 //~}
+                                 CFNBlockEntityEx blockEntity,
                                  MachineLifecyclePositionIndex.Action action,
                                  @Nullable IEnergyHandlerManager excludedManager) {
         LifecycleCommand command;
@@ -1465,12 +1403,8 @@ public final class EnergyMachineManager {
             }
             return;
         }
-        //~ if >=1.20 'World world = blockEntity.getWorld()' -> 'Level world = blockEntity.getLevel()' {
-        World world = blockEntity.getWorld();
-        //~}
-        //~ if >=1.20 '.getPos()' -> '.getBlockPos()' {
-        BlockPos position = blockEntity.getPos();
-        //~}
+        var world = blockEntity.cfn_getWorld();
+        var position = blockEntity.cfn_getBlockPos();
         if (world == null || position == null
             || getDimensionId(world) != command.dimensionId()
             || packBlockPosition(position) != command.packedPosition()
@@ -1491,7 +1425,7 @@ public final class EnergyMachineManager {
                 if (excludedManager == null) {
                     throw new IllegalStateException("Manager-unavailable lifecycle is missing its exact owner");
                 }
-                MachineHandlerRuntime runtime = machineHandlerRuntimes.get(blockEntity);
+                MachineHandlerRuntime runtime = blockEntity.cfn_getMachineHandlerRuntime();
                 if (runtime == null || !isExactOwner(runtime.ownerManager(), excludedManager)) {
                     result = RegistrationResult.ALREADY_REGISTERED;
                 } else {
@@ -1578,6 +1512,19 @@ public final class EnergyMachineManager {
     }
 
     public void removeNode(INode node) {
+        Throwable failure = null;
+        ReferenceSet<CFNBlockEntityEx> connectedMachines = gridMachineMap.remove(node);
+        if (connectedMachines != null) {
+            for (CFNBlockEntityEx machine : connectedMachines) {
+                var connectedNodes = machineGridMap.get(machine);
+                if (connectedNodes != null) {
+                    connectedNodes.remove(node);
+                    if (connectedNodes.isEmpty()) {
+                        machineGridMap.remove(machine);
+                    }
+                }
+            }
+        }
         if (node instanceof IEnergySupplyNode removedNode) {
             nodeRescanTicks.removeLong(removedNode);
             int dimId = removedNode.getDimensionId();
@@ -1600,18 +1547,12 @@ public final class EnergyMachineManager {
                 else set.remove(removedNode);
             }
 
-            Throwable failure = null;
-            //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-            ReferenceSet<TileEntity> affectedMachines = new ReferenceOpenHashSet<>();
+            ReferenceSet<CFNBlockEntityEx> affectedMachines = new ReferenceOpenHashSet<>();
             var supplied = supplyNodeMachines.remove(removedNode);
             if (supplied != null) {
                 affectedMachines.addAll(supplied);
             }
-            var legacy = gridMachineMap.remove(removedNode);
-            if (legacy != null) {
-                affectedMachines.addAll(legacy);
-            }
-            for (TileEntity machine : affectedMachines) {
+            for (CFNBlockEntityEx machine : affectedMachines) {
                 var supplyNodes = machineSupplyNodes.get(machine);
                 if (supplyNodes != null) {
                     supplyNodes.remove(removedNode);
@@ -1619,19 +1560,12 @@ public final class EnergyMachineManager {
                         machineSupplyNodes.remove(machine);
                     }
                 }
-                var legacyNodes = machineGridMap.get(machine);
-                if (legacyNodes != null) {
-                    legacyNodes.remove(removedNode);
-                    if (legacyNodes.isEmpty()) {
-                        machineGridMap.remove(machine);
-                    }
-                }
                 try {
                     notifyMachineLink(machine, removedNode, false);
                 } catch (RuntimeException | Error exception) {
                     failure = aggregateFailure(failure, exception);
                 }
-                if (!machineSupplyNodes.containsKey(machine)) {
+                if (!(machine instanceof IMachineNodeBlockEntity) && !machineSupplyNodes.containsKey(machine)) {
                     try {
                         removeMachine(machine, false);
                     } catch (RuntimeException | Error exception) {
@@ -1653,16 +1587,26 @@ public final class EnergyMachineManager {
                     failure = aggregateFailure(failure, exception);
                 }
             }
-            //~}
             machineChunkResidency.removeIf(record -> record.dimensionId() == dimId
                 && !record.directMachineNode()
                 && !hasScopeRetention(dimId, blockPosFromLong(record.packedPosition()), record));
             throwCleanupFailure(failure);
+            return;
         }
+        throwCleanupFailure(failure);
     }
 
     public void onServerStop() {
         EnergyHandlerRuntime.stopBindings();
+        ReferenceSet<CFNBlockEntityEx> runtimeOwners = new ReferenceOpenHashSet<>();
+        for (Long2ObjectMap<MachineRoute> routes : machineRoutesByPosition.values()) {
+            for (MachineRoute route : routes.values()) {
+                runtimeOwners.add(route.tileEntity);
+            }
+        }
+        for (CFNBlockEntityEx blockEntity : runtimeOwners) {
+            blockEntity.cfn_removeMachineHandlerRuntime();
+        }
         scopeNode.clear();
         nodeScope.clear();
         gridMachineMap.clear();
@@ -1671,7 +1615,6 @@ public final class EnergyMachineManager {
         supplyNodeMachines.clear();
         machineRoutes.clear();
         machineRoutesByPosition.clear();
-        machineHandlerRuntimes.clear();
         machineChunkResidency.clear();
         nodeRescanTicks.clear();
         warningPositionsScratch.clear();
@@ -1703,17 +1646,9 @@ public final class EnergyMachineManager {
         return map.get(ChunkCoordUtils.mergeChunkCoords(chunkX, chunkZ));
     }
     //~}
-    //? if >=1.20 {
-    /*private static long getPackedPos(BlockEntity blockEntity) {
-        return blockEntity.getBlockPos().asLong();
+    public @NotNull Set<CFNBlockEntityEx> getMachinesSuppliedBy(IEnergySupplyNode node) {
+        return gridMachineMap.getOrDefault(node, ReferenceSets.emptySet());
     }
-    *///?}
-
-    //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-    public @NotNull Set<TileEntity> getMachinesSuppliedBy(IEnergySupplyNode node) {
-        return supplyNodeMachines.getOrDefault(node, ReferenceSets.emptySet());
-    }
-
     @Nullable
     private static HubNode.HubMetadata getHubMetadata(@Nullable IGrid grid) {
         if (grid == null) {
@@ -1860,8 +1795,6 @@ public final class EnergyMachineManager {
             (ServerPlayer) player);
          *///?}
     }
-    //~}
-
     enum Status {
         EXTRACT,
         INTERACTION,
@@ -2019,17 +1952,13 @@ public final class EnergyMachineManager {
 
         private final int dimensionId;
         private final long packedPosition;
-        //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-        private final TileEntity blockEntity;
-        //~}
+        private final CFNBlockEntityEx blockEntity;
         private final long generation;
         private final MachineLifecyclePositionIndex.Action action;
         @Nullable
         private final IEnergyHandlerManager excludedManager;
 
-        //~ if >=1.20 'TileEntity ' -> 'BlockEntity ' {
-        LifecycleCommand(int dimensionId, long packedPosition, TileEntity blockEntity,
-                         //~}
+        LifecycleCommand(int dimensionId, long packedPosition, CFNBlockEntityEx blockEntity,
                          long generation,
                          MachineLifecyclePositionIndex.Action action,
                          @Nullable IEnergyHandlerManager excludedManager) {
@@ -2049,11 +1978,9 @@ public final class EnergyMachineManager {
             return packedPosition;
         }
 
-        //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-        TileEntity blockEntity() {
+        CFNBlockEntityEx blockEntity() {
             return blockEntity;
         }
-        //~}
 
         private long generation() {
             return generation;
@@ -2069,10 +1996,8 @@ public final class EnergyMachineManager {
         }
     }
 
-    private static final class MachineHandlerRuntime {
-        //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-        private final TileEntity tileEntity;
-        //~}
+    public static final class MachineHandlerRuntime {
+        private final CFNBlockEntityEx tileEntity;
         private final IEnergyHandler directHandler;
         @Nullable
         private final IEnergyHandlerManager ownerManager;
@@ -2081,9 +2006,7 @@ public final class EnergyMachineManager {
         @Nullable
         private MachineBindingIndex.Binding binding;
 
-        //~ if >=1.20 'TileEntity ' -> 'BlockEntity ' {
-        private MachineHandlerRuntime(TileEntity tileEntity,
-                                      //~}
+        private MachineHandlerRuntime(CFNBlockEntityEx tileEntity,
                                       IEnergyHandler directHandler,
                                       @Nullable MappedEnergyHandlerProvider mappedProvider,
                                       @Nullable IEnergyHandlerManager ownerManager,
@@ -2152,9 +2075,7 @@ public final class EnergyMachineManager {
     }
 
     private final class MachineRoute implements MachineBindingIndex.Route {
-        //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-        private final TileEntity tileEntity;
-        //~}
+        private final CFNBlockEntityEx tileEntity;
         private final MachineHandlerRuntime runtime;
         private final int dimensionId;
         private final String dimensionKey;
@@ -2176,34 +2097,20 @@ public final class EnergyMachineManager {
         private boolean disposed;
         private boolean disposing;
 
-        //~ if >=1.20 'TileEntity ' -> 'BlockEntity ' {
-        private MachineRoute(TileEntity tileEntity,
-                             //~}
+        private MachineRoute(CFNBlockEntityEx tileEntity,
                              MachineHandlerRuntime runtime,
                              int dimensionId,
                              long packedPosition,
                              BlockPos position,
                              int priority) {
-            this(tileEntity, runtime, dimensionId, packedPosition, position, priority,
-                //~ if >=1.20 '.getWorld()' -> '.getLevel()' {
-                getDimensionKey(tileEntity.getWorld())
-                //~}
-            );
-        }
-
-        //~ if >=1.20 'TileEntity ' -> 'BlockEntity ' {
-        private MachineRoute(TileEntity tileEntity,
-                             //~}
-                             MachineHandlerRuntime runtime,
-                             int dimensionId,
-                             long packedPosition,
-                             BlockPos position,
-                             int priority,
-                             String dimensionKey) {
+            var world = tileEntity.cfn_getWorld();
+            if (world == null) {
+                throw new IllegalStateException("Cannot create a machine route without a world");
+            }
             this.tileEntity = tileEntity;
             this.runtime = runtime;
             this.dimensionId = dimensionId;
-            this.dimensionKey = dimensionKey;
+            this.dimensionKey = getDimensionKey(world);
             this.packedPosition = packedPosition;
             this.position = position;
             this.priority = priority;
@@ -2414,7 +2321,7 @@ public final class EnergyMachineManager {
                 throw new IllegalStateException("Effective machine-grid reference count overflow");
             }
             if (current == 0 && routeEnabled) {
-                MachineTransferSlot slot = new MachineTransferSlot();
+                MachineTransferSlot slot = new MachineTransferSlot(tileEntity);
                 try {
                     configureSlot(grid, slot);
                     slots.put(grid, slot);
@@ -2448,9 +2355,7 @@ public final class EnergyMachineManager {
         }
 
         private void rebuildRouteConfiguration() {
-            //~ if >=1.20 'World world = tileEntity.getWorld()' -> 'Level world = tileEntity.getLevel()' {
-            World world = tileEntity.getWorld();
-            //~}
+            var world = tileEntity.cfn_getWorld();
             routeEnabled = routed && world != null
                 && ChunkCoordUtils.isChunkLoaded(world, ChunkCoordUtils.getChunkX(position), ChunkCoordUtils.getChunkZ(position))
                 && !CirculationShielderManager.INSTANCE.isBlockedByShielder(dimensionId, position);
@@ -2461,11 +2366,14 @@ public final class EnergyMachineManager {
             }
             EnergyHandlerRuntime.FailureContext failureContext = runtime.failureContext(dimensionId, packedPosition);
             account = runtime.account(failureContext);
+            if (account != null && !MachineBindingIndex.INSTANCE.isEnergyThrottled(tileEntity)) {
+                MachineBindingIndex.INSTANCE.beginEnergyRoleEvaluation(tileEntity);
+            }
             for (var entry : effectiveGridRefCounts.reference2IntEntrySet()) {
                 if (entry.getIntValue() <= 0 || slots.containsKey(entry.getKey())) {
                     continue;
                 }
-                slots.put(entry.getKey(), new MachineTransferSlot());
+                slots.put(entry.getKey(), new MachineTransferSlot(tileEntity));
             }
             for (var entry : slots.reference2ObjectEntrySet()) {
                 configureSlot(entry.getKey(), entry.getValue());
@@ -2475,6 +2383,10 @@ public final class EnergyMachineManager {
         private void configureSlot(IGrid grid, MachineTransferSlot slot) {
             if (account == null) {
                 slot.detach();
+                return;
+            }
+            if (MachineBindingIndex.INSTANCE.isEnergyThrottled(tileEntity)) {
+                MachineBindingIndex.INSTANCE.markEnergyRouteRetry(tileEntity);
                 return;
             }
             EnergyHandlerRuntime.FailureContext failureContext = runtime.failureContext(dimensionId, packedPosition);
@@ -2487,6 +2399,7 @@ public final class EnergyMachineManager {
                 runtime.directHandler(), policy, hubMetadata, override, failureContext
             );
             if (role == IEnergyHandler.EnergyType.INVALID) {
+                MachineBindingIndex.INSTANCE.markEnergyRoleFailure(tileEntity);
                 slot.detach();
                 return;
             }
@@ -2676,6 +2589,7 @@ public final class EnergyMachineManager {
     }
 
     static final class MachineTransferSlot {
+        private final CFNBlockEntityEx blockEntity;
         @Nullable
         private MachineTransferAccount account;
         @Nullable
@@ -2684,12 +2598,18 @@ public final class EnergyMachineManager {
         private Interaction interaction;
         @Nullable
         private HandlerBindingPolicy endpointPolicy;
+        @Nullable
+        private IEnergyHandler.EnergyType accountRole;
         private final GridParticipantMembership membership = new GridParticipantMembership();
         private EnergyHandlerRuntime.FailureContext failureContext = EnergyHandlerRuntime.FailureContext.UNKNOWN;
         @Nullable
         private String warningDimensionKey;
         private long warningPosLong;
         private boolean hasWarningTarget;
+
+        private MachineTransferSlot(CFNBlockEntityEx blockEntity) {
+            this.blockEntity = Objects.requireNonNull(blockEntity, "blockEntity");
+        }
 
         public GridParticipantMembership membership() {
             return membership;
@@ -2719,11 +2639,14 @@ public final class EnergyMachineManager {
                        EnergyHandlerRuntime.FailureContext failureContext,
                        @Nullable String warningDimensionKey,
                        long warningPosLong) {
-            this.account = Objects.requireNonNull(account, "account");
-            this.endpointPolicy = Objects.requireNonNull(endpointPolicy, "endpointPolicy");
-            this.failureContext = Objects.requireNonNull(failureContext, "failureContext");
+            Objects.requireNonNull(account, "account");
+            Objects.requireNonNull(endpointPolicy, "endpointPolicy");
+            Objects.requireNonNull(failureContext, "failureContext");
+            Objects.requireNonNull(interaction, "interaction");
+            this.endpointPolicy = endpointPolicy;
+            this.failureContext = failureContext;
             this.hubMetadata = hubMetadata;
-            this.interaction = Objects.requireNonNull(interaction, "interaction");
+            this.interaction = interaction;
             GridParticipantIndex index = grid.getParticipantIndex();
             if (!membership.isBound()) {
                 index.add(role, this, priority);
@@ -2736,6 +2659,7 @@ public final class EnergyMachineManager {
                     index.move(this, role, priority);
                 }
             }
+            updateAccountRole(account, role);
             if (warningDimensionKey == null) {
                 hasWarningTarget = false;
             } else {
@@ -2755,12 +2679,44 @@ public final class EnergyMachineManager {
             if (membership.isBound()) {
                 requireMembershipOwner().remove(this);
             }
+            clearAccountRole();
             account = null;
             endpointPolicy = null;
             hubMetadata = null;
             interaction = null;
             failureContext = EnergyHandlerRuntime.FailureContext.UNKNOWN;
             hasWarningTarget = false;
+        }
+
+        private void updateAccountRole(MachineTransferAccount nextAccount, IEnergyHandler.EnergyType nextRole) {
+            if (account == nextAccount && accountRole == nextRole) {
+                return;
+            }
+            nextAccount.registerRole(nextRole);
+            try {
+                clearAccountRole();
+            } catch (RuntimeException | Error exception) {
+                try {
+                    nextAccount.unregisterRole(nextRole);
+                } catch (RuntimeException | Error rollbackException) {
+                    exception.addSuppressed(rollbackException);
+                }
+                throw exception;
+            }
+            account = nextAccount;
+            accountRole = nextRole;
+        }
+
+        private void clearAccountRole() {
+            if (account == null) {
+                if (accountRole != null) {
+                    throw new IllegalStateException("Machine slot retains a role without a physical account");
+                }
+                return;
+            }
+            IEnergyHandler.EnergyType role = Objects.requireNonNull(accountRole, "Physical account role is missing");
+            account.unregisterRole(role);
+            accountRole = null;
         }
 
         private GridParticipantIndex requireMembershipOwner() {
@@ -2772,7 +2728,7 @@ public final class EnergyMachineManager {
         }
 
         boolean isActive(long epoch) {
-            if (account == null) {
+            if (account == null || MachineBindingIndex.INSTANCE.isEnergyThrottled(blockEntity)) {
                 return false;
             }
             account.activate(epoch);
@@ -2780,11 +2736,22 @@ public final class EnergyMachineManager {
         }
 
         void collectWarning(Object2ObjectMap<String, LongSet> warningPositions, long epoch) {
-            if (!hasWarningTarget || !requireAccount().isSettled(epoch)) {
+            if (!hasWarningTarget) {
+                return;
+            }
+            MachineTransferAccount currentAccount = requireAccount();
+            if (MachineBindingIndex.INSTANCE.isEnergyThrottled(blockEntity)) {
+                if (currentAccount.hasCachedWarning()) {
+                    addWarningPosition(warningPositions);
+                }
+                return;
+            }
+            if (!currentAccount.isSettled(epoch)) {
                 return;
             }
             try {
-                if (!requireAccount().hasRemainingReceive(epoch, hubMetadata)) {
+                currentAccount.recordWarning(epoch, hubMetadata);
+                if (!currentAccount.hasCachedWarning()) {
                     return;
                 }
             } catch (RuntimeException exception) {
@@ -2793,6 +2760,10 @@ public final class EnergyMachineManager {
                     warningDimensionKey, EnergyHandlerRuntime.formatPosition(warningPosLong), exception);
                 return;
             }
+            addWarningPosition(warningPositions);
+        }
+
+        private void addWarningPosition(Object2ObjectMap<String, LongSet> warningPositions) {
             String dimensionKey = Objects.requireNonNull(warningDimensionKey, "warningDimensionKey");
             LongSet dimensionWarnings = warningPositions.get(dimensionKey);
             if (dimensionWarnings == null) {
@@ -2806,7 +2777,7 @@ public final class EnergyMachineManager {
             if (!hasWarningTarget || !isActive(epoch)) {
                 return;
             }
-            requireAccount().hasRemainingReceive(epoch, hubMetadata);
+            requireAccount().sampleWarning(requireRole(), epoch, hubMetadata, blockEntity);
         }
 
         public boolean requiresPairMatch() {
@@ -2836,16 +2807,38 @@ public final class EnergyMachineManager {
             return requireAccount().hasRemainingReceive(epoch, hubMetadata);
         }
 
+        boolean prepareExtractBudget(long epoch) {
+            MachineTransferAccount currentAccount = requireAccount();
+            return currentAccount.sampleBudget(requireRole(), epoch, hubMetadata, blockEntity)
+                && currentAccount.hasRemainingExtract(epoch, hubMetadata);
+        }
+
+        boolean prepareReceiveBudget(long epoch) {
+            MachineTransferAccount currentAccount = requireAccount();
+            return currentAccount.sampleBudget(requireRole(), epoch, hubMetadata, blockEntity)
+                && currentAccount.hasRemainingReceive(epoch, hubMetadata);
+        }
+
         boolean claimReceiveCandidate(long passId, long epoch) {
             MachineTransferAccount currentAccount = account;
             return currentAccount != null
-                && currentAccount.claimReceiveCandidate(passId, epoch, hubMetadata);
+                && !MachineBindingIndex.INSTANCE.isEnergyThrottled(blockEntity)
+                && currentAccount.claimReceiveCandidate(passId, epoch, hubMetadata, requireRole(), blockEntity);
         }
 
         boolean hasExtractCandidate(long passId, long epoch) {
             MachineTransferAccount currentAccount = account;
             return currentAccount != null
-                && currentAccount.hasExtractCandidate(passId, epoch, hubMetadata);
+                && !MachineBindingIndex.INSTANCE.isEnergyThrottled(blockEntity)
+                && currentAccount.hasExtractCandidate(passId, epoch, hubMetadata, requireRole(), blockEntity);
+        }
+
+        private IEnergyHandler.EnergyType requireRole() {
+            IEnergyHandler.EnergyType role = membership.role();
+            if (role == null) {
+                throw new IllegalStateException("Machine transfer slot has no structural role");
+            }
+            return role;
         }
 
         boolean canExtract(MachineTransferSlot receiveSlot) {
@@ -2982,12 +2975,12 @@ public final class EnergyMachineManager {
                                                        Status status,
                                                        long epoch) {
         for (MachineTransferSlot receiver = receiveTraversal.next(); receiver != null; receiver = receiveTraversal.next()) {
-            if (!receiver.isActive(epoch) || !receiver.hasReceiveBudget(epoch)) {
+            if (!receiver.isActive(epoch) || !receiver.prepareReceiveBudget(epoch)) {
                 continue;
             }
             sendTraversal.reset();
             for (MachineTransferSlot sender = sendTraversal.next(); sender != null; sender = sendTraversal.next()) {
-                if (!sender.isActive(epoch) || !sender.hasExtractBudget(epoch)) {
+                if (!sender.isActive(epoch) || !sender.prepareExtractBudget(epoch)) {
                     continue;
                 }
                 if ((sender.requiresPairMatch() || receiver.requiresPairMatch())

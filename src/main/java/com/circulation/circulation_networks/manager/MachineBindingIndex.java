@@ -2,6 +2,7 @@ package com.circulation.circulation_networks.manager;
 
 import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.api.EnergyAmount;
+import com.circulation.circulation_networks.api.CFNBlockEntityEx;
 import com.circulation.circulation_networks.api.HandlerTickResult;
 import com.circulation.circulation_networks.api.IEnergyHandler;
 import com.circulation.circulation_networks.api.IGrid;
@@ -20,7 +21,6 @@ import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 //~ mc_imports
 import net.minecraft.item.ItemStack;
-import net.minecraft.tileentity.TileEntity;
 //~ if >=1.20 'net.minecraft.util.math.BlockPos' -> 'net.minecraft.core.BlockPos' {
 import net.minecraft.util.math.BlockPos;
 //~}
@@ -37,6 +37,10 @@ import java.util.UUID;
  * and topology-driven machine routes. All mutations are server-thread confined.
  */
 public final class MachineBindingIndex {
+
+    private static final int MIN_SATURATED_THROTTLE_TIMER = 12;
+    private static final int SATURATED_THROTTLE_TIMER_COUNT =
+        CFNBlockEntityEx.MAX_ENERGY_THROTTLE_TIMER - MIN_SATURATED_THROTTLE_TIMER + 1;
 
     /** Shared server lifecycle index. */
     public static final MachineBindingIndex INSTANCE = new MachineBindingIndex();
@@ -65,9 +69,7 @@ public final class MachineBindingIndex {
         void unregister();
     }
 
-    //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-    private final Reference2ObjectOpenHashMap<TileEntity, Binding> handlerBindings = new Reference2ObjectOpenHashMap<>();
-    //~}
+    private final Reference2ObjectOpenHashMap<CFNBlockEntityEx, Binding> handlerBindings = new Reference2ObjectOpenHashMap<>();
     private final Reference2ObjectOpenHashMap<INode, NodeRecord> nodes = new Reference2ObjectOpenHashMap<>();
     private final Int2ObjectOpenHashMap<Long2ObjectOpenHashMap<ReferenceOpenHashSet<NodeRecord>>> nodesByPosition = new Int2ObjectOpenHashMap<>();
     private final Int2ObjectOpenHashMap<Long2ObjectOpenHashMap<ReferenceOpenHashSet<NodeRecord>>> nodesByChunk = new Int2ObjectOpenHashMap<>();
@@ -96,6 +98,7 @@ public final class MachineBindingIndex {
     private final ObjectArrayList<BackendLease> endBackends = new ObjectArrayList<>();
     private final ObjectArrayList<BackendLease> pendingQuarantines = new ObjectArrayList<>();
     private final ObjectArrayList<BackendLease> pendingBackendClosures = new ObjectArrayList<>();
+    private final ObjectArrayList<CFNBlockEntityEx> throttledBlockEntities = new ObjectArrayList<>();
     private final ObjectArrayList<ProviderCleanupDebt> terminalProviderCleanupDebts = new ObjectArrayList<>();
     private final LongOpenHashSet shielderChunkScratch = new LongOpenHashSet();
     private int topologyTransactionDepth;
@@ -111,9 +114,10 @@ public final class MachineBindingIndex {
     private long structuralMutationCount;
     private long quarantineEnqueueCount;
     private long quarantineProcessedCount;
-    //~ if >=1.20 '(TileEntity ' -> '(BlockEntity ' {
-    Binding bindBlockEntity(TileEntity blockEntity,
-                                   //~}
+    private int throttleEntriesAtTickStart;
+    private int saturatedThrottleCursor;
+    private boolean throttleCountdownPending;
+    Binding bindBlockEntity(CFNBlockEntityEx blockEntity,
                                    IEnergyHandler handler,
                                    @Nullable MappedEnergyHandlerProvider mappedProvider) {
         Objects.requireNonNull(blockEntity, "blockEntity");
@@ -139,14 +143,10 @@ public final class MachineBindingIndex {
             throw exception;
         }
     }
-    //~ if >=1.20 '(TileEntity ' -> '(BlockEntity ' {
-    @Nullable Binding binding(TileEntity blockEntity) {
-        //~}
+    @Nullable Binding binding(CFNBlockEntityEx blockEntity) {
         return handlerBindings.get(Objects.requireNonNull(blockEntity, "blockEntity"));
     }
-    //~ if >=1.20 '(TileEntity ' -> '(BlockEntity ' {
-    public boolean unbindBlockEntity(TileEntity blockEntity) {
-        //~}
+    public boolean unbindBlockEntity(CFNBlockEntityEx blockEntity) {
         Objects.requireNonNull(blockEntity, "blockEntity");
         requireNoProviderCallback("unbind a block entity");
         Binding binding = handlerBindings.remove(blockEntity);
@@ -176,6 +176,8 @@ public final class MachineBindingIndex {
         lastBeginEpoch = epoch;
         try {
             rebindPendingBindings();
+            throttleEntriesAtTickStart = throttledBlockEntities.size();
+            throttleCountdownPending = true;
             for (int index = 0; index < beginBindings.size();) {
                 Binding binding = beginBindings.get(index);
                 binding.beginServerTick(epoch);
@@ -220,7 +222,7 @@ public final class MachineBindingIndex {
             }
             for (int index = 0; index < endBackends.size();) {
                 BackendLease lease = endBackends.get(index);
-                if (lease.closePending && lease.activeEndEpoch != epoch) {
+                if (lease.activeEndEpoch != epoch) {
                     index++;
                     continue;
                 }
@@ -252,6 +254,7 @@ public final class MachineBindingIndex {
             failure = quarantineRequestedBackends(failure);
             retryPendingBackendClosures();
         } finally {
+            advanceEnergyThrottleTimers();
             backendsBegun = false;
             activeAccounts.clear();
             tickActive = false;
@@ -316,7 +319,142 @@ public final class MachineBindingIndex {
         activeAccounts.clear();
         tickActive = false;
         releaseDeferredRetries();
+        advanceEnergyThrottleTimers();
         return failure;
+    }
+
+    boolean isEnergyThrottled(CFNBlockEntityEx blockEntity) {
+        return blockEntity.cfn_getEnergyThrottleTimer() != 0;
+    }
+
+    void markEnergyBudgetFailure(CFNBlockEntityEx blockEntity) {
+        scheduleEnergyThrottleFailure(blockEntity, blockEntity.cfn_getEnergyLastThrottleTimer());
+    }
+
+    void beginEnergyRoleEvaluation(CFNBlockEntityEx blockEntity) {
+        Binding binding = handlerBindings.get(blockEntity);
+        if (binding != null) {
+            binding.routeRetryPending = false;
+        }
+    }
+
+    void markEnergyRoleFailure(CFNBlockEntityEx blockEntity) {
+        Binding binding = handlerBindings.get(blockEntity);
+        if (binding == null) {
+            throw new IllegalStateException("Cannot throttle an invalid role without an indexed handler binding");
+        }
+        binding.routeRetryPending = true;
+        markEnergyBudgetFailure(blockEntity);
+    }
+
+    void markEnergyRouteRetry(CFNBlockEntityEx blockEntity) {
+        Binding binding = handlerBindings.get(blockEntity);
+        if (binding != null) {
+            binding.routeRetryPending = true;
+        }
+    }
+
+    void markEnergyBudgetSuccess(CFNBlockEntityEx blockEntity) {
+        if (blockEntity.cfn_getEnergyThrottleTimer() != 0) {
+            throw new IllegalStateException("A throttled block entity reported a successful energy budget read");
+        }
+        blockEntity.cfn_setEnergyLastThrottleTimer(0);
+    }
+
+    private void markSharedEnergyBudgetFailure(BackendLease lease) {
+        int previousStage = 0;
+        for (int index = 0; index < lease.bindings.size(); index++) {
+            previousStage = Math.max(
+                previousStage, lease.bindings.get(index).blockEntity.cfn_getEnergyLastThrottleTimer()
+            );
+        }
+        int nextStage = nextThrottleStage(previousStage);
+        int nextTimer = previousStage == CFNBlockEntityEx.SATURATED_ENERGY_THROTTLE_STAGE
+            ? nextSaturatedThrottleTimer()
+            : nextStage;
+        for (int index = 0; index < lease.bindings.size(); index++) {
+            markEnergyThrottleFailure(lease.bindings.get(index).blockEntity, nextTimer, nextStage);
+        }
+    }
+
+    private void scheduleEnergyThrottleFailure(CFNBlockEntityEx blockEntity, int previousStage) {
+        int nextStage = nextThrottleStage(previousStage);
+        int nextTimer = previousStage == CFNBlockEntityEx.SATURATED_ENERGY_THROTTLE_STAGE
+            ? nextSaturatedThrottleTimer()
+            : nextStage;
+        markEnergyThrottleFailure(blockEntity, nextTimer, nextStage);
+    }
+
+    private void markEnergyThrottleFailure(CFNBlockEntityEx blockEntity, int nextTimer, int nextStage) {
+        int currentTimer = blockEntity.cfn_getEnergyThrottleTimer();
+        if (currentTimer == 0) {
+            throttledBlockEntities.add(blockEntity);
+        }
+        blockEntity.cfn_setEnergyLastThrottleTimer(nextStage);
+        blockEntity.cfn_setEnergyThrottleTimer(nextTimer);
+    }
+
+    private void clearEnergyThrottle(CFNBlockEntityEx blockEntity) {
+        int foundIndex = -1;
+        for (int index = 0; index < throttledBlockEntities.size(); index++) {
+            if (throttledBlockEntities.get(index) != blockEntity) {
+                continue;
+            }
+            if (foundIndex >= 0) {
+                throw new IllegalStateException("Energy throttle list contains a duplicate block entity");
+            }
+            foundIndex = index;
+        }
+        if (foundIndex >= 0) {
+            swapRemove(throttledBlockEntities, foundIndex);
+        }
+        blockEntity.cfn_setEnergyThrottleTimer(0);
+        blockEntity.cfn_setEnergyLastThrottleTimer(0);
+    }
+
+    private void advanceEnergyThrottleTimers() {
+        if (!throttleCountdownPending) {
+            return;
+        }
+        throttleCountdownPending = false;
+        int lastOriginalIndex = Math.min(throttleEntriesAtTickStart, throttledBlockEntities.size()) - 1;
+        for (int index = lastOriginalIndex; index >= 0; index--) {
+            CFNBlockEntityEx blockEntity = throttledBlockEntities.get(index);
+            int timer = blockEntity.cfn_getEnergyThrottleTimer();
+            if (timer <= 0) {
+                throw new IllegalStateException("Energy throttle list contains a block entity without a timer");
+            }
+            timer--;
+            blockEntity.cfn_setEnergyThrottleTimer(timer);
+            if (timer == 0) {
+                swapRemove(throttledBlockEntities, index);
+                Binding binding = handlerBindings.get(blockEntity);
+                if (binding != null && binding.routeRetryPending) {
+                    binding.enqueueBlockEntityRouteRefresh();
+                }
+            }
+        }
+        throttleEntriesAtTickStart = 0;
+    }
+
+    private static int nextThrottleStage(int previousStage) {
+        if (previousStage == 0) {
+            return 1;
+        }
+        if (previousStage != 1 && previousStage != 2 && previousStage != 4 && previousStage != 8
+            && previousStage != CFNBlockEntityEx.SATURATED_ENERGY_THROTTLE_STAGE) {
+            throw new IllegalArgumentException("Invalid previous energy throttle stage: " + previousStage);
+        }
+        return Math.min(previousStage << 1, CFNBlockEntityEx.SATURATED_ENERGY_THROTTLE_STAGE);
+    }
+
+    private int nextSaturatedThrottleTimer() {
+        int timer = MIN_SATURATED_THROTTLE_TIMER + saturatedThrottleCursor;
+        saturatedThrottleCursor++;
+        if (saturatedThrottleCursor == SATURATED_THROTTLE_TIMER_COUNT) {
+            saturatedThrottleCursor = 0;
+        }
+        return timer;
     }
 
     /**
@@ -673,6 +811,7 @@ public final class MachineBindingIndex {
         deferredMachineRouteRetries.clear();
         pendingChannelBindings.clear();
         pendingRebinds.clear();
+        throttledBlockEntities.clear();
         for (int index = 0; index < pendingQuarantines.size(); index++) {
             pendingQuarantines.get(index).quarantineIndex = -1;
         }
@@ -774,6 +913,9 @@ public final class MachineBindingIndex {
             structuralMutationCount = 0L;
             quarantineEnqueueCount = 0L;
             quarantineProcessedCount = 0L;
+            throttleEntriesAtTickStart = 0;
+            saturatedThrottleCursor = 0;
+            throttleCountdownPending = false;
             providerCallbackActive = false;
             stopping = false;
         }
@@ -1668,12 +1810,16 @@ public final class MachineBindingIndex {
     //~}
     //~}
 
+    //~ if >=1.20 '.toLong()' -> '.asLong()' {
+    private static long packBlockPosition(BlockPos position) {
+        return position.toLong();
+    }
+    //~}
+
     static final class Binding {
 
         private final MachineBindingIndex owner;
-        //~ if >=1.20 'TileEntity' -> 'BlockEntity' {
-        private final TileEntity blockEntity;
-        //~}
+        private final CFNBlockEntityEx blockEntity;
         private final IEnergyHandler handler;
         @Nullable
         private final MappedEnergyHandlerProvider mappedProvider;
@@ -1686,6 +1832,7 @@ public final class MachineBindingIndex {
         private boolean bound;
         private boolean rebindQueued;
         private boolean mappingDirty;
+        private boolean routeRetryPending;
         private int beginIndex = -1;
         private int endIndex = -1;
         private int pendingMappingIndex = -1;
@@ -1693,10 +1840,8 @@ public final class MachineBindingIndex {
         private int allIndex = -1;
         private long activeEndEpoch = Long.MIN_VALUE;
 
-        //~ if >=1.20 'TileEntity ' -> 'BlockEntity ' {
         private Binding(MachineBindingIndex owner,
-                               TileEntity blockEntity,
-                               //~}
+                               CFNBlockEntityEx blockEntity,
                                IEnergyHandler handler,
                                @Nullable MappedEnergyHandlerProvider mappedProvider) {
             this.owner = owner;
@@ -1732,6 +1877,7 @@ public final class MachineBindingIndex {
             if (bound || owner.handlerBindings.get(blockEntity) != this) {
                 return;
             }
+            owner.clearEnergyThrottle(blockEntity);
             bindDirectHandler();
             if (bound) {
                 resolveActiveHandler(Long.MIN_VALUE);
@@ -1740,7 +1886,7 @@ public final class MachineBindingIndex {
         }
 
         private void beginServerTick(long epoch) {
-            if (!bound) {
+            if (!bound || owner.isEnergyThrottled(blockEntity)) {
                 return;
             }
             boolean endTickLifecycle = endIndex >= 0;
@@ -1765,6 +1911,7 @@ public final class MachineBindingIndex {
                 return false;
             }
             if (result == HandlerTickResult.SUSPEND_UNTIL_REBIND) {
+                owner.markEnergyBudgetFailure(blockEntity);
                 suspend(false);
                 return false;
             }
@@ -1779,6 +1926,7 @@ public final class MachineBindingIndex {
         private void handleBeginFailure(long epoch, RuntimeException exception) {
             CirculationFlowNetworks.LOGGER.error("Energy handler {} failed to begin epoch {}",
                 handler.getClass().getName(), epoch, exception);
+            owner.markEnergyBudgetFailure(blockEntity);
             suspend(false);
         }
 
@@ -1908,7 +2056,7 @@ public final class MachineBindingIndex {
             boolean handlerBindAttempted = false;
             try {
                 handlerBindAttempted = true;
-                handler.bindBlockEntity(blockEntity, new BindingSink(this, bindingGeneration));
+                blockEntity.cfn_bindEnergyHandler(handler, new BindingSink(this, bindingGeneration));
                 HandlerBindingPolicy boundPolicy = Objects.requireNonNull(
                     handler.bindingPolicy(), "handler.bindingPolicy()"
                 );
@@ -1993,35 +2141,21 @@ public final class MachineBindingIndex {
         }
 
         private EnergyHandlerRuntime.FailureContext failureContext() {
-            //~ if >=1.20 'World ' -> 'Level ' {
-            //~ if >=1.20 '.getWorld()' -> '.getLevel()' {
-            World world = blockEntity.getWorld();
-            //~}
-            //~}
+            var world = blockEntity.cfn_getWorld();
             if (world == null) {
                 return EnergyHandlerRuntime.FailureContext.UNKNOWN;
             }
-            //~ if >=1.20 '.toLong()' -> '.asLong()' {
-            //~ if >=1.20 '.getPos()' -> '.getBlockPos()' {
-            return EnergyHandlerRuntime.machineContext(getDimensionId(world), blockEntity.getPos().toLong(), generation);
-            //~}
-            //~}
+            return EnergyHandlerRuntime.machineContext(
+                getDimensionId(world), packBlockPosition(blockEntity.cfn_getBlockPos()), generation
+            );
         }
 
         private void enqueueBlockEntityRouteRefresh() {
-            //~ if >=1.20 'World ' -> 'Level ' {
-            //~ if >=1.20 '.getWorld()' -> '.getLevel()' {
-            World world = blockEntity.getWorld();
-            //~}
-            //~}
+            var world = blockEntity.cfn_getWorld();
             if (world == null) {
                 return;
             }
-            //~ if >=1.20 '.toLong()' -> '.asLong()' {
-            //~ if >=1.20 '.getPos()' -> '.getBlockPos()' {
-            owner.enqueuePosition(getDimensionId(world), blockEntity.getPos().toLong());
-            //~}
-            //~}
+            owner.enqueuePosition(getDimensionId(world), packBlockPosition(blockEntity.cfn_getBlockPos()));
         }
 
         private void advanceGeneration() {
@@ -2052,7 +2186,7 @@ public final class MachineBindingIndex {
         }
     }
 
-    private static final class BackendLease {
+    static final class BackendLease {
 
         private final MachineBindingIndex owner;
         private final IEnergyHandler backend;
@@ -2087,7 +2221,7 @@ public final class MachineBindingIndex {
             this.policy = policy;
             this.manageLifecycle = manageLifecycle;
             this.shared = shared;
-            this.account = new MachineTransferAccount(owner, backend, policy, failureContext, this::requestQuarantine);
+            this.account = new MachineTransferAccount(owner, this, backend, policy, failureContext, this::requestQuarantine);
         }
 
         private void attach(Binding binding) {
@@ -2135,8 +2269,21 @@ public final class MachineBindingIndex {
         }
 
         private void beginServerTick(long epoch) {
+            if (allBindingsThrottled()) {
+                return;
+            }
             boolean endTickLifecycle = endIndex >= 0;
-            HandlerTickResult result = backend.beginServerTick(epoch);
+            HandlerTickResult result;
+            try {
+                result = backend.beginServerTick(epoch);
+            } catch (RuntimeException exception) {
+                CirculationFlowNetworks.LOGGER.error(
+                    "Shared energy backend {} failed to begin epoch {}", backend.getClass().getName(), epoch, exception
+                );
+                owner.markSharedEnergyBudgetFailure(this);
+                suspendBindings(false);
+                return;
+            }
             if (result != HandlerTickResult.UNCHANGED && !handleBeginResult(result)) {
                 return;
             }
@@ -2146,8 +2293,16 @@ public final class MachineBindingIndex {
         }
 
         private boolean handleBeginResult(@Nullable HandlerTickResult result) {
-            Objects.requireNonNull(result, "backend.beginServerTick()");
+            if (result == null) {
+                owner.markSharedEnergyBudgetFailure(this);
+                CirculationFlowNetworks.LOGGER.error(
+                    "Shared energy backend {} returned null from beginServerTick", backend.getClass().getName()
+                );
+                suspendBindings(false);
+                return false;
+            }
             if (result == HandlerTickResult.SUSPEND_UNTIL_REBIND) {
+                owner.markSharedEnergyBudgetFailure(this);
                 suspendBindings(false);
                 return false;
             }
@@ -2155,6 +2310,30 @@ public final class MachineBindingIndex {
                 bindings.get(index).enqueueBlockEntityRouteRefresh();
             }
             return true;
+        }
+
+        private boolean allBindingsThrottled() {
+            if (bindings.isEmpty()) {
+                throw new IllegalStateException("Active backend lease has no endpoint bindings");
+            }
+            for (int index = 0; index < bindings.size(); index++) {
+                if (!owner.isEnergyThrottled(bindings.get(index).blockEntity)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        void reportBudgetFailure(CFNBlockEntityEx source) {
+            if (shared) {
+                owner.markSharedEnergyBudgetFailure(this);
+            } else {
+                owner.markEnergyBudgetFailure(source);
+            }
+        }
+
+        void reportBudgetSuccess(CFNBlockEntityEx source) {
+            owner.markEnergyBudgetSuccess(source);
         }
 
         private void requestQuarantine() {

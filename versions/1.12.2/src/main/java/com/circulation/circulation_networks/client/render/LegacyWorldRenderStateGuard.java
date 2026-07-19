@@ -100,6 +100,8 @@ public final class LegacyWorldRenderStateGuard implements AutoCloseable {
     private final int[] textureBinding = new int[2];
     private final int[] textureStackDepth = new int[2];
     private final float[][] textureMatrix = new float[2][16];
+    private int[] strongTextureTargetMasks = new int[0];
+    private int[] strongTexGenMasks = new int[0];
     private final TextureEnvironmentState textureEnvironment = new TextureEnvironmentState();
     private final TextureCoordinates texture0Coordinates = new TextureCoordinates();
     private final TextureCoordinates lightmapCoordinates = new TextureCoordinates();
@@ -117,11 +119,9 @@ public final class LegacyWorldRenderStateGuard implements AutoCloseable {
     private boolean vaoSupported;
     private boolean vboSupported;
     private boolean clientAttributesPushed;
-    private boolean textureAttributesPushed;
     private boolean activeTextureCaptured;
     private Profile profile;
     private boolean hubLightmapEstablished;
-    private int textureAttributeStackDepth;
     private int maxFixedFunctionTextureUnits;
     private int activeTexture;
     private int matrixMode;
@@ -175,13 +175,7 @@ public final class LegacyWorldRenderStateGuard implements AutoCloseable {
                 throw new IllegalStateException(lifecycle.passName() + " requires at least two fixed-function texture units, found "
                     + maxFixedFunctionTextureUnits);
             }
-            textureAttributeStackDepth = GL11.glGetInteger(GL11.GL_ATTRIB_STACK_DEPTH);
-            GL11.glPushAttrib(GL11.GL_TEXTURE_BIT);
-            textureAttributesPushed = true;
-            int pushedDepth = GL11.glGetInteger(GL11.GL_ATTRIB_STACK_DEPTH);
-            if (pushedDepth != textureAttributeStackDepth + 1) {
-                throw textureAttributePushFailure(pushedDepth);
-            }
+            ensureStrongTextureStateCapacity(maxFixedFunctionTextureUnits);
         }
         GL11.glPushClientAttrib(clientArraySnapshotMask());
         clientAttributesPushed = true;
@@ -197,9 +191,17 @@ public final class LegacyWorldRenderStateGuard implements AutoCloseable {
         projectionStackDepth = GL11.glGetInteger(GL11.GL_PROJECTION_STACK_DEPTH);
         readMatrix(GL11.GL_MODELVIEW_MATRIX, modelViewMatrix);
         readMatrix(GL11.GL_PROJECTION_MATRIX, projectionMatrix);
-        for (int index = 0; index < 2; index++) {
+        int capturedTextureUnits = profile.strongTextureIsolation ? maxFixedFunctionTextureUnits : 2;
+        for (int index = 0; index < capturedTextureUnits; index++) {
             int textureUnit = OpenGlHelper.defaultTexUnit + index;
             OpenGlHelper.setActiveTexture(textureUnit);
+            if (profile.strongTextureIsolation) {
+                strongTextureTargetMasks[index] = enabledTextureTargetMask();
+                strongTexGenMasks[index] = enabledTexGenMask();
+            }
+            if (index >= 2) {
+                continue;
+            }
             texture2dEnabled[index] = GL11.glIsEnabled(GL11.GL_TEXTURE_2D);
             textureBinding[index] = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
             textureStackDepth[index] = GL11.glGetInteger(GL11.GL_TEXTURE_STACK_DEPTH);
@@ -371,10 +373,8 @@ public final class LegacyWorldRenderStateGuard implements AutoCloseable {
     private void prepareCapture(Profile requestedProfile) {
         profile = requestedProfile;
         clientAttributesPushed = false;
-        textureAttributesPushed = false;
         activeTextureCaptured = false;
         hubLightmapEstablished = false;
-        textureAttributeStackDepth = 0;
         maxFixedFunctionTextureUnits = 0;
         unexpectedTextureUnit = -1;
         unexpectedTextureTargets = 0;
@@ -392,22 +392,17 @@ public final class LegacyWorldRenderStateGuard implements AutoCloseable {
     }
 
     private void detectAndLogUnexpectedTextureState() {
-        try {
-            for (int index = 0; index < maxFixedFunctionTextureUnits; index++) {
-                OpenGlHelper.setActiveTexture(OpenGlHelper.defaultTexUnit + index);
-                int textureTargets = unexpectedTextureTargetMask(index, enabledTextureTargetMask());
-                if (textureTargets != 0 && unexpectedTextureUnit < 0) {
-                    unexpectedTextureUnit = index;
-                    unexpectedTextureTargets = textureTargets;
-                }
-                int texGenCoordinates = enabledTexGenMask();
-                if (texGenCoordinates != 0 && unexpectedTexGenUnit < 0) {
-                    unexpectedTexGenUnit = index;
-                    unexpectedTexGenCoordinates = texGenCoordinates;
-                }
+        for (int index = 0; index < maxFixedFunctionTextureUnits; index++) {
+            int textureTargets = unexpectedTextureTargetMask(index, strongTextureTargetMasks[index]);
+            if (textureTargets != 0 && unexpectedTextureUnit < 0) {
+                unexpectedTextureUnit = index;
+                unexpectedTextureTargets = textureTargets;
             }
-        } finally {
-            OpenGlHelper.setActiveTexture(activeTexture);
+            int texGenCoordinates = strongTexGenMasks[index];
+            if (texGenCoordinates != 0 && unexpectedTexGenUnit < 0) {
+                unexpectedTexGenUnit = index;
+                unexpectedTexGenCoordinates = texGenCoordinates;
+            }
         }
         profile.strongEntryScanCompleted = true;
 
@@ -482,6 +477,28 @@ public final class LegacyWorldRenderStateGuard implements AutoCloseable {
         if (GL11.glIsEnabled(GL11.GL_TEXTURE_GEN_R)) mask |= TEX_GEN_R_BIT;
         if (GL11.glIsEnabled(GL11.GL_TEXTURE_GEN_Q)) mask |= TEX_GEN_Q_BIT;
         return mask;
+    }
+
+    private void ensureStrongTextureStateCapacity(int textureUnits) {
+        if (strongTextureTargetMasks.length >= textureUnits) {
+            return;
+        }
+        strongTextureTargetMasks = new int[textureUnits];
+        strongTexGenMasks = new int[textureUnits];
+    }
+
+    private static void applyTextureTargetMask(int mask) {
+        setCapability(GL11.GL_TEXTURE_1D, (mask & TEXTURE_TARGET_1D_BIT) != 0);
+        setCapability(GL11.GL_TEXTURE_2D, (mask & TEXTURE_TARGET_2D_BIT) != 0);
+        setCapability(GL12.GL_TEXTURE_3D, (mask & TEXTURE_TARGET_3D_BIT) != 0);
+        setCapability(GL13.GL_TEXTURE_CUBE_MAP, (mask & TEXTURE_TARGET_CUBE_MAP_BIT) != 0);
+    }
+
+    private static void applyTexGenMask(int mask) {
+        setCapability(GL11.GL_TEXTURE_GEN_S, (mask & TEX_GEN_S_BIT) != 0);
+        setCapability(GL11.GL_TEXTURE_GEN_T, (mask & TEX_GEN_T_BIT) != 0);
+        setCapability(GL11.GL_TEXTURE_GEN_R, (mask & TEX_GEN_R_BIT) != 0);
+        setCapability(GL11.GL_TEXTURE_GEN_Q, (mask & TEX_GEN_Q_BIT) != 0);
     }
 
     private static void establishClientArrayProfile() {
@@ -588,7 +605,6 @@ public final class LegacyWorldRenderStateGuard implements AutoCloseable {
             int actualProjectionDepth = projectionStackDepth;
             int actualTexture0Depth = textureStackDepth[0];
             int actualTexture1Depth = textureStackDepth[1];
-            int actualTextureAttributeDepth = textureAttributeStackDepth + 1;
 
             try {
                 restoreVanillaLightmapTracker();
@@ -617,7 +633,7 @@ public final class LegacyWorldRenderStateGuard implements AutoCloseable {
 
             if (profile.strongTextureIsolation) {
                 try {
-                    actualTextureAttributeDepth = restoreTextureAttributes();
+                    restoreStrongTextureState();
                 } catch (RuntimeException | Error failure) {
                     restorationFailure = appendFailure(restorationFailure, failure);
                 }
@@ -759,11 +775,6 @@ public final class LegacyWorldRenderStateGuard implements AutoCloseable {
                     matrixImbalanceFailure(actualModelViewDepth, actualProjectionDepth,
                         actualTexture0Depth, actualTexture1Depth));
             }
-            if (profile.strongTextureIsolation
-                && actualTextureAttributeDepth != textureAttributeStackDepth + 1) {
-                restorationFailure = appendFailure(restorationFailure,
-                    textureAttributeImbalanceFailure(actualTextureAttributeDepth));
-            }
             if (restorationFailure != null) {
                 CirculationFlowNetworks.LOGGER.error(
                     "Failed to restore {} render state", lifecycle.passName(), restorationFailure);
@@ -785,31 +796,12 @@ public final class LegacyWorldRenderStateGuard implements AutoCloseable {
         }
     }
 
-    private int restoreTextureAttributes() {
-        int actualDepth = GL11.glGetInteger(GL11.GL_ATTRIB_STACK_DEPTH);
-        int currentDepth = actualDepth;
-        while (currentDepth > textureAttributeStackDepth) {
-            GL11.glPopAttrib();
-            int nextDepth = GL11.glGetInteger(GL11.GL_ATTRIB_STACK_DEPTH);
-            if (nextDepth != currentDepth - 1) {
-                throw new IllegalStateException(lifecycle.passName()
-                    + " texture attribute stack changed from " + currentDepth + " to " + nextDepth
-                    + " while recovering");
-            }
-            currentDepth = nextDepth;
+    private void restoreStrongTextureState() {
+        for (int index = 0; index < maxFixedFunctionTextureUnits; index++) {
+            OpenGlHelper.setActiveTexture(OpenGlHelper.defaultTexUnit + index);
+            applyTextureTargetMask(strongTextureTargetMasks[index]);
+            applyTexGenMask(strongTexGenMasks[index]);
         }
-        textureAttributesPushed = false;
-        return actualDepth;
-    }
-
-    private IllegalStateException textureAttributePushFailure(int actualDepth) {
-        return new IllegalStateException(lifecycle.passName() + " texture attribute stack push expected depth "
-            + (textureAttributeStackDepth + 1) + " but was " + actualDepth);
-    }
-
-    private IllegalStateException textureAttributeImbalanceFailure(int actualDepth) {
-        return new IllegalStateException(lifecycle.passName() + " texture attribute stack imbalance: expected "
-            + (textureAttributeStackDepth + 1) + " but was " + actualDepth);
     }
 
     private void restoreOriginalActiveTexture() {
@@ -889,17 +881,6 @@ public final class LegacyWorldRenderStateGuard implements AutoCloseable {
 
     private void abortCapture() {
         Throwable restorationFailure = null;
-        if (textureAttributesPushed) {
-            try {
-                int actualDepth = restoreTextureAttributes();
-                if (actualDepth != textureAttributeStackDepth + 1) {
-                    restorationFailure = appendFailure(
-                        restorationFailure, textureAttributeImbalanceFailure(actualDepth));
-                }
-            } catch (RuntimeException | Error failure) {
-                restorationFailure = appendFailure(restorationFailure, failure);
-            }
-        }
         if (activeTextureCaptured) {
             try {
                 int activeTextureIndex = activeTexture - OpenGlHelper.defaultTexUnit;
@@ -928,11 +909,9 @@ public final class LegacyWorldRenderStateGuard implements AutoCloseable {
     private void clearPassState() {
         capabilities = null;
         clientAttributesPushed = false;
-        textureAttributesPushed = false;
         activeTextureCaptured = false;
         profile = null;
         hubLightmapEstablished = false;
-        textureAttributeStackDepth = 0;
         maxFixedFunctionTextureUnits = 0;
         unexpectedTextureUnit = -1;
         unexpectedTextureTargets = 0;

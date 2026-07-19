@@ -12,11 +12,13 @@ final class MachineTransferBudget {
 
     private long epoch = Long.MIN_VALUE;
     private long longRemaining;
+    private boolean initiallyPositive;
     @Nullable
     private BigInteger bigRemaining;
 
     void initialize(long epoch, EnergyAmount amount) {
         this.epoch = epoch;
+        initiallyPositive = amount.isPositive();
         if (!amount.isPositive()) {
             longRemaining = 0L;
             bigRemaining = null;
@@ -38,6 +40,11 @@ final class MachineTransferBudget {
     boolean isPositive(long epoch) {
         requireEpoch(epoch);
         return bigRemaining != null ? bigRemaining.signum() > 0 : longRemaining > 0L;
+    }
+
+    boolean wasInitiallyPositive(long epoch) {
+        requireEpoch(epoch);
+        return initiallyPositive;
     }
 
     EnergyAmount snapshot(long epoch) {
@@ -102,6 +109,7 @@ final class MachineTransferBudget {
         epoch = Long.MIN_VALUE;
         longRemaining = 0L;
         bigRemaining = null;
+        initiallyPositive = false;
     }
 
     private void setRemaining(BigInteger value) {

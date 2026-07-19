@@ -7,7 +7,8 @@
   "compatibilityLevel": "JAVA_8",
   "mixins": [
     "appliedenergistics2.MixinAENetworkProxy",
-    "mc.MixinChunk"
+    "mc.MixinChunk",
+    "mc.MixinBlockEntity"
   ],
   "server": [
   ],

@@ -1,5 +1,6 @@
 package com.circulation.circulation_networks.packets;
 
+import com.circulation.circulation_networks.api.CFNBlockEntityEx;
 import com.circulation.circulation_networks.api.IGrid;
 import com.circulation.circulation_networks.api.IMachineNodeBlockEntity;
 import com.circulation.circulation_networks.api.node.IEnergySupplyNode;
@@ -25,7 +26,6 @@ import it.unimi.dsi.fastutil.objects.ReferenceSets;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
-import net.minecraft.tileentity.TileEntity;
 import net.minecraftforge.fml.common.network.simpleimpl.IMessage;
 import net.minecraftforge.fml.common.network.simpleimpl.MessageContext;
 
@@ -94,7 +94,7 @@ public final class NodeNetworkRendering implements Packet<NodeNetworkRendering> 
         this.nodes = ReferenceSets.unmodifiable(relevant);
     }
 
-    public NodeNetworkRendering(EntityPlayer player, TileEntity te, INode node, int mode) {
+    public NodeNetworkRendering(EntityPlayer player, CFNBlockEntityEx te, INode node, int mode) {
         this.dim = player.dimension;
         this.grid = node.getGrid();
         this.mode = mode;
@@ -238,7 +238,7 @@ public final class NodeNetworkRendering implements Packet<NodeNetworkRendering> 
                 int count = 0;
                 var set = EnergyMachineManager.INSTANCE.getMachinesSuppliedBy(supplyNode);
                 for (var te : set) {
-                    buf.writeLong(te.getPos().toLong());
+                    buf.writeLong(te.cfn_getBlockPos().toLong());
                     buf.writeLong(targetNode.getPos().toLong());
                     count++;
                 }
@@ -250,10 +250,10 @@ public final class NodeNetworkRendering implements Packet<NodeNetworkRendering> 
             writeLinks(buf, () -> {
                 int count = 0;
                 for (var entry : entryList) {
-                    if (dim != entry.tileEntity.getWorld().provider.getDimension()) continue;
+                    if (dim != entry.tileEntity.cfn_getDimensionId()) continue;
                     var node = entry.node;
                     if (node.getGrid() != grid) continue;
-                    buf.writeLong(entry.tileEntity.getPos().toLong());
+                    buf.writeLong(entry.tileEntity.cfn_getBlockPos().toLong());
                     buf.writeLong(node.getPos().toLong());
                     count++;
                 }
@@ -263,6 +263,6 @@ public final class NodeNetworkRendering implements Packet<NodeNetworkRendering> 
     }
 
     @Desugar
-    private record Pair(TileEntity tileEntity, INode node) {
+    private record Pair(CFNBlockEntityEx tileEntity, INode node) {
     }
 }

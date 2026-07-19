@@ -3,6 +3,7 @@ package com.circulation.circulation_networks.manager;
 import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.api.IGrid;
 import com.circulation.circulation_networks.api.INodeBlockEntity;
+import com.circulation.circulation_networks.api.CFNBlockEntityEx;
 import com.circulation.circulation_networks.api.node.IHubNode;
 import com.circulation.circulation_networks.api.node.IMachineNode;
 import com.circulation.circulation_networks.api.node.INode;
@@ -544,7 +545,7 @@ public final class NetworkManager {
                     }
                     addNode(actual, blockEntity);
                     if (actual instanceof IMachineNode machineNode) {
-                        EnergyMachineManager.INSTANCE.addMachineNode(blockEntity);
+                        EnergyMachineManager.INSTANCE.addMachineNode(CFNBlockEntityEx.cfn_cast(blockEntity));
                     }
                     mapped = posNodes.get(dimId).get(posLong);
                 }

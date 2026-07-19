@@ -4,7 +4,8 @@
     "refmap": "mixins.circulation_networks.refmap.json",
     "minVersion": "0.8.5",
     "mixins": [
-        "mc.MixinLevelChunk"
+        "mc.MixinLevelChunk",
+        "mc.MixinBlockEntity"
     ],
     "server": [
         

@@ -204,7 +204,7 @@ public final class API {
      * @return 节点所供能的所有设备 / all machines supplied by this node
      */
     @NotNull
-    public static Set<TileEntity> getMachinesSuppliedBy(@NotNull IEnergySupplyNode node) {
+    public static Set<CFNBlockEntityEx> getMachinesSuppliedBy(@NotNull IEnergySupplyNode node) {
         return EnergyMachineManager.INSTANCE.getMachinesSuppliedBy(node);
     }
 

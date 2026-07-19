@@ -1,5 +1,6 @@
 package com.circulation.circulation_networks.packets;
 
+import com.circulation.circulation_networks.api.CFNBlockEntityEx;
 import com.circulation.circulation_networks.api.IGrid;
 import com.circulation.circulation_networks.api.IMachineNodeBlockEntity;
 import com.circulation.circulation_networks.api.node.IEnergySupplyNode;
@@ -24,7 +25,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraftforge.fml.loading.FMLEnvironment;
 import net.minecraftforge.network.NetworkEvent;
 
@@ -92,7 +92,7 @@ public final class NodeNetworkRendering implements Packet<NodeNetworkRendering> 
         this.nodes = ReferenceSets.unmodifiable(relevant);
     }
 
-    public NodeNetworkRendering(Player player, BlockEntity blockEntity, INode node, int mode) {
+    public NodeNetworkRendering(Player player, CFNBlockEntityEx blockEntity, INode node, int mode) {
         this.dim = player.level().dimension().location().hashCode();
         this.grid = node.getGrid();
         this.mode = mode;
@@ -204,7 +204,7 @@ public final class NodeNetworkRendering implements Packet<NodeNetworkRendering> 
                 }
                 int count = 0;
                 for (var blockEntity : EnergyMachineManager.INSTANCE.getMachinesSuppliedBy(supplyNode)) {
-                    buf.writeLong(blockEntity.getBlockPos().asLong());
+                    buf.writeLong(blockEntity.cfn_getBlockPos().asLong());
                     buf.writeLong(targetNode.getPos().asLong());
                     count++;
                 }
@@ -216,14 +216,14 @@ public final class NodeNetworkRendering implements Packet<NodeNetworkRendering> 
             writeLinks(buf, () -> {
                 int count = 0;
                 for (var entry : entryList) {
-                    if (entry.blockEntity.getLevel() == null || dim != entry.blockEntity.getLevel().dimension().location().hashCode()) {
+                    if (dim != entry.blockEntity.cfn_getDimensionId()) {
                         continue;
                     }
                     var node = entry.node;
                     if (node.getGrid() != grid) {
                         continue;
                     }
-                    buf.writeLong(entry.blockEntity.getBlockPos().asLong());
+                    buf.writeLong(entry.blockEntity.cfn_getBlockPos().asLong());
                     buf.writeLong(node.getPos().asLong());
                     count++;
                 }
@@ -274,6 +274,6 @@ public final class NodeNetworkRendering implements Packet<NodeNetworkRendering> 
         context.setPacketHandled(true);
     }
 
-    private record Pair(BlockEntity blockEntity, INode node) {
+    private record Pair(CFNBlockEntityEx blockEntity, INode node) {
     }
 }

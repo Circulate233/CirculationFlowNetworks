@@ -1,6 +1,7 @@
 package com.circulation.circulation_networks.manager;
 
 import com.circulation.circulation_networks.api.EnergyAmount;
+import com.circulation.circulation_networks.api.CFNBlockEntityEx;
 import com.circulation.circulation_networks.api.IEnergyHandler;
 import com.circulation.circulation_networks.network.nodes.HubNode;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
@@ -15,6 +16,7 @@ import java.util.Objects;
 final class MachineTransferAccount {
 
     private final MachineBindingIndex owner;
+    private final MachineBindingIndex.BackendLease lease;
     private final IEnergyHandler handler;
     private final EnergyHandlerRuntime.FailureContext failureContext;
     private final Runnable quarantine;
@@ -36,13 +38,21 @@ final class MachineTransferAccount {
     private boolean reservationOpen;
     private int activeDeferredCredits;
     private boolean closed;
+    private long budgetSampleEpoch = Long.MIN_VALUE;
+    private boolean budgetSampleValid;
+    private boolean warningKnown;
+    private boolean warningMissing;
+    private int sendRoleReferences;
+    private int receiveRoleReferences;
 
     MachineTransferAccount(MachineBindingIndex owner,
+                           MachineBindingIndex.BackendLease lease,
                            IEnergyHandler handler,
                            HandlerBindingPolicy policy,
                            EnergyHandlerRuntime.FailureContext failureContext,
                            Runnable quarantine) {
         this.owner = Objects.requireNonNull(owner, "owner");
+        this.lease = Objects.requireNonNull(lease, "lease");
         this.handler = Objects.requireNonNull(handler, "handler");
         Objects.requireNonNull(policy, "policy");
         this.failureContext = Objects.requireNonNull(failureContext, "failureContext");
@@ -65,6 +75,8 @@ final class MachineTransferAccount {
         settledEpoch = Long.MIN_VALUE;
         extractBudget.reset();
         receiveBudget.reset();
+        budgetSampleEpoch = Long.MIN_VALUE;
+        budgetSampleValid = false;
     }
 
     public void activate(long epoch) {
@@ -118,7 +130,9 @@ final class MachineTransferAccount {
 
     public boolean claimReceiveCandidate(long passId,
                                          long epoch,
-                                         @Nullable HubNode.HubMetadata metadata) {
+                                         @Nullable HubNode.HubMetadata metadata,
+                                         IEnergyHandler.EnergyType role,
+                                         CFNBlockEntityEx blockEntity) {
         activate(epoch);
         if (!isActive(epoch)) {
             return false;
@@ -129,13 +143,17 @@ final class MachineTransferAccount {
             return false;
         }
         receiveCandidatePassId = passId;
-        initializeReceive(epoch, metadata);
+        if (!sampleBudget(role, epoch, metadata, blockEntity)) {
+            return false;
+        }
         return receiveBudget.isPositive(epoch);
     }
 
     public boolean hasExtractCandidate(long passId,
                                        long epoch,
-                                       @Nullable HubNode.HubMetadata metadata) {
+                                       @Nullable HubNode.HubMetadata metadata,
+                                       IEnergyHandler.EnergyType role,
+                                       CFNBlockEntityEx blockEntity) {
         activate(epoch);
         if (!isActive(epoch)) {
             return false;
@@ -148,12 +166,139 @@ final class MachineTransferAccount {
         if (reservedExtract.compareTo(deferredExtract) > 0) {
             return true;
         }
-        initializeExtract(epoch, metadata);
+        if (!sampleBudget(role, epoch, metadata, blockEntity)) {
+            exhaustedExtractPassId = passId;
+            return false;
+        }
         if (extractBudget.isPositive(epoch)) {
             return true;
         }
         exhaustedExtractPassId = passId;
         return false;
+    }
+
+    boolean sampleBudget(IEnergyHandler.EnergyType role,
+                         long epoch,
+                         @Nullable HubNode.HubMetadata metadata,
+                         CFNBlockEntityEx blockEntity) {
+        if (role == IEnergyHandler.EnergyType.INVALID) {
+            throw new IllegalStateException("Invalid energy role reached physical budget sampling");
+        }
+        if (budgetSampleEpoch == epoch) {
+            return budgetSampleValid;
+        }
+        IEnergyHandler.EnergyType physicalRole = effectiveRole();
+        initializeExtractIfRequired(physicalRole, epoch, metadata);
+        initializeReceiveIfRequired(physicalRole, epoch, metadata);
+        boolean extractPositive = physicalRole != IEnergyHandler.EnergyType.RECEIVE
+            && extractBudget.wasInitiallyPositive(epoch);
+        boolean receivePositive = physicalRole != IEnergyHandler.EnergyType.SEND
+            && receiveBudget.wasInitiallyPositive(epoch);
+        boolean valid = switch (physicalRole) {
+            case SEND -> extractPositive;
+            case RECEIVE -> receivePositive;
+            case STORAGE -> extractPositive || receivePositive;
+            case INVALID -> false;
+        };
+        if (receiveBudget.isInitialized(epoch) && !receiveBudget.wasInitiallyPositive(epoch)) {
+            warningKnown = true;
+            warningMissing = false;
+        }
+        if (valid) {
+            if (blockEntity.cfn_getEnergyLastThrottleTimer() != 0) {
+                lease.reportBudgetSuccess(blockEntity);
+            }
+        } else {
+            lease.reportBudgetFailure(blockEntity);
+        }
+        budgetSampleEpoch = epoch;
+        budgetSampleValid = valid;
+        return valid;
+    }
+
+    void registerRole(IEnergyHandler.EnergyType role) {
+        if (role == IEnergyHandler.EnergyType.INVALID) {
+            throw new IllegalArgumentException("Invalid energy role cannot be registered on a physical account");
+        }
+        if ((role == IEnergyHandler.EnergyType.SEND || role == IEnergyHandler.EnergyType.STORAGE)
+            && sendRoleReferences == Integer.MAX_VALUE) {
+            throw new IllegalStateException("Physical account send-role reference count overflow");
+        }
+        if ((role == IEnergyHandler.EnergyType.RECEIVE || role == IEnergyHandler.EnergyType.STORAGE)
+            && receiveRoleReferences == Integer.MAX_VALUE) {
+            throw new IllegalStateException("Physical account receive-role reference count overflow");
+        }
+        if (role == IEnergyHandler.EnergyType.SEND || role == IEnergyHandler.EnergyType.STORAGE) {
+            sendRoleReferences++;
+        }
+        if (role == IEnergyHandler.EnergyType.RECEIVE || role == IEnergyHandler.EnergyType.STORAGE) {
+            receiveRoleReferences++;
+        }
+    }
+
+    void unregisterRole(IEnergyHandler.EnergyType role) {
+        boolean send = role == IEnergyHandler.EnergyType.SEND || role == IEnergyHandler.EnergyType.STORAGE;
+        boolean receive = role == IEnergyHandler.EnergyType.RECEIVE || role == IEnergyHandler.EnergyType.STORAGE;
+        if (role == IEnergyHandler.EnergyType.INVALID
+            || (send && sendRoleReferences <= 0) || (receive && receiveRoleReferences <= 0)) {
+            throw new IllegalStateException("Physical account role reference count underflow");
+        }
+        if (send) {
+            sendRoleReferences--;
+        }
+        if (receive) {
+            receiveRoleReferences--;
+        }
+    }
+
+    private IEnergyHandler.EnergyType effectiveRole() {
+        if (sendRoleReferences > 0 && receiveRoleReferences > 0) {
+            return IEnergyHandler.EnergyType.STORAGE;
+        }
+        if (sendRoleReferences > 0) {
+            return IEnergyHandler.EnergyType.SEND;
+        }
+        if (receiveRoleReferences > 0) {
+            return IEnergyHandler.EnergyType.RECEIVE;
+        }
+        throw new IllegalStateException("Physical account has no active structural role");
+    }
+
+    void sampleWarning(IEnergyHandler.EnergyType role,
+                       long epoch,
+                       @Nullable HubNode.HubMetadata metadata,
+                       CFNBlockEntityEx blockEntity) {
+        sampleBudget(role, epoch, metadata, blockEntity);
+    }
+
+    void recordWarning(long epoch, @Nullable HubNode.HubMetadata metadata) {
+        if (activeEpoch == epoch) {
+            initializeReceive(epoch, metadata);
+        } else if (settledEpoch != epoch || !receiveBudget.isInitialized(epoch)) {
+            throw new IllegalStateException("Machine transfer account has no receive state for warning epoch " + epoch);
+        }
+        warningMissing = receiveBudget.wasInitiallyPositive(epoch) && receiveBudget.isPositive(epoch);
+        warningKnown = true;
+    }
+
+    boolean hasCachedWarning() {
+        return warningKnown && warningMissing;
+    }
+
+    private void initializeExtractIfRequired(IEnergyHandler.EnergyType role,
+                                             long epoch,
+                                             @Nullable HubNode.HubMetadata metadata) {
+        if (role != IEnergyHandler.EnergyType.RECEIVE) {
+            initializeExtract(epoch, metadata);
+        }
+    }
+
+    private void initializeReceiveIfRequired(IEnergyHandler.EnergyType role,
+                                             long epoch,
+                                             @Nullable HubNode.HubMetadata metadata) {
+        if (role != IEnergyHandler.EnergyType.SEND) {
+            initializeReceive(epoch, metadata);
+        }
     }
 
     public EnergyAmount remainingExtract(long epoch, @Nullable HubNode.HubMetadata metadata) {
