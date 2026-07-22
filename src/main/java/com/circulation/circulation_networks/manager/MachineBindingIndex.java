@@ -38,7 +38,8 @@ import java.util.UUID;
  */
 public final class MachineBindingIndex {
 
-    private static final int MIN_SATURATED_THROTTLE_TIMER = 12;
+    private static final int MIN_SATURATED_THROTTLE_TIMER =
+        CFNBlockEntityEx.SATURATED_ENERGY_THROTTLE_STAGE * 3 / 4;
     private static final int SATURATED_THROTTLE_TIMER_COUNT =
         CFNBlockEntityEx.MAX_ENERGY_THROTTLE_TIMER - MIN_SATURATED_THROTTLE_TIMER + 1;
 
@@ -442,6 +443,7 @@ public final class MachineBindingIndex {
             return 1;
         }
         if (previousStage != 1 && previousStage != 2 && previousStage != 4 && previousStage != 8
+            && previousStage != 16
             && previousStage != CFNBlockEntityEx.SATURATED_ENERGY_THROTTLE_STAGE) {
             throw new IllegalArgumentException("Invalid previous energy throttle stage: " + previousStage);
         }

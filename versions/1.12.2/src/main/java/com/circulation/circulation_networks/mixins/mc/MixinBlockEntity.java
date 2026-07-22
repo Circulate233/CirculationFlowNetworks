@@ -146,7 +146,7 @@ public abstract class MixinBlockEntity implements CFNBlockEntityEx {
     @Override
     @Unique
     public void cfn_setEnergyLastThrottleTimer(int timer) {
-        if (timer != 0 && timer != 1 && timer != 2 && timer != 4 && timer != 8
+        if (timer != 0 && timer != 1 && timer != 2 && timer != 4 && timer != 8 && timer != 16
             && timer != CFNBlockEntityEx.SATURATED_ENERGY_THROTTLE_STAGE) {
             throw new IllegalArgumentException("Invalid previous energy throttle stage: " + timer);
         }

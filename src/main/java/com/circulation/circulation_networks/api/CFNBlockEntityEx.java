@@ -15,10 +15,10 @@ import java.util.Objects;
 public interface CFNBlockEntityEx {
 
     /** Saturated exponential stage retained after energy budget failures reach the backoff ceiling. */
-    int SATURATED_ENERGY_THROTTLE_STAGE = 16;
+    int SATURATED_ENERGY_THROTTLE_STAGE = 32;
 
     /** Maximum scheduled delay after saturated failures are distributed across neighboring ticks. */
-    int MAX_ENERGY_THROTTLE_TIMER = 20;
+    int MAX_ENERGY_THROTTLE_TIMER = SATURATED_ENERGY_THROTTLE_STAGE * 5 / 4;
 
     /**
      * Converts a Minecraft block entity received from an unmodified platform API into its CFN extension view.
@@ -111,13 +111,13 @@ public interface CFNBlockEntityEx {
      */
     int cfn_getEnergyThrottleTimer();
 
-    /** Sets the remaining energy backoff ticks in the inclusive range 0..20. */
+    /** Sets the remaining energy backoff ticks in the inclusive range 0..40. */
     void cfn_setEnergyThrottleTimer(int timer);
 
     /**
      * Returns the exponential backoff stage used to calculate the next delay.
-     * Valid values are 0, 1, 2, 4, 8 and 16; saturated scheduled delays may
-     * independently range from 12 through 20 ticks.
+     * Valid values are 0, 1, 2, 4, 8, 16 and 32; saturated scheduled delays
+     * may independently range from 24 through 40 ticks.
      */
     int cfn_getEnergyLastThrottleTimer();
 

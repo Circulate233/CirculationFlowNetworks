@@ -210,8 +210,14 @@ public final class AE2BackendHandler implements IEnergyHandler, DeferredReceiveC
                     throw new IllegalStateException("AE2 pending receive produced invalid AE commit " + requestedAe);
                 }
                 double overflowAe = energyGrid.injectPower(requestedAe, Actionable.MODULATE);
-                if (!Double.isFinite(overflowAe) || overflowAe < 0.0D || overflowAe > requestedAe) {
+                if (!Double.isFinite(overflowAe) || overflowAe < 0.0D) {
                     throw new IllegalStateException("AE2 energy grid returned invalid injection overflow " + overflowAe);
+                }
+                if (overflowAe > requestedAe) {
+                    // Some AE2 providers report an oversized remainder. Its accepted portion is unknowable, so
+                    // conservatively reject this deferred receive and let the normal escrow settlement restore it.
+                    rejectedReceive.copyFrom(pendingReceive);
+                    return;
                 }
                 double rejectedRf = PowerUnits.AE.convertTo(PowerUnits.RF, overflowAe);
                 if (!Double.isFinite(rejectedRf)) {
