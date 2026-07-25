@@ -155,7 +155,11 @@ public final class MachineBindingIndex {
             return false;
         }
         removeBinding(binding);
-        binding.unbind();
+        try {
+            binding.unbind();
+        } finally {
+            clearEnergyThrottle(blockEntity);
+        }
         return true;
     }
     public void beginServerTick(long epoch) {

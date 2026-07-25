@@ -130,9 +130,9 @@ public abstract class MixinBlockEntity implements CFNBlockEntityEx {
     @Override
     @Unique
     public void cfn_setEnergyThrottleTimer(int timer) {
-        if (timer < 0 || timer > CFNBlockEntityEx.MAX_ENERGY_THROTTLE_TIMER) {
+        if (timer < 0 || timer > CFNBlockEntityEx.MAX_STORED_ENERGY_THROTTLE_TIMER) {
             throw new IllegalArgumentException("Energy throttle timer must be between 0 and "
-                + CFNBlockEntityEx.MAX_ENERGY_THROTTLE_TIMER + ": " + timer);
+                + CFNBlockEntityEx.MAX_STORED_ENERGY_THROTTLE_TIMER + ": " + timer);
         }
         cfn$energyThrottleTimer = timer;
     }

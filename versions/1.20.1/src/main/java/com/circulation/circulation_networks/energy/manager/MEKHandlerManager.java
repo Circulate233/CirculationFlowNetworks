@@ -3,6 +3,7 @@ package com.circulation.circulation_networks.energy.manager;
 import com.circulation.circulation_networks.api.IEnergyHandler;
 import com.circulation.circulation_networks.api.IEnergyHandlerManager;
 import com.circulation.circulation_networks.energy.handler.MEKHandler;
+import mekanism.api.energy.IMekanismStrictEnergyHandler;
 import mekanism.common.capabilities.Capabilities;
 import mekanism.common.tile.multiblock.TileEntityInductionCell;
 import net.minecraft.core.Direction;
@@ -16,6 +17,9 @@ public final class MEKHandlerManager implements IEnergyHandlerManager {
     @Override
     public boolean isAvailable(BlockEntity blockEntity) {
         if (blockEntity instanceof TileEntityInductionCell) {
+            return false;
+        }
+        if (blockEntity instanceof IMekanismStrictEnergyHandler energyHandler && !energyHandler.canHandleEnergy()) {
             return false;
         }
         for (Direction direction : DIRECTIONS) {

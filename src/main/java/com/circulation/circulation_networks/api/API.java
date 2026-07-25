@@ -208,6 +208,19 @@ public final class API {
         return EnergyMachineManager.INSTANCE.getMachinesSuppliedBy(node);
     }
 
+    /**
+     * Returns the current-tick energy interaction totals for a registered machine. The input and output values combine
+     * settled transfers from every grid linked to that machine and read as zero when the machine has not interacted in
+     * the current tick.
+     *
+     * @param blockEntity registered machine block entity
+     * @return the machine-owned runtime tracker, or {@code null} when the machine has no active registration
+     */
+    @Nullable
+    public static EnergyMachineManager.Interaction getMachineInteraction(@NotNull CFNBlockEntityEx blockEntity) {
+        return EnergyMachineManager.INSTANCE.getMachineInteraction(blockEntity);
+    }
+
     // -------------------------------------------------------------------------
     // 中枢频道 / Hub channels
     // -------------------------------------------------------------------------

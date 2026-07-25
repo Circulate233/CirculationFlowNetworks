@@ -19,8 +19,6 @@ final class EnergyTransferParticipant {
     private IGrid grid;
     @Nullable
     private HubNode.HubMetadata hubMetadata;
-    @Nullable
-    private EnergyMachineManager.Interaction interaction;
     private HandlerBindingPolicy policy;
 
     private EnergyTransferParticipant() {
@@ -35,10 +33,6 @@ final class EnergyTransferParticipant {
         p.hubMetadata = hubMetadata;
         p.policy = EnergyHandlerRuntime.policy(handler);
         return p;
-    }
-
-    void setInteraction(@Nullable EnergyMachineManager.Interaction interaction) {
-        this.interaction = interaction;
     }
 
     boolean requiresPairMatch() {
@@ -93,11 +87,6 @@ final class EnergyTransferParticipant {
     }
 
     @Nullable
-    EnergyMachineManager.Interaction interaction() {
-        return interaction;
-    }
-
-    @Nullable
     IGrid grid() {
         return grid;
     }
@@ -114,7 +103,6 @@ final class EnergyTransferParticipant {
         handler = null;
         grid = null;
         hubMetadata = null;
-        interaction = null;
         policy = null;
     }
 }

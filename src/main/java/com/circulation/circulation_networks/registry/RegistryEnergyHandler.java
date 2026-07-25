@@ -2,6 +2,9 @@ package com.circulation.circulation_networks.registry;
 
 import com.circulation.circulation_networks.api.node.IMachineNode;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import it.unimi.dsi.fastutil.objects.Reference2BooleanMap;
+import it.unimi.dsi.fastutil.objects.Reference2BooleanMaps;
+import it.unimi.dsi.fastutil.objects.Reference2BooleanOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
 import com.circulation.circulation_networks.api.IEnergyHandlerManager;
@@ -17,8 +20,7 @@ import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.NotNull;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Objects;
 
 @SuppressWarnings("unused")
 public final class RegistryEnergyHandler {
@@ -27,16 +29,18 @@ public final class RegistryEnergyHandler {
     //~ if >=1.20 ' TileEntity ' -> ' BlockEntity ' {
     //~ if >=1.20 '<TileEntity>' -> '<BlockEntity>' {
 
-    private static Class<?>[] blackListClass;
-    private static Class<?>[] supplyBlackListClass;
+    private static Class<?>[] registeredBlackClassArray;
+    private static Class<?>[] registeredSupplyBlackClassArray;
+    private static Class<?>[] configuredBlackClassRules;
+    private static Class<?>[] configuredSupplyBlackClassRules;
     private static Pair[] managerUnit;
     private static String[] blackPrefixArray;
     private static String[] supplyPrefixArray;
     private static List<IEnergyHandlerManager> list = new ObjectArrayList<>();
     private static IEnergyHandlerManager[] managerArray = new IEnergyHandlerManager[0];
     private static boolean locked;
-    private static final Map<Class<?>, Boolean> blackClassCache = new ConcurrentHashMap<>();
-    private static final Map<Class<?>, Boolean> supplyBlackClassCache = new ConcurrentHashMap<>();
+    private static final Reference2BooleanMap<Class<?>> blackClassCache = Reference2BooleanMaps.synchronize(new Reference2BooleanOpenHashMap<>());
+    private static final Reference2BooleanMap<Class<?>> supplyBlackClassCache = Reference2BooleanMaps.synchronize(new Reference2BooleanOpenHashMap<>());
 
     private static ReferenceSet<Class<?>> registeredBlackClasses = new ReferenceOpenHashSet<>();
     private static ReferenceSet<Class<?>> registeredSupplyBlackClasses = new ReferenceOpenHashSet<>();
@@ -59,7 +63,8 @@ public final class RegistryEnergyHandler {
     }
 
     /**
-     * Registers a tile entity class to be excluded from automatic energy network integration.
+     * Registers an exact runtime tile entity class to be excluded from automatic energy network integration.
+     * Subclasses are not excluded.
      * Node-based tile entities (implementing {@link IMachineNode}) are automatically blacklisted
      * and do not need to be registered here.
      * Must be called before {@link #lock()}.
@@ -67,26 +72,37 @@ public final class RegistryEnergyHandler {
      * @param clazz the tile entity class to blacklist from energy handling
      */
     public static void registerBlackClass(Class<?> clazz) {
-        registeredBlackClasses.add(clazz);
+        if (locked) {
+            throw new IllegalStateException("Energy handler registry is already locked");
+        }
+        registeredBlackClasses.add(Objects.requireNonNull(clazz, "clazz"));
     }
 
     /**
-     * Registers a tile entity class to be excluded from energy supply operations.
+     * Registers an exact runtime tile entity class to be excluded from energy supply operations.
+     * Subclasses are not excluded.
      * Must be called before {@link #lock()}.
      *
      * @param clazz the tile entity class to blacklist from energy supply
      */
     public static void registerSupplyBlackClass(Class<?> clazz) {
-        registeredSupplyBlackClasses.add(clazz);
+        if (locked) {
+            throw new IllegalStateException("Energy handler registry is already locked");
+        }
+        registeredSupplyBlackClasses.add(Objects.requireNonNull(clazz, "clazz"));
     }
 
     public static boolean isBlack(TileEntity blockEntity) {
         if (blockEntity instanceof IMachineNodeBlockEntity) return true;
-        return blackClassCache.computeIfAbsent(blockEntity.getClass(), clazz -> matchesClassRule(clazz, blackListClass, blackPrefixArray));
+        return blackClassCache.computeIfAbsent(blockEntity.getClass(), clazz ->
+            matchesExactClass(clazz, registeredBlackClassArray)
+                || matchesConfiguredClassRule(clazz, configuredBlackClassRules, blackPrefixArray));
     }
 
     public static boolean isSupplyBlack(TileEntity blockEntity) {
-        return supplyBlackClassCache.computeIfAbsent(blockEntity.getClass(), clazz -> matchesClassRule(clazz, supplyBlackListClass, supplyPrefixArray));
+        return supplyBlackClassCache.computeIfAbsent(blockEntity.getClass(), clazz ->
+            matchesExactClass(clazz, registeredSupplyBlackClassArray)
+                || matchesConfiguredClassRule(clazz, configuredSupplyBlackClassRules, supplyPrefixArray));
     }
 
     public static boolean isEnergyItemStack(ItemStack stack) {
@@ -183,27 +199,27 @@ public final class RegistryEnergyHandler {
 
         final List<String> blackPrefixes = new ObjectArrayList<>();
         final List<String> supplyPrefixes = new ObjectArrayList<>();
-        final ReferenceSet<Class<?>> blackSet = registeredBlackClasses;
-        final ReferenceSet<Class<?>> supplySet = registeredSupplyBlackClasses;
+        final ReferenceSet<Class<?>> configuredBlackClasses = new ReferenceOpenHashSet<>();
+        final ReferenceSet<Class<?>> configuredSupplyBlackClasses = new ReferenceOpenHashSet<>();
 
-        collectExactClasses(CFNConfig.classNames, blackSet, blackPrefixes);
-        collectExactClasses(CFNConfig.supplyClassNames, supplySet, supplyPrefixes);
+        collectConfiguredClasses(CFNConfig.classNames, configuredBlackClasses, blackPrefixes);
+        collectConfiguredClasses(CFNConfig.supplyClassNames, configuredSupplyBlackClasses, supplyPrefixes);
         //? if <1.20 {
         if (!blackPrefixes.isEmpty() || !supplyPrefixes.isEmpty()) {
             for (var aClass : TileEntity.REGISTRY) {
                 var className = aClass.getName();
-                if (!blackPrefixes.isEmpty() && !blackSet.contains(aClass)) {
+                if (!blackPrefixes.isEmpty() && !configuredBlackClasses.contains(aClass)) {
                     for (String prefix : blackPrefixes) {
                         if (className.startsWith(prefix)) {
-                            blackSet.add(aClass);
+                            configuredBlackClasses.add(aClass);
                             break;
                         }
                     }
                 }
-                if (!supplyPrefixes.isEmpty() && !supplySet.contains(aClass)) {
+                if (!supplyPrefixes.isEmpty() && !configuredSupplyBlackClasses.contains(aClass)) {
                     for (String prefix : supplyPrefixes) {
                         if (className.startsWith(prefix)) {
-                            supplySet.add(aClass);
+                            configuredSupplyBlackClasses.add(aClass);
                             break;
                         }
                     }
@@ -213,8 +229,14 @@ public final class RegistryEnergyHandler {
         //?}
         blackPrefixArray = blackPrefixes.isEmpty() ? null : blackPrefixes.toArray(new String[0]);
         supplyPrefixArray = supplyPrefixes.isEmpty() ? null : supplyPrefixes.toArray(new String[0]);
-        blackListClass = blackSet.isEmpty() ? null : blackSet.toArray(new Class[0]);
-        supplyBlackListClass = supplySet.isEmpty() ? null : supplySet.toArray(new Class[0]);
+        registeredBlackClassArray = registeredBlackClasses.isEmpty()
+            ? null : registeredBlackClasses.toArray(new Class<?>[0]);
+        registeredSupplyBlackClassArray = registeredSupplyBlackClasses.isEmpty()
+            ? null : registeredSupplyBlackClasses.toArray(new Class<?>[0]);
+        configuredBlackClassRules = configuredBlackClasses.isEmpty()
+            ? null : configuredBlackClasses.toArray(new Class<?>[0]);
+        configuredSupplyBlackClassRules = configuredSupplyBlackClasses.isEmpty()
+            ? null : configuredSupplyBlackClasses.toArray(new Class<?>[0]);
         blackClassCache.clear();
         supplyBlackClassCache.clear();
 
@@ -225,7 +247,21 @@ public final class RegistryEnergyHandler {
         registeredSupplyBlackClasses = null;
     }
 
-    private static boolean matchesClassRule(Class<?> clazz, @Nullable Class<?>[] classRules, @Nullable String[] prefixRules) {
+    static boolean matchesExactClass(Class<?> clazz, @Nullable Class<?>[] exactClasses) {
+        if (exactClasses == null) {
+            return false;
+        }
+        for (Class<?> exactClass : exactClasses) {
+            if (exactClass == clazz) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static boolean matchesConfiguredClassRule(Class<?> clazz,
+                                              @Nullable Class<?>[] classRules,
+                                              @Nullable String[] prefixRules) {
         if (classRules != null) {
             for (Class<?> classRule : classRules) {
                 if (classRule == null) continue;
@@ -242,7 +278,9 @@ public final class RegistryEnergyHandler {
         return false;
     }
 
-    private static void collectExactClasses(String[] names, ReferenceSet<Class<?>> classSet, List<String> prefixes) {
+    private static void collectConfiguredClasses(String[] names,
+                                                 ReferenceSet<Class<?>> classSet,
+                                                 List<String> prefixes) {
         if (names == null) return;
         for (String className : names) {
             if (className == null || className.trim().isEmpty()) continue;

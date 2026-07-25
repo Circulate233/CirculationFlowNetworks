@@ -420,11 +420,13 @@ final class MachineTransferAccount {
                                         MachineTransferAccount source,
                                         long epoch,
                                         @Nullable HubNode.HubMetadata metadata,
-                                        @Nullable EnergyMachineManager.Interaction senderInteraction,
-                                        @Nullable EnergyMachineManager.Interaction receiverInteraction,
+                                        EnergyMachineManager.MachineTransferSlot sender,
+                                        EnergyMachineManager.MachineTransferSlot receiver,
                                         EnergyMachineManager.Status status) {
         Objects.requireNonNull(maximum, "maximum");
         Objects.requireNonNull(source, "source");
+        Objects.requireNonNull(sender, "sender");
+        Objects.requireNonNull(receiver, "receiver");
         Objects.requireNonNull(status, "status");
         requireEpoch(epoch);
         source.requireEpoch(epoch);
@@ -446,7 +448,7 @@ final class MachineTransferAccount {
             }
             source.holdDeferredExtract(received, epoch);
             sourceHeld = true;
-            credit.assign(source, received, senderInteraction, receiverInteraction, status);
+            credit.assign(source, received, sender, receiver, status);
             activeDeferredCredits++;
             deferredCreditTotal.add(received);
             return received;
@@ -518,7 +520,12 @@ final class MachineTransferAccount {
                 .settleDeferredExtract(credit.amount, settlementPiece, epoch);
             if (settlementPiece.isPositive()) {
                 Objects.requireNonNull(credit.status, "Deferred credit status")
-                    .interaction(settlementPiece, credit.senderInteraction, credit.receiverInteraction);
+                    .interaction(
+                        settlementPiece,
+                        Objects.requireNonNull(credit.sender, "Deferred credit sender slot"),
+                        Objects.requireNonNull(credit.receiver, "Deferred credit receiver slot"),
+                        epoch
+                    );
             }
             settlementAccepted.subtract(settlementPiece);
             credit.clear();
@@ -731,29 +738,29 @@ final class MachineTransferAccount {
         @Nullable
         private MachineTransferAccount source;
         @Nullable
-        private EnergyMachineManager.Interaction senderInteraction;
+        private EnergyMachineManager.MachineTransferSlot sender;
         @Nullable
-        private EnergyMachineManager.Interaction receiverInteraction;
+        private EnergyMachineManager.MachineTransferSlot receiver;
         @Nullable
         private EnergyMachineManager.Status status;
 
         private void assign(MachineTransferAccount source,
                             EnergyAmount amount,
-                            @Nullable EnergyMachineManager.Interaction senderInteraction,
-                            @Nullable EnergyMachineManager.Interaction receiverInteraction,
+                            EnergyMachineManager.MachineTransferSlot sender,
+                            EnergyMachineManager.MachineTransferSlot receiver,
                             EnergyMachineManager.Status status) {
             this.source = source;
             this.amount.copyFrom(amount);
-            this.senderInteraction = senderInteraction;
-            this.receiverInteraction = receiverInteraction;
+            this.sender = Objects.requireNonNull(sender, "sender");
+            this.receiver = Objects.requireNonNull(receiver, "receiver");
             this.status = status;
         }
 
         private void clear() {
             amount.setZero();
             source = null;
-            senderInteraction = null;
-            receiverInteraction = null;
+            sender = null;
+            receiver = null;
             status = null;
         }
 

@@ -7,6 +7,7 @@ import com.circulation.circulation_networks.manager.EnergyMachineManager;
 import com.circulation.circulation_networks.manager.GridParticipantIndex;
 import com.circulation.circulation_networks.manager.PocketNodeManager;
 import com.circulation.circulation_networks.registry.NodeTypes;
+import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ReferenceOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
@@ -149,6 +150,11 @@ public final class Grid implements IGrid {
     @Override
     public EnergyMachineManager.Interaction getInteraction() {
         return interaction;
+    }
+
+    @Override
+    public Long2ObjectMap<EnergyMachineManager.Interaction> getMachineInteractions() {
+        return participantIndex.machineInteractions();
     }
 
     @Override

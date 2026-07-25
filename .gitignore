@@ -29,11 +29,16 @@ versions/1.12.2/src/test/java/com/circulation/circulation_networks/client/*
 !versions/1.12.2/src/test/java/com/circulation/circulation_networks/client/render/
 versions/1.12.2/src/test/java/com/circulation/circulation_networks/client/render/*
 !versions/1.12.2/src/test/java/com/circulation/circulation_networks/client/render/LegacyWorldRenderStateProfileTest.java
+!versions/1.12.2/src/test/java/com/circulation/circulation_networks/registry/
+versions/1.12.2/src/test/java/com/circulation/circulation_networks/registry/*
+!versions/1.12.2/src/test/java/com/circulation/circulation_networks/registry/RegistryEnergyHandlerClassRuleTest.java
 !versions/1.12.2/src/test/java/com/circulation/circulation_networks/manager/
 versions/1.12.2/src/test/java/com/circulation/circulation_networks/manager/*
 !versions/1.12.2/src/test/java/com/circulation/circulation_networks/manager/MachineChunkResidencyIndexTest.java
 !versions/1.12.2/src/test/java/com/circulation/circulation_networks/manager/MachineBindingIndexSharedBackendTest.java
 !versions/1.12.2/src/test/java/com/circulation/circulation_networks/manager/PriorityRoutingAccountTest.java
+!versions/1.12.2/src/test/java/com/circulation/circulation_networks/manager/EnergyInteractionTrackingTest.java
+!versions/1.12.2/src/test/java/com/circulation/circulation_networks/manager/MachineDiscoveryThrottleTest.java
 !versions/1.12.2/src/test/java/com/circulation/circulation_networks/energy/
 versions/1.12.2/src/test/java/com/circulation/circulation_networks/energy/*
 !versions/1.12.2/src/test/java/com/circulation/circulation_networks/energy/handler/

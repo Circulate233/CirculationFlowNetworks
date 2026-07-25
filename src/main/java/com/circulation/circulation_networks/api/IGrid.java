@@ -4,6 +4,7 @@ import com.circulation.circulation_networks.api.node.IHubNode;
 import com.circulation.circulation_networks.api.node.INode;
 import com.circulation.circulation_networks.manager.EnergyMachineManager;
 import com.circulation.circulation_networks.manager.GridParticipantIndex;
+import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
 //~ mc_imports
 import net.minecraft.nbt.NBTTagCompound;
@@ -50,6 +51,15 @@ public interface IGrid {
      * 返回此网络的传输统计运行时对象。该对象随 grid 生命周期常驻，不参与序列化。
      */
     EnergyMachineManager.Interaction getInteraction();
+
+    /**
+     * Returns the live, read-only machine interaction index for this grid. Keys are packed block positions;
+     * each value records only the energy settled through this grid during the current machine tick.
+     * Linked machines remain present when they have no current-tick interaction, in which case both values read as zero.
+     *
+     * @return a pre-created unmodifiable view that is not serialized with the grid
+     */
+    Long2ObjectMap<EnergyMachineManager.Interaction> getMachineInteractions();
 
     /**
      * 返回此网络常驻的能量参与者索引。该接口只接受持有直接 membership 的

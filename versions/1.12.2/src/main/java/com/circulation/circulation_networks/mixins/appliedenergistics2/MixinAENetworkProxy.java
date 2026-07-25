@@ -6,13 +6,11 @@ import appeng.tile.networking.TileEnergyAcceptor;
 import com.circulation.circulation_networks.api.CFNBlockEntityEx;
 import com.circulation.circulation_networks.manager.EnergyMachineManager;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Pseudo
 @Mixin(targets = "appeng.me.helpers.AENetworkProxy", remap = false)
 public abstract class MixinAENetworkProxy {
 

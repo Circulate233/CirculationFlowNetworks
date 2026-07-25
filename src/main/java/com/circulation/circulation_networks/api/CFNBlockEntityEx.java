@@ -20,6 +20,16 @@ public interface CFNBlockEntityEx {
     /** Maximum scheduled delay after saturated failures are distributed across neighboring ticks. */
     int MAX_ENERGY_THROTTLE_TIMER = SATURATED_ENERGY_THROTTLE_STAGE * 5 / 4;
 
+    /** Base retry delay for a scoped block entity that currently has no available energy handler manager. */
+    int ENERGY_DISCOVERY_THROTTLE_TIMER = 200;
+
+    /** Symmetric jitter applied to unsupported-machine discovery retries. */
+    int ENERGY_DISCOVERY_THROTTLE_JITTER = 10;
+
+    /** Largest value stored in the shared throttle timer field. */
+    int MAX_STORED_ENERGY_THROTTLE_TIMER =
+        ENERGY_DISCOVERY_THROTTLE_TIMER + ENERGY_DISCOVERY_THROTTLE_JITTER;
+
     /**
      * Converts a Minecraft block entity received from an unmodified platform API into its CFN extension view.
      * Missing Mixin application is an installation error and therefore fails immediately.
@@ -111,7 +121,10 @@ public interface CFNBlockEntityEx {
      */
     int cfn_getEnergyThrottleTimer();
 
-    /** Sets the remaining energy backoff ticks in the inclusive range 0..40. */
+    /**
+     * Sets the remaining energy backoff ticks. Budget backoff uses {@code 0..40}; unsupported-machine discovery uses
+     * {@code 190..210}. Values between those ranges are reserved for the same internal countdown mechanism.
+     */
     void cfn_setEnergyThrottleTimer(int timer);
 
     /**

@@ -2,6 +2,7 @@ package com.circulation.circulation_networks.manager;
 
 import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.api.EnergyAmount;
+import com.circulation.circulation_networks.api.EnergyAmounts;
 import com.circulation.circulation_networks.api.CFNBlockEntityEx;
 import com.circulation.circulation_networks.api.IEnergyHandler;
 import com.circulation.circulation_networks.api.IEnergyHandlerManager;
@@ -79,6 +80,10 @@ public final class EnergyMachineManager {
     private static final long WARNING_EVALUATION_INTERVAL_TICKS = 20L;
     private static final double WARNING_RENDER_DISTANCE_SQ = 48.0D * 48.0D;
     private static final int POSITION_READY_MAX_RESOLUTION_ATTEMPTS = 2;
+    private static final int MIN_DISCOVERY_THROTTLE_TIMER =
+        CFNBlockEntityEx.ENERGY_DISCOVERY_THROTTLE_TIMER - CFNBlockEntityEx.ENERGY_DISCOVERY_THROTTLE_JITTER;
+    private static final int DISCOVERY_THROTTLE_TIMER_COUNT =
+        CFNBlockEntityEx.ENERGY_DISCOVERY_THROTTLE_JITTER * 2 + 1;
     private final Int2ObjectMap<Long2ObjectMap<ReferenceSet<IEnergySupplyNode>>> scopeNode = new Int2ObjectOpenHashMap<>();
     private final Int2ObjectMap<Object2ObjectMap<IEnergySupplyNode, LongSet>> nodeScope = new Int2ObjectOpenHashMap<>();
     private final Reference2ObjectMap<INode, ReferenceSet<CFNBlockEntityEx>> gridMachineMap = new Reference2ObjectOpenHashMap<>();
@@ -115,6 +120,7 @@ public final class EnergyMachineManager {
         };
     private final ObjectArrayList<LifecycleCommand> lifecycleInbox = new ObjectArrayList<>();
     private final ObjectArrayList<LifecycleCommand> lifecycleDrain = new ObjectArrayList<>();
+    private final ObjectArrayList<CFNBlockEntityEx> discoveryThrottledBlockEntities = new ObjectArrayList<>();
     private final Object2ObjectMap<PositionLifecycleKey, PositionLifecycleCommand> positionLifecycleInbox =
         new Object2ObjectOpenHashMap<>();
     private final Object2ObjectMap<PositionLifecycleKey, PositionLifecycleCommand> positionLifecycleDrain =
@@ -127,6 +133,7 @@ public final class EnergyMachineManager {
     private long warningSessionGeneration = 1L;
     private long interactionEpoch;
     private long transferPassId;
+    private int discoveryThrottleCursor;
     private boolean lifecycleDraining;
 
     {
@@ -300,6 +307,7 @@ public final class EnergyMachineManager {
         boolean evaluateWarnings;
         try {
             reconcileMachineChunkResidency();
+            advanceDiscoveryThrottleTimers();
             loadPositionLifecycle(server);
             loadCache();
             if (interactionEpoch == Long.MAX_VALUE) {
@@ -446,19 +454,12 @@ public final class EnergyMachineManager {
             return RegistrationResult.UNSUPPORTED;
         }
         if (!isCurrentBlockEntity(blockEntity)) {
+            cancelDiscoveryThrottle(blockEntity);
             removeMachine(blockEntity);
             return RegistrationResult.STALE;
         }
-        IEnergyHandlerManager handlerManager = blockEntity.cfn_getEnergyManager(excludedManager);
-        if (handlerManager == null) {
-            if (explicitOwnerInvalidation) {
-                removeMachine(blockEntity);
-            }
-            return excludedManager == null
-                ? RegistrationResult.UNSUPPORTED
-                : RegistrationResult.WAITING_FOR_READY;
-        }
         if (blockEntity.cfn_isEnergyBlacklisted()) {
+            cancelDiscoveryThrottle(blockEntity);
             removeMachine(blockEntity);
             return RegistrationResult.UNSUPPORTED;
         }
@@ -467,21 +468,15 @@ public final class EnergyMachineManager {
 
         var dim = blockEntity.cfn_getDimensionId();
         long packedPosition = packBlockPosition(pos);
-        MachinePositionRecord coldRecord = machineChunkResidency.get(dim, chunkCoord, packedPosition);
-        IEnergyHandlerManager selectedManager = handlerManager;
-        if (!explicitOwnerInvalidation && coldRecord != null && coldRecord.ownerManager() != null) {
-            selectedManager = selectRegistrationManager(
-                coldRecord.ownerManager(), coldRecord.ownerPriority(), handlerManager, false
-            );
-        }
-        rememberMachinePosition(blockEntity, selectedManager, false);
         var map = scopeNode.get(dim);
         if (map == scopeNode.defaultReturnValue()) {
+            cancelDiscoveryThrottle(blockEntity);
             removeMachine(blockEntity);
             return RegistrationResult.WAITING_FOR_SCOPE;
         }
         ReferenceSet<IEnergySupplyNode> set = map.get(chunkCoord);
         if (set.isEmpty()) {
+            cancelDiscoveryThrottle(blockEntity);
             removeMachine(blockEntity);
             return RegistrationResult.WAITING_FOR_SCOPE;
         }
@@ -494,21 +489,52 @@ public final class EnergyMachineManager {
         }
 
         if (candidateNodes.isEmpty()) {
+            cancelDiscoveryThrottle(blockEntity);
             removeMachine(blockEntity);
             return RegistrationResult.WAITING_FOR_SCOPE;
         }
+        if (isDiscoveryThrottled(blockEntity)) {
+            return RegistrationResult.WAITING_FOR_READY;
+        }
         MachineHandlerRuntime currentRuntime = blockEntity.cfn_getMachineHandlerRuntime();
-        if (currentRuntime != null && currentRuntime.ownerManager() != null) {
-            ReferenceSet<IEnergySupplyNode> currentNodes = machineSupplyNodes.get(blockEntity);
-            boolean currentValid = currentNodes != null && isValidMachineRegistration(
+        ReferenceSet<IEnergySupplyNode> currentNodes = currentRuntime == null
+            ? null : machineSupplyNodes.get(blockEntity);
+        boolean currentRegistrationValid = currentRuntime != null && currentRuntime.ownerManager() != null
+            && currentNodes != null
+            && isValidMachineRegistration(
                 blockEntity, currentRuntime.ownerManager(), currentNodes, dim, packedPosition
             );
-            if (currentValid) {
+        IEnergyHandlerManager handlerManager = blockEntity.cfn_getEnergyManager(excludedManager);
+        if (handlerManager == null) {
+            if (!explicitOwnerInvalidation && currentRegistrationValid) {
+                rememberMachinePosition(blockEntity, currentRuntime.ownerManager(), false);
+                return RegistrationResult.ALREADY_REGISTERED;
+            }
+            if (explicitOwnerInvalidation || currentRuntime != null) {
+                removeMachine(blockEntity);
+            }
+            rememberMachinePosition(blockEntity, null, false);
+            scheduleDiscoveryThrottle(blockEntity);
+            return RegistrationResult.WAITING_FOR_READY;
+        }
+        cancelDiscoveryThrottle(blockEntity);
+        MachinePositionRecord coldRecord = machineChunkResidency.get(dim, chunkCoord, packedPosition);
+        IEnergyHandlerManager selectedManager = handlerManager;
+        if (!explicitOwnerInvalidation && coldRecord != null && coldRecord.ownerManager() != null) {
+            selectedManager = selectRegistrationManager(
+                coldRecord.ownerManager(), coldRecord.ownerPriority(), handlerManager, false
+            );
+        }
+        if (currentRuntime != null && currentRuntime.ownerManager() != null) {
+            if (currentRegistrationValid) {
+                ReferenceSet<IEnergySupplyNode> validCurrentNodes = Objects.requireNonNull(
+                    currentNodes, "Valid machine registration lost its supply-node index"
+                );
                 selectedManager = selectRegistrationManager(
                     currentRuntime.ownerManager(), currentRuntime.ownerPriority(), handlerManager,
                     explicitOwnerInvalidation
                 );
-                if (selectedManager == currentRuntime.ownerManager() && currentNodes.equals(candidateNodes)) {
+                if (selectedManager == currentRuntime.ownerManager() && validCurrentNodes.equals(candidateNodes)) {
                     rememberMachinePosition(blockEntity, currentRuntime.ownerManager(), false);
                     return RegistrationResult.ALREADY_REGISTERED;
                 }
@@ -516,6 +542,77 @@ public final class EnergyMachineManager {
         }
         rememberMachinePosition(blockEntity, selectedManager, false);
         return replaceMachineRegistration(blockEntity, selectedManager, candidateNodes, dim, packedPosition);
+    }
+
+    private boolean isDiscoveryThrottled(CFNBlockEntityEx blockEntity) {
+        return blockEntity.cfn_getEnergyLastThrottleTimer() == 0
+            && blockEntity.cfn_getEnergyThrottleTimer() != 0;
+    }
+
+    void scheduleDiscoveryThrottle(CFNBlockEntityEx blockEntity) {
+        if (blockEntity.cfn_getEnergyThrottleTimer() != 0
+            || blockEntity.cfn_getEnergyLastThrottleTimer() != 0) {
+            throw new IllegalStateException("Cannot schedule discovery retry over an existing energy throttle");
+        }
+        int timer = MIN_DISCOVERY_THROTTLE_TIMER + discoveryThrottleCursor;
+        discoveryThrottleCursor++;
+        if (discoveryThrottleCursor == DISCOVERY_THROTTLE_TIMER_COUNT) {
+            discoveryThrottleCursor = 0;
+        }
+        blockEntity.cfn_setEnergyThrottleTimer(timer);
+        discoveryThrottledBlockEntities.add(blockEntity);
+    }
+
+    void advanceDiscoveryThrottleTimers() {
+        for (int index = discoveryThrottledBlockEntities.size() - 1; index >= 0; index--) {
+            CFNBlockEntityEx blockEntity = discoveryThrottledBlockEntities.get(index);
+            if (blockEntity.cfn_getEnergyLastThrottleTimer() != 0) {
+                throw new IllegalStateException("Discovery throttle acquired an energy-budget backoff stage");
+            }
+            int timer = blockEntity.cfn_getEnergyThrottleTimer();
+            if (timer <= 0) {
+                throw new IllegalStateException("Discovery throttle list contains a block entity without a timer");
+            }
+            blockEntity.cfn_setEnergyThrottleTimer(--timer);
+            if (timer != 0) {
+                continue;
+            }
+            swapRemove(discoveryThrottledBlockEntities, index);
+            submitLifecycle(blockEntity, MachineLifecyclePositionIndex.Action.READY);
+        }
+    }
+
+    void cancelDiscoveryThrottle(CFNBlockEntityEx blockEntity) {
+        if (blockEntity.cfn_getEnergyLastThrottleTimer() != 0) {
+            return;
+        }
+        int timer = blockEntity.cfn_getEnergyThrottleTimer();
+        if (timer == 0) {
+            return;
+        }
+        int foundIndex = -1;
+        for (int index = 0; index < discoveryThrottledBlockEntities.size(); index++) {
+            if (discoveryThrottledBlockEntities.get(index) != blockEntity) {
+                continue;
+            }
+            if (foundIndex >= 0) {
+                throw new IllegalStateException("Discovery throttle list contains a duplicate block entity");
+            }
+            foundIndex = index;
+        }
+        if (foundIndex < 0) {
+            throw new IllegalStateException("Block entity has a discovery timer without a discovery throttle entry");
+        }
+        swapRemove(discoveryThrottledBlockEntities, foundIndex);
+        blockEntity.cfn_setEnergyThrottleTimer(0);
+    }
+
+    private static <T> void swapRemove(ObjectArrayList<T> list, int index) {
+        int lastIndex = list.size() - 1;
+        if (index != lastIndex) {
+            list.set(index, list.get(lastIndex));
+        }
+        list.remove(lastIndex);
     }
 
     private static IEnergyHandlerManager selectRegistrationManager(IEnergyHandlerManager currentOwner,
@@ -685,6 +782,7 @@ public final class EnergyMachineManager {
         if (!(blockEntity instanceof IMachineNodeBlockEntity machineNode)) {
             return RegistrationResult.UNSUPPORTED;
         }
+        cancelDiscoveryThrottle(blockEntity);
         if (!isCurrentBlockEntity(blockEntity)) {
             removeMachineNode(blockEntity);
             return RegistrationResult.STALE;
@@ -1195,18 +1293,8 @@ public final class EnergyMachineManager {
         if (!(nativeBlockEntity instanceof CFNBlockEntityEx blockEntity) || blockEntity.cfn_isRemoved()) {
             return hasScopeRetention(dimensionId, position, record);
         }
-        try {
-            if (!(blockEntity instanceof IMachineNodeBlockEntity)
-                && (blockEntity.cfn_isEnergyBlacklisted()
-                || blockEntity.cfn_getEnergyManager(null) == null)) {
-                return hasScopeRetention(dimensionId, position, record);
-            }
-        } catch (RuntimeException exception) {
-            CirculationFlowNetworks.LOGGER.error(
-                "Failed to resolve cold machine at dimension {} position {}",
-                dimensionId, EnergyHandlerRuntime.formatPosition(record.packedPosition()), exception
-            );
-            return true;
+        if (!(blockEntity instanceof IMachineNodeBlockEntity) && blockEntity.cfn_isEnergyBlacklisted()) {
+            return hasScopeRetention(dimensionId, position, record);
         }
         submitLifecycle(world, position, blockEntity, MachineLifecyclePositionIndex.Action.READY, null);
         return true;
@@ -1387,6 +1475,7 @@ public final class EnergyMachineManager {
     private void applyLifecycleCommand(LifecycleCommand command) {
         var blockEntity = command.blockEntity();
         if (command.action() == MachineLifecyclePositionIndex.Action.INVALIDATE) {
+            cancelDiscoveryThrottle(blockEntity);
             if (blockEntity instanceof IMachineNodeBlockEntity) {
                 removeMachineNode(blockEntity);
             } else {
@@ -1616,6 +1705,11 @@ public final class EnergyMachineManager {
         machineRoutes.clear();
         machineRoutesByPosition.clear();
         machineChunkResidency.clear();
+        for (int index = 0; index < discoveryThrottledBlockEntities.size(); index++) {
+            discoveryThrottledBlockEntities.get(index).cfn_setEnergyThrottleTimer(0);
+        }
+        discoveryThrottledBlockEntities.clear();
+        discoveryThrottleCursor = 0;
         nodeRescanTicks.clear();
         warningPositionsScratch.clear();
         warningSnapshots.clear();
@@ -1649,6 +1743,17 @@ public final class EnergyMachineManager {
     public @NotNull Set<CFNBlockEntityEx> getMachinesSuppliedBy(IEnergySupplyNode node) {
         return gridMachineMap.getOrDefault(node, ReferenceSets.emptySet());
     }
+
+    /**
+     * Returns the current-tick interaction totals owned by a registered machine route.
+     * Transfers through every linked grid contribute to this one tracker.
+     */
+    @Nullable
+    public synchronized Interaction getMachineInteraction(CFNBlockEntityEx blockEntity) {
+        Objects.requireNonNull(blockEntity, "blockEntity");
+        MachineRoute route = machineRoutes.get(blockEntity);
+        return route != null && route.isQueryable() ? route.interaction : null;
+    }
     @Nullable
     private static HubNode.HubMetadata getHubMetadata(@Nullable IGrid grid) {
         if (grid == null) {
@@ -1664,16 +1769,6 @@ public final class EnergyMachineManager {
         }
         grid.getInteraction().prepareForTick(INSTANCE.interactionEpoch);
         grid.getInteraction().recordGridTickTimeNanos(durationNanos);
-    }
-
-    @Nullable
-    static Interaction getOrCreateInteraction(@Nullable IGrid grid) {
-        if (grid == null) {
-            return null;
-        }
-        Interaction interaction = grid.getInteraction();
-        interaction.prepareForTick(INSTANCE.interactionEpoch);
-        return interaction;
     }
 
     static void recordDistributedChannelTickTimeNanos(ChannelParticipantIndex.ChannelEntry channel,
@@ -1801,25 +1896,30 @@ public final class EnergyMachineManager {
         RECEIVE;
 
         void interaction(EnergyAmount value,
-                         @Nullable Interaction senderInteraction,
-                         @Nullable Interaction receiverInteraction) {
+                         @Nullable MachineTransferSlot sender,
+                         @Nullable MachineTransferSlot receiver,
+                         long epoch) {
+            Objects.requireNonNull(value, "value");
+            if (!value.isPositive()) {
+                throw new IllegalArgumentException("Settled interaction value must be positive");
+            }
             switch (this) {
                 case INTERACTION -> {
-                    if (senderInteraction != null) {
-                        senderInteraction.output.add(value);
+                    if (sender != null) {
+                        sender.recordOutput(value, epoch);
                     }
-                    if (receiverInteraction != null) {
-                        receiverInteraction.input.add(value);
+                    if (receiver != null) {
+                        receiver.recordInput(value, epoch);
                     }
                 }
                 case EXTRACT -> {
-                    if (senderInteraction != null) {
-                        senderInteraction.output.add(value);
+                    if (sender != null) {
+                        sender.recordOutput(value, epoch);
                     }
                 }
                 case RECEIVE -> {
-                    if (receiverInteraction != null) {
-                        receiverInteraction.input.add(value);
+                    if (receiver != null) {
+                        receiver.recordInput(value, epoch);
                     }
                 }
             }
@@ -2082,6 +2182,7 @@ public final class EnergyMachineManager {
         private final long packedPosition;
         private final BlockPos position;
         private final boolean machineNode;
+        private final Interaction interaction = new Interaction();
         private final Reference2ObjectMap<IGrid, MachineTransferSlot> slots = new Reference2ObjectOpenHashMap<>();
         private final Reference2ObjectMap<IEnergySupplyNode, SupplyMachineEdge> supplyEdges =
             new Reference2ObjectOpenHashMap<>();
@@ -2128,6 +2229,11 @@ public final class EnergyMachineManager {
 
         private boolean isValid(MachineHandlerRuntime expectedRuntime) {
             return runtime == expectedRuntime && registered && !disposed;
+        }
+
+        private boolean isQueryable() {
+            return registered && routed && !disposed && runtime.isBound()
+                && tileEntity.cfn_getMachineHandlerRuntime() == runtime;
         }
 
         private boolean hasSupplyNode(IEnergySupplyNode node) {
@@ -2321,13 +2427,14 @@ public final class EnergyMachineManager {
                 throw new IllegalStateException("Effective machine-grid reference count overflow");
             }
             if (current == 0 && routeEnabled) {
-                MachineTransferSlot slot = new MachineTransferSlot(tileEntity);
+                MachineTransferSlot slot = new MachineTransferSlot(tileEntity, packedPosition, interaction);
                 try {
+                    slot.attachGridTracking(grid, grid.getInteraction());
                     configureSlot(grid, slot);
                     slots.put(grid, slot);
                 } catch (RuntimeException | Error exception) {
                     try {
-                        slot.detach();
+                        slot.detachGrid();
                     } catch (RuntimeException | Error rollbackException) {
                         exception.addSuppressed(rollbackException);
                     }
@@ -2348,7 +2455,7 @@ public final class EnergyMachineManager {
             }
             MachineTransferSlot slot = slots.get(grid);
             if (slot != null) {
-                slot.detach();
+                slot.detachGrid();
                 slots.remove(grid, slot);
             }
             effectiveGridRefCounts.removeInt(grid);
@@ -2373,7 +2480,15 @@ public final class EnergyMachineManager {
                 if (entry.getIntValue() <= 0 || slots.containsKey(entry.getKey())) {
                     continue;
                 }
-                slots.put(entry.getKey(), new MachineTransferSlot(tileEntity));
+                IGrid grid = entry.getKey();
+                MachineTransferSlot slot = new MachineTransferSlot(tileEntity, packedPosition, interaction);
+                slot.attachGridTracking(grid, grid.getInteraction());
+                MachineTransferSlot previous = slots.put(grid, slot);
+                if (previous != null) {
+                    slots.put(grid, previous);
+                    slot.detachGrid();
+                    throw new IllegalStateException("Machine grid slot was overwritten without removal");
+                }
             }
             for (var entry : slots.reference2ObjectEntrySet()) {
                 configureSlot(entry.getKey(), entry.getValue());
@@ -2381,12 +2496,14 @@ public final class EnergyMachineManager {
         }
 
         private void configureSlot(IGrid grid, MachineTransferSlot slot) {
+            slot.requireGridTracking(grid, grid.getInteraction());
             if (account == null) {
-                slot.detach();
+                slot.suspendTransfer();
                 return;
             }
             if (MachineBindingIndex.INSTANCE.isEnergyThrottled(tileEntity)) {
                 MachineBindingIndex.INSTANCE.markEnergyRouteRetry(tileEntity);
+                slot.suspendTransfer();
                 return;
             }
             EnergyHandlerRuntime.FailureContext failureContext = runtime.failureContext(dimensionId, packedPosition);
@@ -2400,7 +2517,7 @@ public final class EnergyMachineManager {
             );
             if (role == IEnergyHandler.EnergyType.INVALID) {
                 MachineBindingIndex.INSTANCE.markEnergyRoleFailure(tileEntity);
-                slot.detach();
+                slot.suspendTransfer();
                 return;
             }
             slot.configure(grid, account, policy, hubMetadata, grid.getInteraction(), role, priority, failureContext,
@@ -2410,7 +2527,7 @@ public final class EnergyMachineManager {
 
         private void clearSlots() {
             for (MachineTransferSlot slot : slots.values()) {
-                slot.detach();
+                slot.detachGrid();
             }
             slots.clear();
         }
@@ -2420,11 +2537,11 @@ public final class EnergyMachineManager {
             slots.clear();
             for (MachineTransferSlot slot : snapshot) {
                 try {
-                    slot.detach();
+                    slot.detachGrid();
                 } catch (RuntimeException | Error exception) {
                     failure = aggregateFailure(failure, exception);
                     try {
-                        slot.detach();
+                        slot.detachGrid();
                     } catch (RuntimeException | Error retryException) {
                         failure = aggregateFailure(failure, retryException);
                     }
@@ -2590,12 +2707,17 @@ public final class EnergyMachineManager {
 
     static final class MachineTransferSlot {
         private final CFNBlockEntityEx blockEntity;
+        private final long packedPosition;
+        private final Interaction machineInteraction;
+        private final Interaction gridMachineInteraction = new Interaction();
         @Nullable
         private MachineTransferAccount account;
         @Nullable
         private HubNode.HubMetadata hubMetadata;
         @Nullable
         private Interaction interaction;
+        @Nullable
+        private IGrid interactionGrid;
         @Nullable
         private HandlerBindingPolicy endpointPolicy;
         @Nullable
@@ -2607,8 +2729,12 @@ public final class EnergyMachineManager {
         private long warningPosLong;
         private boolean hasWarningTarget;
 
-        private MachineTransferSlot(CFNBlockEntityEx blockEntity) {
+        MachineTransferSlot(CFNBlockEntityEx blockEntity,
+                            long packedPosition,
+                            Interaction machineInteraction) {
             this.blockEntity = Objects.requireNonNull(blockEntity, "blockEntity");
+            this.packedPosition = packedPosition;
+            this.machineInteraction = Objects.requireNonNull(machineInteraction, "machineInteraction");
         }
 
         public GridParticipantMembership membership() {
@@ -2639,6 +2765,7 @@ public final class EnergyMachineManager {
                        EnergyHandlerRuntime.FailureContext failureContext,
                        @Nullable String warningDimensionKey,
                        long warningPosLong) {
+            requireGridTracking(grid, interaction);
             Objects.requireNonNull(account, "account");
             Objects.requireNonNull(endpointPolicy, "endpointPolicy");
             Objects.requireNonNull(failureContext, "failureContext");
@@ -2646,7 +2773,6 @@ public final class EnergyMachineManager {
             this.endpointPolicy = endpointPolicy;
             this.failureContext = failureContext;
             this.hubMetadata = hubMetadata;
-            this.interaction = interaction;
             GridParticipantIndex index = grid.getParticipantIndex();
             if (!membership.isBound()) {
                 index.add(role, this, priority);
@@ -2675,7 +2801,7 @@ public final class EnergyMachineManager {
             }
         }
 
-        void detach() {
+        void suspendTransfer() {
             if (membership.isBound()) {
                 requireMembershipOwner().remove(this);
             }
@@ -2683,9 +2809,64 @@ public final class EnergyMachineManager {
             account = null;
             endpointPolicy = null;
             hubMetadata = null;
-            interaction = null;
             failureContext = EnergyHandlerRuntime.FailureContext.UNKNOWN;
             hasWarningTarget = false;
+        }
+
+        void detachGrid() {
+            suspendTransfer();
+            if (interactionGrid == null) {
+                if (interaction != null) {
+                    throw new IllegalStateException("Machine slot retains a grid interaction without grid ownership");
+                }
+                return;
+            }
+            interactionGrid.getParticipantIndex().unregisterMachineInteraction(packedPosition, gridMachineInteraction);
+            interactionGrid = null;
+            interaction = null;
+        }
+
+        void attachGridTracking(IGrid grid, Interaction gridInteraction) {
+            if (interactionGrid == grid) {
+                if (interaction != gridInteraction
+                    || grid.getMachineInteractions().get(packedPosition) != gridMachineInteraction) {
+                    throw new IllegalStateException("Machine slot grid interaction identity changed without detach");
+                }
+                return;
+            }
+            if (interactionGrid != null) {
+                throw new IllegalStateException("Machine slot cannot move interaction tracking between grids");
+            }
+            grid.getParticipantIndex().registerMachineInteraction(packedPosition, gridMachineInteraction);
+            interactionGrid = grid;
+            interaction = gridInteraction;
+        }
+
+        void requireGridTracking(IGrid grid, Interaction gridInteraction) {
+            if (interactionGrid != grid || interaction != gridInteraction
+                || grid.getMachineInteractions().get(packedPosition) != gridMachineInteraction) {
+                throw new IllegalStateException("Machine slot grid interaction tracking is inconsistent");
+            }
+        }
+
+        private void recordInput(EnergyAmount value, long epoch) {
+            Interaction gridInteraction = interaction;
+            if (interactionGrid == null || gridInteraction == null) {
+                throw new IllegalStateException("Machine slot cannot record input without grid interaction tracking");
+            }
+            gridInteraction.recordPositiveInput(value, epoch);
+            gridMachineInteraction.recordPositiveInput(value, epoch);
+            machineInteraction.recordPositiveInput(value, epoch);
+        }
+
+        private void recordOutput(EnergyAmount value, long epoch) {
+            Interaction gridInteraction = interaction;
+            if (interactionGrid == null || gridInteraction == null) {
+                throw new IllegalStateException("Machine slot cannot record output without grid interaction tracking");
+            }
+            gridInteraction.recordPositiveOutput(value, epoch);
+            gridMachineInteraction.recordPositiveOutput(value, epoch);
+            machineInteraction.recordPositiveOutput(value, epoch);
         }
 
         private void updateAccountRole(MachineTransferAccount nextAccount, IEnergyHandler.EnergyType nextRole) {
@@ -2886,15 +3067,10 @@ public final class EnergyMachineManager {
                 sender.requireAccount(),
                 epoch,
                 hubMetadata,
-                sender.interaction,
-                interaction,
+                sender,
+                this,
                 status
             );
-        }
-
-        @Nullable
-        Interaction interaction() {
-            return interaction;
         }
 
         private MachineTransferAccount requireAccount() {
@@ -2935,7 +3111,8 @@ public final class EnergyMachineManager {
 
     static void transferEnergy(PriorityRoleIndex send,
                                Collection<EnergyTransferParticipant> receive,
-                               Status status) {
+                               Status status,
+                               long epoch) {
         if (send.isEmpty() || receive.isEmpty()) {
             return;
         }
@@ -2950,12 +3127,12 @@ public final class EnergyMachineManager {
                     }
                     sendTraversal.reset();
                     for (MachineTransferSlot sender = sendTraversal.next(); sender != null; sender = sendTraversal.next()) {
-                        if (!sender.isActive(INSTANCE.interactionEpoch)
+                        if (!sender.isActive(epoch)
                             || (sender.requiresPairMatch() || receiver.requiresPairMatch())
                             && !(sender.canExtract(receiver) && receiver.canReceive(sender))) {
                             continue;
                         }
-                        transferToItem(sender, receiver, status);
+                        transferToItem(sender, receiver, status, epoch);
                     }
                 } finally {
                     receivable.recycle();
@@ -3084,7 +3261,7 @@ public final class EnergyMachineManager {
                         if (received.isPositive()) {
                             if (!receiver.defersReceiveCommit()) {
                                 sender.commitExtractEnergy(received, epoch);
-                                status.interaction(received, sender.interaction(), receiver.interaction());
+                                status.interaction(received, sender, receiver, epoch);
                             }
                         } else {
                             return TRANSFER_RECEIVER_REJECTED;
@@ -3124,8 +3301,8 @@ public final class EnergyMachineManager {
 
     private static void transferToItem(MachineTransferSlot sender,
                                        EnergyTransferParticipant receiver,
-                                       Status status) {
-        long epoch = INSTANCE.interactionEpoch;
+                                       Status status,
+                                       long epoch) {
         EnergyAmount extractable = sender.canExtractValue(epoch);
         try {
             EnergyAmount receivable = receiver.canReceiveValue();
@@ -3146,7 +3323,7 @@ public final class EnergyMachineManager {
                         try {
                             if (received.isPositive()) {
                                 sender.commitExtractEnergy(received, epoch);
-                                status.interaction(received, sender.interaction(), receiver.interaction());
+                                status.interaction(received, sender, null, epoch);
                             }
                         } finally {
                             received.recycle();
@@ -3218,29 +3395,77 @@ public final class EnergyMachineManager {
         }
     }
 
+    /**
+     * Runtime input/output totals for one interaction owner. Values are initialized lazily by the first record in an
+     * epoch; reads from any other epoch return the immutable zero value without touching retained data.
+     */
     public static class Interaction {
         private final EnergyAmount input = EnergyAmount.obtain(0L);
         private final EnergyAmount output = EnergyAmount.obtain(0L);
         private long interactionTimeNanos;
         private long preparedEpoch = Long.MIN_VALUE;
 
+        /**
+         * Returns a snapshot of settled input for the current machine tick. A current-epoch snapshot is owned by the
+         * caller and must be recycled. A stale tracker returns {@link EnergyAmounts#ZERO}, which must not be recycled.
+         */
         public EnergyAmount getInput() {
-            ensureCurrent();
-            return input;
+            return inputAt(INSTANCE.interactionEpoch);
         }
 
+        /**
+         * Returns a snapshot of settled output for the current machine tick. A current-epoch snapshot is owned by the
+         * caller and must be recycled. A stale tracker returns {@link EnergyAmounts#ZERO}, which must not be recycled.
+         */
         public EnergyAmount getOutput() {
-            ensureCurrent();
-            return output;
+            return outputAt(INSTANCE.interactionEpoch);
+        }
+
+        /** Returns current-tick settled input as text without creating an owned {@link EnergyAmount} snapshot. */
+        public String getInputString() {
+            return preparedEpoch == INSTANCE.interactionEpoch ? input.toString() : "0";
+        }
+
+        /** Returns current-tick settled output as text without creating an owned {@link EnergyAmount} snapshot. */
+        public String getOutputString() {
+            return preparedEpoch == INSTANCE.interactionEpoch ? output.toString() : "0";
+        }
+
+        EnergyAmount inputAt(long epoch) {
+            return preparedEpoch == epoch ? EnergyAmount.obtain(input) : EnergyAmounts.ZERO;
+        }
+
+        EnergyAmount outputAt(long epoch) {
+            return preparedEpoch == epoch ? EnergyAmount.obtain(output) : EnergyAmounts.ZERO;
         }
 
         public String getInteractionTimeMicrosString() {
-            ensureCurrent();
-            return Long.toString(interactionTimeNanos / 1_000L);
+            return preparedEpoch == INSTANCE.interactionEpoch
+                ? Long.toString(interactionTimeNanos / 1_000L)
+                : "0";
+        }
+
+        void recordPositiveInput(EnergyAmount value, long epoch) {
+            requirePositiveInteraction(value);
+            prepareForTick(epoch);
+            input.add(value);
+        }
+
+        void recordPositiveOutput(EnergyAmount value, long epoch) {
+            requirePositiveInteraction(value);
+            prepareForTick(epoch);
+            output.add(value);
+        }
+
+        private static void requirePositiveInteraction(EnergyAmount value) {
+            Objects.requireNonNull(value, "value");
+            if (!value.isPositive()) {
+                throw new IllegalArgumentException("Settled interaction value must be positive");
+            }
         }
 
         void recordGridTickTimeNanos(long durationNanos) {
-            ensureCurrent();
+            prepareForTick(INSTANCE.interactionEpoch);
             if (durationNanos > 0L) {
                 interactionTimeNanos += durationNanos;
             }
@@ -3252,10 +3477,6 @@ public final class EnergyMachineManager {
             }
             reset();
             preparedEpoch = epoch;
-        }
-
-        private void ensureCurrent() {
-            prepareForTick(INSTANCE.interactionEpoch);
         }
 
         private void reset() {

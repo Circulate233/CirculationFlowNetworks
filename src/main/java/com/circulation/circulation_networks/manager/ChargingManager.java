@@ -90,7 +90,6 @@ public final class ChargingManager {
             var handler = EnergyHandlerRuntime.bindItem(stack, hubMetadata);
             if (handler == null) continue;
             var participant = EnergyTransferParticipant.obtain(handler, grid, hubMetadata);
-            participant.setInteraction(EnergyMachineManager.getOrCreateInteraction(grid));
             if (canReceiveMore(participant)) {
                 invs.add(participant);
                 continue;
@@ -110,7 +109,6 @@ public final class ChargingManager {
                 var energyHandler = EnergyHandlerRuntime.bindItem(stack, hubMetadata);
                 if (energyHandler == null) continue;
                 var participant = EnergyTransferParticipant.obtain(energyHandler, grid, hubMetadata);
-                participant.setInteraction(EnergyMachineManager.getOrCreateInteraction(grid));
                 if (canReceiveMore(participant)) {
                     invs.add(participant);
                     continue;
@@ -202,7 +200,6 @@ public final class ChargingManager {
             return;
         }
         var participant = EnergyTransferParticipant.obtain(handler, grid, hubMetadata);
-        participant.setInteraction(EnergyMachineManager.getOrCreateInteraction(grid));
         if (canReceiveMore(participant)) {
             result.add(participant);
             return;
@@ -242,8 +239,8 @@ public final class ChargingManager {
             return;
         }
         long startNanos = System.nanoTime();
-        transferEnergy(grid.getParticipantIndex().send(), chargingTargets, EnergyMachineManager.Status.EXTRACT);
-        transferEnergy(grid.getParticipantIndex().storage(), chargingTargets, EnergyMachineManager.Status.EXTRACT);
+        transferEnergy(grid.getParticipantIndex().send(), chargingTargets, EnergyMachineManager.Status.EXTRACT, epoch);
+        transferEnergy(grid.getParticipantIndex().storage(), chargingTargets, EnergyMachineManager.Status.EXTRACT, epoch);
         EnergyMachineManager.recordGridTickTimeNanos(grid, System.nanoTime() - startNanos);
     }
 
@@ -267,8 +264,8 @@ public final class ChargingManager {
             return;
         }
         long startNanos = System.nanoTime();
-        transferEnergy(channel.send(), channelTargetsScratch, EnergyMachineManager.Status.EXTRACT);
-        transferEnergy(channel.storage(), channelTargetsScratch, EnergyMachineManager.Status.EXTRACT);
+        transferEnergy(channel.send(), channelTargetsScratch, EnergyMachineManager.Status.EXTRACT, epoch);
+        transferEnergy(channel.storage(), channelTargetsScratch, EnergyMachineManager.Status.EXTRACT, epoch);
         EnergyMachineManager.recordDistributedChannelTickTimeNanos(channel, System.nanoTime() - startNanos);
     }
 

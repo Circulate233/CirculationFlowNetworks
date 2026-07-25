@@ -74,8 +74,8 @@ public final class NodeHudRequest implements Packet<NodeHudRequest> {
             EnergyMachineManager.Interaction interaction =
                 node.getGrid().getInteraction();
             if (interaction != null) {
-                input = interaction.getInput().toString();
-                output = interaction.getOutput().toString();
+                input = interaction.getInputString();
+                output = interaction.getOutputString();
                 interactionTimeMicros = interaction.getInteractionTimeMicrosString();
             }
         }

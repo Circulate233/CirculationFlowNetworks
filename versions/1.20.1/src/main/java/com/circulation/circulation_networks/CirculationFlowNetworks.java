@@ -29,6 +29,7 @@ import com.circulation.circulation_networks.utils.HubPlatformServices;
 import com.circulation.circulation_networks.utils.HubTeamServices;
 import com.circulation.circulation_networks.utils.Packet;
 import dev.ftb.mods.ftbteams.api.FTBTeamsAPI;
+import mekanism.common.tile.TileEntityBoundingBlock;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -108,6 +109,7 @@ public final class CirculationFlowNetworks {
             RegistryEnergyHandler.registerEnergyHandler(new DEHandlerManager());
         }
         if (ModList.get().isLoaded("mekanism")) {
+            RegistryEnergyHandler.registerBlackClass(TileEntityBoundingBlock.class);
             RegistryEnergyHandler.registerEnergyHandler(new MEKHandlerManager());
         }
     }

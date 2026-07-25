@@ -183,8 +183,8 @@ public class ContainerHub extends CFNBaseContainer {
             return;
         }
         if (refreshEnergy) {
-            input = energy.getInput().toString();
-            output = energy.getOutput().toString();
+            input = energy.getInputString();
+            output = energy.getOutputString();
         }
         if (refreshLatency) {
             interactionTimeMicros = energy.getInteractionTimeMicrosString();
