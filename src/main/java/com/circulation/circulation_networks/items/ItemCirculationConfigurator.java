@@ -478,6 +478,7 @@ public class ItemCirculationConfigurator extends BaseItem {
     }
     //~}
     //~}
+    //~}
 
     @Override
     protected List<LocalizedComponent> buildTooltips(ItemStack stack) {
