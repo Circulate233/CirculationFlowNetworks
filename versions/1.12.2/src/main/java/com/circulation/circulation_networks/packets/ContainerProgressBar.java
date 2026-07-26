@@ -43,7 +43,7 @@ public class ContainerProgressBar implements Packet<ContainerProgressBar> {
             case CLIENT -> {
                 var c = Minecraft.getMinecraft().player.openContainer;
                 if (c instanceof CFNBaseContainer cc) {
-                    cc.updateFullProgressBar(this.id, this.value);
+                    cc.updateFullProgressBar(message.id, message.value);
                 }
             }
         }

@@ -11,6 +11,7 @@ import com.circulation.circulation_networks.blocks.nodes.BlockPortNode;
 import com.circulation.circulation_networks.blocks.nodes.BlockRelayNode;
 import com.circulation.circulation_networks.container.ContainerCirculationShielder;
 import com.circulation.circulation_networks.container.ContainerHub;
+import com.circulation.circulation_networks.container.ContainerMachinePriority;
 import com.circulation.circulation_networks.tiles.CirculationShielderBlockEntity;
 import com.circulation.circulation_networks.tiles.MultiblockShellBlockEntity;
 import com.circulation.circulation_networks.tiles.NodePedestalBlockEntity;
@@ -96,6 +97,15 @@ public final class RegistryBlocks {
                 }
                 return null;
             }));
+            CFNMenuTypes.MACHINE_PRIORITY_MENU = registerMenuType(helper, "machine_priority", IForgeMenuType.create(
+                (containerId, inv, buf) -> new ContainerMachinePriority(
+                    CFNMenuTypes.MACHINE_PRIORITY_MENU,
+                    containerId,
+                    inv.player,
+                    buf.readBlockPos(),
+                    ContainerMachinePriority.handFromOrdinal(buf.readByte())
+                )
+            ));
         });
     }
 

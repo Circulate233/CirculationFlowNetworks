@@ -7,6 +7,7 @@ import com.circulation.circulation_networks.packets.ContainerProgressBar;
 import com.circulation.circulation_networks.packets.CreateHubChannel;
 import com.circulation.circulation_networks.packets.DeleteHubChannel;
 import com.circulation.circulation_networks.packets.HubPluginSyncRequest;
+import com.circulation.circulation_networks.packets.MachinePriorityPackets;
 import com.circulation.circulation_networks.packets.NodeHudRequest;
 import com.circulation.circulation_networks.packets.ToggleItemFunctionMessage;
 import com.circulation.circulation_networks.packets.UpdateHubChannelPermission;
@@ -57,6 +58,7 @@ public final class CFNNetwork {
         registerMessage(UpdatePlayerChargingMode.class, NetworkDirection.PLAY_TO_SERVER);
         registerMessage(NodeHudRequest.class, NetworkDirection.PLAY_TO_SERVER);
         registerMessage(HubPluginSyncRequest.class, NetworkDirection.PLAY_TO_SERVER);
+        registerMessage(new MachinePriorityPackets.Submit(), NetworkDirection.PLAY_TO_SERVER);
 
         for (var packetEntry : CFNNetworkPackets.playToClientPacketEntries()) {
             registerPlayToClient(packetEntry);

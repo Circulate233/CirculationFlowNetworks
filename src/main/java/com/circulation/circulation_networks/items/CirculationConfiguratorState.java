@@ -38,11 +38,12 @@ public final class CirculationConfiguratorState {
     }
 
     public static void setSubMode(ItemStack stack, int subMode) {
+        int normalizedSubMode = CirculationConfiguratorModeModel.wrapSubMode(subMode, getFunction(stack));
         //? if <1.21 {
-        putInt(ItemStackTagUtils.getOrCreateTagCompound(stack), MODE_KEY, subMode);
+        putInt(ItemStackTagUtils.getOrCreateTagCompound(stack), MODE_KEY, normalizedSubMode);
         //?} else {
         /*CompoundTag tag = ItemStackTagUtils.getOrCreateTagCompound(stack);
-        putInt(tag, MODE_KEY, subMode);
+        putInt(tag, MODE_KEY, normalizedSubMode);
         ItemStackTagUtils.saveTagCompound(stack, tag);
         *///?}
     }

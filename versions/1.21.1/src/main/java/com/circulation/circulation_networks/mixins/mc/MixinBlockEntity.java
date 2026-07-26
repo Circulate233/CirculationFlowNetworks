@@ -7,17 +7,26 @@ import com.circulation.circulation_networks.manager.HandlerInvalidationSink;
 import com.circulation.circulation_networks.manager.EnergyMachineManager;
 import com.circulation.circulation_networks.registry.RegistryEnergyHandler;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.Objects;
 
 @Mixin(value = BlockEntity.class, remap = false)
 public abstract class MixinBlockEntity implements CFNBlockEntityEx {
+
+    @Unique
+    private static final String CFN_ENERGY_PRIORITY_KEY = "circulation_networks:energy_priority";
 
     @Unique
     private EnergyMachineManager.MachineHandlerRuntime cfn$machineHandlerRuntime;
@@ -28,6 +37,9 @@ public abstract class MixinBlockEntity implements CFNBlockEntityEx {
     @Unique
     private int cfn$energyLastThrottleTimer;
 
+    @Unique
+    private int cfn$energyPriority;
+
     @Shadow
     public abstract Level getLevel();
 
@@ -36,6 +48,35 @@ public abstract class MixinBlockEntity implements CFNBlockEntityEx {
 
     @Shadow
     public abstract boolean isRemoved();
+
+    @Shadow
+    public abstract void setChanged();
+
+    @Inject(
+        method = "saveWithoutMetadata(Lnet/minecraft/core/HolderLookup$Provider;)Lnet/minecraft/nbt/CompoundTag;",
+        at = @At("RETURN"),
+        require = 1
+    )
+    private void cfn$saveEnergyPriority(HolderLookup.Provider registries,
+                                        CallbackInfoReturnable<CompoundTag> callback) {
+        CompoundTag tag = callback.getReturnValue();
+        if (cfn$energyPriority == 0) {
+            tag.remove(CFN_ENERGY_PRIORITY_KEY);
+        } else {
+            tag.putInt(CFN_ENERGY_PRIORITY_KEY, cfn$energyPriority);
+        }
+    }
+
+    @Inject(
+        method = "loadWithComponents(Lnet/minecraft/nbt/CompoundTag;Lnet/minecraft/core/HolderLookup$Provider;)V",
+        at = @At("TAIL"),
+        require = 1
+    )
+    private void cfn$loadEnergyPriority(CompoundTag tag,
+                                        HolderLookup.Provider registries,
+                                        CallbackInfo callback) {
+        cfn_loadEnergyPriority(tag.getInt(CFN_ENERGY_PRIORITY_KEY));
+    }
 
     @Override
     @Unique
@@ -119,6 +160,28 @@ public abstract class MixinBlockEntity implements CFNBlockEntityEx {
         var runtime = cfn$machineHandlerRuntime;
         cfn$machineHandlerRuntime = null;
         return runtime;
+    }
+
+    @Override
+    @Unique
+    public int cfn_getEnergyPriority() {
+        return cfn$energyPriority;
+    }
+
+    @Override
+    @Unique
+    public void cfn_setEnergyPriority(int priority) {
+        if (cfn$energyPriority == priority) {
+            return;
+        }
+        cfn$energyPriority = priority;
+        setChanged();
+    }
+
+    @Override
+    @Unique
+    public void cfn_loadEnergyPriority(int priority) {
+        cfn$energyPriority = priority;
     }
 
     @Override

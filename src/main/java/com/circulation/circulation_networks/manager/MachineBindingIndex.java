@@ -43,7 +43,6 @@ public final class MachineBindingIndex {
     private static final int SATURATED_THROTTLE_TIMER_COUNT =
         CFNBlockEntityEx.MAX_ENERGY_THROTTLE_TIMER - MIN_SATURATED_THROTTLE_TIMER + 1;
 
-    /** Shared server lifecycle index. */
     public static final MachineBindingIndex INSTANCE = new MachineBindingIndex();
 
     private MachineBindingIndex() {
@@ -63,7 +62,16 @@ public final class MachineBindingIndex {
         void updateMachinePriority(int priority);
     }
 
-    /** Handle used by a topology adapter to remove its own route. */
+    static final class PriorityRollbackException extends IllegalStateException {
+
+        PriorityRollbackException(RuntimeException cause) {
+            super("Machine priority rollback could not restore every transfer slot", cause);
+        }
+    }
+
+    /**
+     * Handle used by a topology adapter to remove its own route.
+     */
     interface RouteHandle {
         INode node();
 
@@ -118,9 +126,10 @@ public final class MachineBindingIndex {
     private int throttleEntriesAtTickStart;
     private int saturatedThrottleCursor;
     private boolean throttleCountdownPending;
+
     Binding bindBlockEntity(CFNBlockEntityEx blockEntity,
-                                   IEnergyHandler handler,
-                                   @Nullable MappedEnergyHandlerProvider mappedProvider) {
+                            IEnergyHandler handler,
+                            @Nullable MappedEnergyHandlerProvider mappedProvider) {
         Objects.requireNonNull(blockEntity, "blockEntity");
         Objects.requireNonNull(handler, "handler");
         requireNoProviderCallback("bind a block entity");
@@ -144,9 +153,11 @@ public final class MachineBindingIndex {
             throw exception;
         }
     }
+
     @Nullable Binding binding(CFNBlockEntityEx blockEntity) {
         return handlerBindings.get(Objects.requireNonNull(blockEntity, "blockEntity"));
     }
+
     public boolean unbindBlockEntity(CFNBlockEntityEx blockEntity) {
         Objects.requireNonNull(blockEntity, "blockEntity");
         requireNoProviderCallback("unbind a block entity");
@@ -162,6 +173,7 @@ public final class MachineBindingIndex {
         }
         return true;
     }
+
     public void beginServerTick(long epoch) {
         if (tickActive) {
             throw new IllegalStateException("A server-tick binding window is already active for epoch " + activeTickEpoch);
@@ -183,7 +195,7 @@ public final class MachineBindingIndex {
             rebindPendingBindings();
             throttleEntriesAtTickStart = throttledBlockEntities.size();
             throttleCountdownPending = true;
-            for (int index = 0; index < beginBindings.size();) {
+            for (int index = 0; index < beginBindings.size(); ) {
                 Binding binding = beginBindings.get(index);
                 binding.beginServerTick(epoch);
                 if (binding.beginIndex == index) {
@@ -191,7 +203,7 @@ public final class MachineBindingIndex {
                 }
             }
             drainPendingMappings(epoch);
-            for (int index = 0; index < beginBackends.size();) {
+            for (int index = 0; index < beginBackends.size(); ) {
                 BackendLease lease = beginBackends.get(index);
                 lease.beginServerTick(epoch);
                 if (lease.beginIndex == index) {
@@ -205,6 +217,7 @@ public final class MachineBindingIndex {
             throw rollbackBegunTick(epoch, exception);
         }
     }
+
     public void endServerTick(long epoch) {
         if (!tickActive || activeTickEpoch != epoch) {
             throw new IllegalStateException(
@@ -214,7 +227,7 @@ public final class MachineBindingIndex {
         }
         RuntimeException failure = null;
         try {
-            for (int index = 0; index < endBindings.size();) {
+            for (int index = 0; index < endBindings.size(); ) {
                 Binding binding = endBindings.get(index);
                 try {
                     binding.endServerTick(epoch);
@@ -225,7 +238,7 @@ public final class MachineBindingIndex {
                     index++;
                 }
             }
-            for (int index = 0; index < endBackends.size();) {
+            for (int index = 0; index < endBackends.size(); ) {
                 BackendLease lease = endBackends.get(index);
                 if (lease.activeEndEpoch != epoch) {
                     index++;
@@ -591,6 +604,7 @@ public final class MachineBindingIndex {
         handler.bindItem(stack, hubMetadata);
         return handler;
     }
+
     RouteHandle registerRoute(INode node, Route route) {
         Objects.requireNonNull(node, "node");
         Objects.requireNonNull(route, "route");
@@ -609,6 +623,7 @@ public final class MachineBindingIndex {
         }
         return routeEntry;
     }
+
     void registerMachineRoute(int dimensionId, long machinePosition, Route route) {
         Objects.requireNonNull(route, "route");
         requireRunning();
@@ -636,6 +651,7 @@ public final class MachineBindingIndex {
         }
         enqueue(entry);
     }
+
     void unregisterMachineRoute(int dimensionId, long machinePosition, Route route) {
         Objects.requireNonNull(route, "route");
         Long2ObjectOpenHashMap<MachineRouteEntry> dimensionRoutes = machineRoutes.get(dimensionId);
@@ -658,12 +674,14 @@ public final class MachineBindingIndex {
         unindexMachineRouteChunk(entry);
         structuralMutationCount++;
     }
+
     public void beginTopologyTransaction() {
         if (topologyTransactionDepth == Integer.MAX_VALUE) {
             throw new IllegalStateException("Topology transaction nesting overflow");
         }
         topologyTransactionDepth++;
     }
+
     public void endTopologyTransaction() {
         if (topologyTransactionDepth == 0) {
             throw new IllegalStateException("No topology transaction is open");
@@ -673,6 +691,7 @@ public final class MachineBindingIndex {
             commitPendingUpdates();
         }
     }
+
     public void onNodeGridChanged(INode node, @Nullable IGrid oldGrid, @Nullable IGrid newGrid) {
         Objects.requireNonNull(node, "node");
         NodeRecord nodeRecord = nodes.get(node);
@@ -695,12 +714,25 @@ public final class MachineBindingIndex {
         enqueueNode(nodeRecord);
         enqueueMachineRoute(nodeRecord.dimensionId, nodeRecord.packedPosition);
     }
-    public void updateMachinePriority(int dimensionId, long packedPosition, int priority) {
+
+    void updateMachinePriority(int dimensionId, long packedPosition, Route expectedRoute, int priority) {
+        Objects.requireNonNull(expectedRoute, "expectedRoute");
         MachineRouteEntry machineRoute = machineRoute(dimensionId, packedPosition);
-        if (machineRoute != null) {
-            machineRoute.queuePriority(priority);
+        if (machineRoute == null) {
+            throw new IllegalStateException(
+                "Cannot update priority without a registered machine route at dimension " + dimensionId
+                    + " position " + EnergyHandlerRuntime.formatPosition(packedPosition)
+            );
         }
+        if (machineRoute.route != expectedRoute) {
+            throw new IllegalStateException(
+                "Cannot update priority through a stale machine route at dimension " + dimensionId
+                    + " position " + EnergyHandlerRuntime.formatPosition(packedPosition)
+            );
+        }
+        machineRoute.queuePriority(priority);
     }
+
     public void onNodeActiveChanged(INode node, boolean oldActive, boolean newActive, @Nullable IGrid grid) {
         Objects.requireNonNull(node, "node");
         NodeRecord nodeRecord = nodes.get(node);
@@ -719,6 +751,7 @@ public final class MachineBindingIndex {
         enqueueNode(nodeRecord);
         enqueueMachineRoute(nodeRecord.dimensionId, nodeRecord.packedPosition);
     }
+
     public void onHubChannelBindingChanged(IHubNode hub, UUID oldChannelId, UUID newChannelId) {
         Objects.requireNonNull(hub, "hub");
         Objects.requireNonNull(oldChannelId, "oldChannelId");
@@ -733,6 +766,7 @@ public final class MachineBindingIndex {
         }
         enqueueNode(nodeRecord(hub));
     }
+
     public void onEnergyTypeOverrideChanged(int dimensionId,
                                             long packedPosition,
                                             @Nullable IEnergyHandler.EnergyType oldType,
@@ -742,6 +776,7 @@ public final class MachineBindingIndex {
         }
         enqueuePosition(dimensionId, packedPosition);
     }
+
     public void onEnergyTypeOverridesLoaded(EnergyTypeOverrideManager overrideManager) {
         Objects.requireNonNull(overrideManager, "overrideManager");
         for (int index = 0; index < allRoutes.size(); index++) {
@@ -751,6 +786,7 @@ public final class MachineBindingIndex {
             enqueue(allMachineRoutes.get(index));
         }
     }
+
     public void onShielderCoverageChanged(int dimensionId, LongSet added, LongSet removed) {
         Objects.requireNonNull(added, "added");
         Objects.requireNonNull(removed, "removed");
@@ -767,6 +803,7 @@ public final class MachineBindingIndex {
             shielderChunkScratch.clear();
         }
     }
+
     public void commitPendingUpdates() {
         if (topologyTransactionDepth != 0) {
             commitRequested = true;
@@ -793,6 +830,7 @@ public final class MachineBindingIndex {
             committing = false;
         }
     }
+
     public void onServerStop() {
         requireNoProviderCallback("stop the machine binding index");
         if (stopping) {
@@ -832,59 +870,59 @@ public final class MachineBindingIndex {
         RuntimeException failure = null;
         Error fatal = null;
         try {
-        for (int index = 0; index < routeSnapshot.size(); index++) {
+            for (int index = 0; index < routeSnapshot.size(); index++) {
+                try {
+                    routeSnapshot.get(index).shutdown();
+                } catch (RuntimeException exception) {
+                    failure = aggregate(failure, exception);
+                } catch (Error error) {
+                    fatal = aggregate(fatal, error);
+                }
+            }
+            for (int index = 0; index < machineRouteSnapshot.size(); index++) {
+                try {
+                    machineRouteSnapshot.get(index).shutdown();
+                } catch (RuntimeException exception) {
+                    failure = aggregate(failure, exception);
+                } catch (Error error) {
+                    fatal = aggregate(fatal, error);
+                }
+            }
+            for (int index = 0; index < bindingSnapshot.size(); index++) {
+                try {
+                    bindingSnapshot.get(index).unbind();
+                } catch (RuntimeException exception) {
+                    failure = aggregate(failure, exception);
+                } catch (Error error) {
+                    fatal = aggregate(fatal, error);
+                }
+            }
+            retryPendingBackendClosures();
+            if (!sharedBackendLeases.isEmpty()) {
+                failure = aggregate(failure, new IllegalStateException(
+                    "Shared backend leases retain physical escrow after handler unbind"
+                ));
+            }
+            if (!pendingBackendClosures.isEmpty()) {
+                failure = aggregate(failure, new IllegalStateException(
+                    "Physical extraction escrow remains owned by " + pendingBackendClosures.size()
+                        + " backend lease(s) after server stop"
+                ));
+            }
             try {
-                routeSnapshot.get(index).shutdown();
+                LocalParticipantRoutingIndex.INSTANCE.onServerStop();
             } catch (RuntimeException exception) {
                 failure = aggregate(failure, exception);
             } catch (Error error) {
                 fatal = aggregate(fatal, error);
             }
-        }
-        for (int index = 0; index < machineRouteSnapshot.size(); index++) {
             try {
-                machineRouteSnapshot.get(index).shutdown();
+                ChannelParticipantIndex.INSTANCE.onServerStop();
             } catch (RuntimeException exception) {
                 failure = aggregate(failure, exception);
             } catch (Error error) {
                 fatal = aggregate(fatal, error);
             }
-        }
-        for (int index = 0; index < bindingSnapshot.size(); index++) {
-            try {
-                bindingSnapshot.get(index).unbind();
-            } catch (RuntimeException exception) {
-                failure = aggregate(failure, exception);
-            } catch (Error error) {
-                fatal = aggregate(fatal, error);
-            }
-        }
-        retryPendingBackendClosures();
-        if (!sharedBackendLeases.isEmpty()) {
-            failure = aggregate(failure, new IllegalStateException(
-                "Shared backend leases retain physical escrow after handler unbind"
-            ));
-        }
-        if (!pendingBackendClosures.isEmpty()) {
-            failure = aggregate(failure, new IllegalStateException(
-                "Physical extraction escrow remains owned by " + pendingBackendClosures.size()
-                    + " backend lease(s) after server stop"
-            ));
-        }
-        try {
-            LocalParticipantRoutingIndex.INSTANCE.onServerStop();
-        } catch (RuntimeException exception) {
-            failure = aggregate(failure, exception);
-        } catch (Error error) {
-            fatal = aggregate(fatal, error);
-        }
-        try {
-            ChannelParticipantIndex.INSTANCE.onServerStop();
-        } catch (RuntimeException exception) {
-            failure = aggregate(failure, exception);
-        } catch (Error error) {
-            fatal = aggregate(fatal, error);
-        }
         } finally {
             for (int index = 0; index < terminalProviderCleanupDebts.size(); index++) {
                 ProviderCleanupDebt debt = terminalProviderCleanupDebts.get(index);
@@ -1013,14 +1051,14 @@ public final class MachineBindingIndex {
 
     private void addNodePosition(NodeRecord nodeRecord) {
         nodesByPosition.computeIfAbsent(nodeRecord.dimensionId, ignored -> new Long2ObjectOpenHashMap<>())
-            .computeIfAbsent(nodeRecord.packedPosition, ignored -> new ReferenceOpenHashSet<>())
-            .add(nodeRecord);
+                       .computeIfAbsent(nodeRecord.packedPosition, ignored -> new ReferenceOpenHashSet<>())
+                       .add(nodeRecord);
     }
 
     private void addNodeChunk(NodeRecord nodeRecord) {
         nodesByChunk.computeIfAbsent(nodeRecord.dimensionId, ignored -> new Long2ObjectOpenHashMap<>())
-            .computeIfAbsent(chunkKey(nodeRecord.chunkX, nodeRecord.chunkZ), ignored -> new ReferenceOpenHashSet<>())
-            .add(nodeRecord);
+                    .computeIfAbsent(chunkKey(nodeRecord.chunkX, nodeRecord.chunkZ), ignored -> new ReferenceOpenHashSet<>())
+                    .add(nodeRecord);
     }
 
     private void addNodeGrid(NodeRecord nodeRecord) {
@@ -1247,6 +1285,19 @@ public final class MachineBindingIndex {
     }
 
     private void commitMachineRoute(MachineRouteEntry entry) {
+        if (entry.deactivationIncomplete) {
+            try {
+                entry.deactivate();
+            } catch (RuntimeException exception) {
+                CirculationFlowNetworks.LOGGER.error(
+                    "Machine route {} failed during cleanup retry at dimension {} position {}",
+                    entry.route.getClass().getName(), entry.dimensionId,
+                    EnergyHandlerRuntime.formatPosition(entry.machinePosition), exception
+                );
+                deferRetry(entry);
+                return;
+            }
+        }
         if (!entry.registered || entry.retryDeferred) {
             return;
         }
@@ -1256,7 +1307,7 @@ public final class MachineBindingIndex {
                 entry.route.updateMachinePriority(entry.pendingPriority);
             } catch (RuntimeException exception) {
                 entry.priorityQueued = true;
-                handleMachineRouteFailure(entry, "priority update", exception);
+                handleMachinePriorityFailure(entry, exception);
                 return;
             }
         }
@@ -1267,7 +1318,7 @@ public final class MachineBindingIndex {
                 entry.routed = true;
             } catch (RuntimeException exception) {
                 entry.refreshQueued = true;
-                handleMachineRouteFailure(entry, "refresh", exception);
+                handleMachineRouteFailure(entry, exception);
             }
         }
     }
@@ -1290,12 +1341,10 @@ public final class MachineBindingIndex {
         }
     }
 
-    private void handleMachineRouteFailure(MachineRouteEntry entry,
-                                           String operation,
-                                           RuntimeException exception) {
+    private void handleMachineRouteFailure(MachineRouteEntry entry, RuntimeException exception) {
         CirculationFlowNetworks.LOGGER.error(
-            "Machine route {} failed during {} at dimension {} position {}",
-            entry.route.getClass().getName(), operation, entry.dimensionId,
+            "Machine route {} failed during refresh at dimension {} position {}",
+            entry.route.getClass().getName(), entry.dimensionId,
             EnergyHandlerRuntime.formatPosition(entry.machinePosition), exception
         );
         deferRetry(entry);
@@ -1308,6 +1357,28 @@ public final class MachineBindingIndex {
                 EnergyHandlerRuntime.formatPosition(entry.machinePosition), revokeException
             );
         }
+    }
+
+    private void handleMachinePriorityFailure(MachineRouteEntry entry, RuntimeException exception) {
+        if (exception instanceof PriorityRollbackException) {
+            entry.refreshQueued = true;
+            try {
+                entry.deactivate();
+            } catch (RuntimeException revokeException) {
+                exception.addSuppressed(revokeException);
+                CirculationFlowNetworks.LOGGER.error(
+                    "Machine route {} failed during priority recovery revoke at dimension {} position {}",
+                    entry.route.getClass().getName(), entry.dimensionId,
+                    EnergyHandlerRuntime.formatPosition(entry.machinePosition), revokeException
+                );
+            }
+        }
+        CirculationFlowNetworks.LOGGER.error(
+            "Machine route {} failed during priority update at dimension {} position {}",
+            entry.route.getClass().getName(), entry.dimensionId,
+            EnergyHandlerRuntime.formatPosition(entry.machinePosition), exception
+        );
+        deferRetry(entry);
     }
 
     private void deferRetry(RouteEntry entry) {
@@ -1533,7 +1604,7 @@ public final class MachineBindingIndex {
         boolean consumesPreviousReference = previousLease == lease;
         if (consumesPreviousReference
             && (finalBinding != binding || previousReferenceIndex != finalReferenceIndex
-                || !previousProviderReference)) {
+            || !previousProviderReference)) {
             throw new IllegalStateException("Reacquiring binding does not match its pending shared backend reference");
         }
         ProviderReference displacedProviderReference = lease.finalProviderReference
@@ -1847,26 +1918,30 @@ public final class MachineBindingIndex {
         private long activeEndEpoch = Long.MIN_VALUE;
 
         private Binding(MachineBindingIndex owner,
-                               CFNBlockEntityEx blockEntity,
-                               IEnergyHandler handler,
-                               @Nullable MappedEnergyHandlerProvider mappedProvider) {
+                        CFNBlockEntityEx blockEntity,
+                        IEnergyHandler handler,
+                        @Nullable MappedEnergyHandlerProvider mappedProvider) {
             this.owner = owner;
             this.blockEntity = blockEntity;
             this.handler = handler;
             this.mappedProvider = mappedProvider;
         }
+
         public IEnergyHandler handler() {
             return handler;
         }
+
         public boolean isActive() {
             return bound && backendLease != null;
         }
+
         public MachineTransferAccount account() {
             if (!isActive()) {
                 throw new IllegalStateException("Binding has been invalidated");
             }
             return Objects.requireNonNull(backendLease, "Binding has no backend lease").account;
         }
+
         public HandlerBindingPolicy policy() {
             return Objects.requireNonNull(policy, "Binding policy is not frozen");
         }
@@ -1968,44 +2043,44 @@ public final class MachineBindingIndex {
             boolean acquiredProviderReference = false;
             SharedBackendAcquisition sharedAcquisition = null;
             try {
-            switch (policy().mappingScope()) {
-                case NONE -> acquiredLease = owner.acquireExclusiveBackend(
-                    this, handler, policy(), false, failureContext()
-                );
-                case RUNTIME_DYNAMIC -> {
-                    IEnergyHandler backend = owner.resolveRuntimeProvider(this, epoch);
-                    HandlerBindingPolicy backendPolicy = Objects.requireNonNull(
-                        backend.bindingPolicy(), "backend.bindingPolicy()"
+                switch (policy().mappingScope()) {
+                    case NONE -> acquiredLease = owner.acquireExclusiveBackend(
+                        this, handler, policy(), false, failureContext()
                     );
-                    if (backendPolicy.mappingScope() != HandlerBindingPolicy.MappingScope.NONE) {
-                        throw new IllegalArgumentException("Mapped runtime backend must not require another backend");
-                    }
-                    acquiredLease = owner.acquireExclusiveBackend(
-                        this, backend, backendPolicy, true, failureContext()
-                    );
-                }
-                case SHARED_BACKEND -> {
-                    IEnergyHandler backend = owner.acquireSharedProviderReference(this);
-                    acquiredProviderReference = true;
-                    try {
-                        sharedAcquisition = owner.acquireSharedBackend(
-                            this,
-                            backend,
-                            previousLease,
-                            previousReferenceIndex,
-                            previousProviderReference,
-                            failureContext()
+                    case RUNTIME_DYNAMIC -> {
+                        IEnergyHandler backend = owner.resolveRuntimeProvider(this, epoch);
+                        HandlerBindingPolicy backendPolicy = Objects.requireNonNull(
+                            backend.bindingPolicy(), "backend.bindingPolicy()"
                         );
-                        acquiredLease = sharedAcquisition.lease;
-                    } catch (RuntimeException | Error exception) {
-                        owner.releaseSharedProviderReferenceAtMostOnce(
-                            MachineBindingIndex.providerReference(this, backend), "failed shared backend acquisition"
+                        if (backendPolicy.mappingScope() != HandlerBindingPolicy.MappingScope.NONE) {
+                            throw new IllegalArgumentException("Mapped runtime backend must not require another backend");
+                        }
+                        acquiredLease = owner.acquireExclusiveBackend(
+                            this, backend, backendPolicy, true, failureContext()
                         );
-                        throw exception;
                     }
+                    case SHARED_BACKEND -> {
+                        IEnergyHandler backend = owner.acquireSharedProviderReference(this);
+                        acquiredProviderReference = true;
+                        try {
+                            sharedAcquisition = owner.acquireSharedBackend(
+                                this,
+                                backend,
+                                previousLease,
+                                previousReferenceIndex,
+                                previousProviderReference,
+                                failureContext()
+                            );
+                            acquiredLease = sharedAcquisition.lease;
+                        } catch (RuntimeException | Error exception) {
+                            owner.releaseSharedProviderReferenceAtMostOnce(
+                                MachineBindingIndex.providerReference(this, backend), "failed shared backend acquisition"
+                            );
+                            throw exception;
+                        }
+                    }
+                    default -> throw new IllegalStateException("Unknown handler mapping scope");
                 }
-                default -> throw new IllegalStateException("Unknown handler mapping scope");
-            }
             } catch (RuntimeException | Error exception) {
                 backendReferenceIndex = previousReferenceIndex;
                 throw exception;
@@ -2181,12 +2256,15 @@ public final class MachineBindingIndex {
             this.binding = binding;
             this.generation = generation;
         }
+
         public void invalidate() {
             binding.invalidate(generation);
         }
+
         public void backendChanged() {
             binding.backendChanged(generation);
         }
+
         public void suspendUntilRebind() {
             binding.suspend(generation);
         }
@@ -2442,9 +2520,11 @@ public final class MachineBindingIndex {
             this.node = node;
             this.route = route;
         }
+
         public INode node() {
             return node.node;
         }
+
         public void unregister() {
             if (!registered) {
                 return;
@@ -2495,6 +2575,7 @@ public final class MachineBindingIndex {
         private boolean priorityQueued;
         private boolean retryDeferred;
         private boolean pendingQueued;
+        private boolean deactivationIncomplete;
         private int pendingPriority;
         private int allIndex = -1;
         private int chunkIndex = -1;
@@ -2515,7 +2596,7 @@ public final class MachineBindingIndex {
 
         private void queuePriority(int priority) {
             if (!registered) {
-                return;
+                throw new IllegalStateException("Cannot queue priority for an unregistered machine route");
             }
             pendingPriority = priority;
             priorityQueued = true;
@@ -2538,26 +2619,38 @@ public final class MachineBindingIndex {
         }
 
         private void shutdown() {
+            closeRoute();
             registered = false;
             pendingQueued = false;
             retryDeferred = false;
             refreshQueued = false;
             priorityQueued = false;
             allIndex = -1;
-            closeRoute();
         }
 
         private void closeRoute() {
             routed = false;
-            route.close();
+            try {
+                route.close();
+                deactivationIncomplete = false;
+            } catch (RuntimeException | Error exception) {
+                deactivationIncomplete = true;
+                throw exception;
+            }
         }
 
         private void deactivate() {
-            if (!routed) {
+            if (!routed && !deactivationIncomplete) {
                 return;
             }
             routed = false;
-            route.revoke();
+            try {
+                route.revoke();
+                deactivationIncomplete = false;
+            } catch (RuntimeException | Error exception) {
+                deactivationIncomplete = true;
+                throw exception;
+            }
         }
     }
 }

@@ -116,6 +116,30 @@ public interface CFNBlockEntityEx {
     EnergyMachineManager.MachineHandlerRuntime cfn_removeMachineHandlerRuntime();
 
     /**
+     * Returns the persistent transfer priority assigned to this machine.
+     * The value is stored on the native block entity so route recreation, chunk reload and server restart preserve it.
+     * Higher values are processed before lower values; the default is {@code 0}.
+     */
+    int cfn_getEnergyPriority();
+
+    /**
+     * Updates the persistent transfer priority assigned to this machine and marks the native block entity for saving.
+     * Runtime participant indexes are updated separately by the machine registration owner.
+     *
+     * @param priority complete signed integer priority; higher values are processed first
+     */
+    void cfn_setEnergyPriority(int priority);
+
+    /**
+     * Restores the persistent transfer priority from Minecraft's authoritative block-entity loading path.
+     * Unlike {@link #cfn_setEnergyPriority(int)}, this method must not mark the block entity dirty because loading an
+     * unchanged chunk is not a state mutation.
+     *
+     * @param priority persisted signed integer priority, or {@code 0} when the tag is absent
+     */
+    void cfn_loadEnergyPriority(int priority);
+
+    /**
      * Returns the remaining energy backoff ticks. A non-zero value suppresses
      * all handler and budget reads for the current server tick.
      */

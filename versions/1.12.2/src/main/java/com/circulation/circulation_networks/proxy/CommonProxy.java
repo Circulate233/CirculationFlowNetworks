@@ -2,6 +2,7 @@ package com.circulation.circulation_networks.proxy;
 
 import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.api.INodeBlockEntity;
+import com.circulation.circulation_networks.container.ContainerMachinePriority;
 import com.circulation.circulation_networks.energy.manager.EIOHandlerManager;
 import com.circulation.circulation_networks.energy.manager.AE2HandlerManager;
 import com.circulation.circulation_networks.energy.manager.EUHandlerManager;
@@ -20,6 +21,7 @@ import com.circulation.circulation_networks.manager.PocketNodeManager;
 import com.circulation.circulation_networks.packets.BindHubChannel;
 import com.circulation.circulation_networks.packets.CirculationShielderSyncPacket;
 import com.circulation.circulation_networks.packets.ConfigOverrideRendering;
+import com.circulation.circulation_networks.packets.ConfiguratorInteractionReport;
 import com.circulation.circulation_networks.packets.ContainerProgressBar;
 import com.circulation.circulation_networks.packets.ContainerValueConfig;
 import com.circulation.circulation_networks.packets.CreateHubChannel;
@@ -27,6 +29,7 @@ import com.circulation.circulation_networks.packets.DeleteHubChannel;
 import com.circulation.circulation_networks.packets.EnergyWarningRendering;
 import com.circulation.circulation_networks.packets.HubPluginSyncData;
 import com.circulation.circulation_networks.packets.HubPluginSyncRequest;
+import com.circulation.circulation_networks.packets.MachinePriorityPackets;
 import com.circulation.circulation_networks.packets.NodeHudData;
 import com.circulation.circulation_networks.packets.NodeHudRequest;
 import com.circulation.circulation_networks.packets.NodeNetworkRendering;
@@ -59,6 +62,7 @@ import net.minecraft.inventory.Container;
 import net.minecraft.item.Item;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.EnumHand;
 import net.minecraft.world.World;
 import net.minecraftforge.common.DimensionManager;
 import net.minecraftforge.common.MinecraftForge;
@@ -142,6 +146,7 @@ public class CommonProxy implements IGuiHandler {
         registerMessage(UpdateNodeCustomName.class, Side.SERVER);
         registerMessage(NodeHudRequest.class, Side.SERVER);
         registerMessage(HubPluginSyncRequest.class, Side.SERVER);
+        registerMessage(MachinePriorityPackets.Submit.class, Side.SERVER);
         registerMessage(BindHubChannel.class, Side.SERVER);
         registerMessage(CreateHubChannel.class, Side.SERVER);
         registerMessage(UpdateHubChannelSettings.class, Side.SERVER);
@@ -152,6 +157,7 @@ public class CommonProxy implements IGuiHandler {
         registerMessage(NodeNetworkRendering.class, Side.CLIENT);
         registerMessage(EnergyWarningRendering.class, Side.CLIENT);
         registerMessage(ConfigOverrideRendering.class, Side.CLIENT);
+        registerMessage(ConfiguratorInteractionReport.class, Side.CLIENT);
         registerMessage(ContainerProgressBar.class, Side.CLIENT);
         registerMessage(ContainerValueConfig.class, Side.CLIENT);
         registerMessage(RenderingClear.INSTANCE, Side.CLIENT);
@@ -296,6 +302,10 @@ public class CommonProxy implements IGuiHandler {
 
     @Override
     public @Nullable Container getServerGuiElement(int ID, EntityPlayer player, World world, int x, int y, int z) {
+        EnumHand priorityHand = ContainerMachinePriority.handFromGuiId(ID);
+        if (priorityHand != null) {
+            return new ContainerMachinePriority(player, world, new BlockPos(x, y, z), priorityHand);
+        }
         var tile = world.getTileEntity(new BlockPos(x, y, z));
         if (tile == null) {
             return null;

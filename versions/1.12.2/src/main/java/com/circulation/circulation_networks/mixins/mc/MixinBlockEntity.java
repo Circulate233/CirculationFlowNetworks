@@ -6,6 +6,7 @@ import com.circulation.circulation_networks.api.IEnergyHandlerManager;
 import com.circulation.circulation_networks.manager.HandlerInvalidationSink;
 import com.circulation.circulation_networks.manager.EnergyMachineManager;
 import com.circulation.circulation_networks.registry.RegistryEnergyHandler;
+import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
@@ -13,11 +14,17 @@ import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.Objects;
 
 @Mixin(TileEntity.class)
 public abstract class MixinBlockEntity implements CFNBlockEntityEx {
+
+    @Unique
+    private static final String CFN_ENERGY_PRIORITY_KEY = "circulation_networks:energy_priority";
 
     @Unique
     private EnergyMachineManager.MachineHandlerRuntime cfn$machineHandlerRuntime;
@@ -28,6 +35,9 @@ public abstract class MixinBlockEntity implements CFNBlockEntityEx {
     @Unique
     private int cfn$energyLastThrottleTimer;
 
+    @Unique
+    private int cfn$energyPriority;
+
     @Shadow
     public abstract World getWorld();
 
@@ -36,6 +46,23 @@ public abstract class MixinBlockEntity implements CFNBlockEntityEx {
 
     @Shadow
     public abstract boolean isInvalid();
+
+    @Shadow
+    public abstract void markDirty();
+
+    @Inject(
+        method = "create(Lnet/minecraft/world/World;Lnet/minecraft/nbt/NBTTagCompound;)Lnet/minecraft/tileentity/TileEntity;",
+        at = @At("RETURN"),
+        require = 1
+    )
+    private static void cfn$loadEnergyPriority(World worldIn,
+                                               NBTTagCompound compound,
+                                               CallbackInfoReturnable<TileEntity> callback) {
+        TileEntity blockEntity = callback.getReturnValue();
+        if (blockEntity != null) {
+            CFNBlockEntityEx.cfn_cast(blockEntity).cfn_loadEnergyPriority(compound.getInteger(CFN_ENERGY_PRIORITY_KEY));
+        }
+    }
 
     @Override
     @Unique
@@ -119,6 +146,28 @@ public abstract class MixinBlockEntity implements CFNBlockEntityEx {
         var runtime = cfn$machineHandlerRuntime;
         cfn$machineHandlerRuntime = null;
         return runtime;
+    }
+
+    @Override
+    @Unique
+    public int cfn_getEnergyPriority() {
+        return cfn$energyPriority;
+    }
+
+    @Override
+    @Unique
+    public void cfn_setEnergyPriority(int priority) {
+        if (cfn$energyPriority == priority) {
+            return;
+        }
+        cfn$energyPriority = priority;
+        markDirty();
+    }
+
+    @Override
+    @Unique
+    public void cfn_loadEnergyPriority(int priority) {
+        cfn$energyPriority = priority;
     }
 
     @Override

@@ -32,6 +32,8 @@ item.circulation_networks.circulation_configurator.current_mode=当前模式：�
 item.circulation_networks.circulation_configurator.current_submode=子模式：§9%s
 item.circulation_networks.circulation_configurator.mode.inspection=网络信息显示
 item.circulation_networks.circulation_configurator.mode.configuration=能量节点配置
+item.circulation_networks.circulation_configurator.mode.priority=机器优先级
+item.circulation_networks.circulation_configurator.mode.interaction=能量交互查询
 item.circulation_networks.circulation_configurator.mode_display=§6%s§7[§9%s§7]
 item.circulation_networks.circulation_configurator.submode.inspection.all=显示全部信息
 item.circulation_networks.circulation_configurator.submode.inspection.spoce=显示连接范围
@@ -48,8 +50,24 @@ item.circulation_networks.circulation_configurator.config.set=§a已将此方块
 item.circulation_networks.circulation_configurator.config.cleared=§a已清除此方块的能量配置
 item.circulation_networks.circulation_configurator.config.invalid_target=§c此方块不是有效的能量机器，无法配置
 item.circulation_networks.circulation_configurator.config.node_blocked=§c节点机器无法通过此方式配置
+item.circulation_networks.circulation_configurator.priority.set=§a机器优先级已设置为 %1$s
+item.circulation_networks.circulation_configurator.priority.error.context_changed=§c配置器或目标上下文已改变
+item.circulation_networks.circulation_configurator.priority.error.invalid_target=§c目标已不再是可用的能量机器
+item.circulation_networks.circulation_configurator.priority.error.disconnected=§c机器未接入能量网络
+item.circulation_networks.circulation_configurator.priority.error.out_of_reach=§c目标超出交互距离
+item.circulation_networks.circulation_configurator.interaction.machine.title=%1$s 在 (%2$s, %3$s, %4$s) 的能量交互
+item.circulation_networks.circulation_configurator.interaction.machine.input=输入：%s/t
+item.circulation_networks.circulation_configurator.interaction.machine.output=输出：%s/t
+item.circulation_networks.circulation_configurator.interaction.network.input_top=本网络机器输入前 10
+item.circulation_networks.circulation_configurator.interaction.network.output_top=本网络机器提取前 10
+item.circulation_networks.circulation_configurator.interaction.network.entry=%1$s. %2$s，坐标 (%3$s, %4$s, %5$s)：%6$s/t
+item.circulation_networks.circulation_configurator.interaction.network.empty=本 tick 此方向无交互
+item.circulation_networks.circulation_configurator.interaction.error.invalid_target=§c目标不是已注册的能量机器或节点
+item.circulation_networks.circulation_configurator.interaction.error.no_grid=§c节点尚未接入网络
 item.circulation_networks.circulation_configurator.mode.inspection.description=潜行 + 右键节点机器以显示节点的特定信息
 item.circulation_networks.circulation_configurator.mode.configuration.description=潜行 + 右键机器以覆盖网络自动化的机器类型检测
+item.circulation_networks.circulation_configurator.mode.priority.description=潜行右键已接入网络的能量机器以设置传输优先级
+item.circulation_networks.circulation_configurator.mode.interaction.description=潜行右键机器或节点以查询本 tick 的能量交互
 
 item.circulation_networks.sourceflow_crystal.name=环流源晶
 item.circulation_networks.netherforged_crystal.name=狱生熔晶
@@ -73,6 +91,11 @@ tooltip.circulation_networks.double_click_locate=§e双击查看世界上的坐�
 tooltip.circulation_networks.pocket_node_attach_on_block=§e右键以依附在方块上
 tooltip.circulation_networks.pocket_node_detach_with_configurator=§e可用环流配置器右键拆下
 tooltip.circulation_networks.node_rescan=§e空手潜行右键可重扫描附近能量设备
+
+# Circulation Configurator GUI
+gui.circulation_configurator.priority.title=机器能量优先级
+gui.circulation_configurator.priority.input=优先级
+gui.circulation_configurator.priority.invalid_input=§c优先级必须是 -2147483648 至 2147483647 范围内的整数
 
 # Circulation Shielder GUI
 gui.circulation_shielder.title=环流屏蔽仪配置

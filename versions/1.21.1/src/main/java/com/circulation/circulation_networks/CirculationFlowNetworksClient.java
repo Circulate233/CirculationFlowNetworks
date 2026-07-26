@@ -14,6 +14,7 @@ import com.circulation.circulation_networks.client.render.RotatingModelVBORender
 import com.circulation.circulation_networks.events.BlockEntityLifeCycleEvent;
 import com.circulation.circulation_networks.gui.GuiCirculationShielder;
 import com.circulation.circulation_networks.gui.GuiHub;
+import com.circulation.circulation_networks.gui.GuiMachinePriority;
 import com.circulation.circulation_networks.gui.component.base.ComponentAtlas;
 import com.circulation.circulation_networks.handlers.CirculationShielderRenderingHandler;
 import com.circulation.circulation_networks.handlers.ConfigOverrideRenderingHandler;
@@ -170,6 +171,7 @@ final class CirculationFlowNetworksClient {
     private static void onRegisterMenuScreens(RegisterMenuScreensEvent event) {
         event.register(CFNMenuTypes.HUB_MENU, GuiHub::new);
         event.register(CFNMenuTypes.CIRCULATION_SHIELDER_MENU, GuiCirculationShielder::new);
+        event.register(CFNMenuTypes.MACHINE_PRIORITY_MENU, GuiMachinePriority::new);
     }
 
     private static void onRegisterClientExtensions(RegisterClientExtensionsEvent event) {

@@ -24,6 +24,7 @@ public class TextFieldComponent extends Component {
     /*private EditBox textField;
      *///?}
     private Predicate<Character> inputAllowed = ALLOW_ALL_INPUT;
+    private Predicate<String> textFilter = ignored -> true;
     private int maxLength;
     private int textInsetLeft = 0;
     private int textInsetTop = 0;
@@ -76,6 +77,32 @@ public class TextFieldComponent extends Component {
         //?} else {
         /*textField.setValue(text != null ? text : "");
          *///?}
+        return this;
+    }
+
+    /**
+     * Sets the validator for the complete edited value. This is used when
+     * character-level filtering cannot express constraints such as numeric range.
+     */
+    public TextFieldComponent setTextFilter(Predicate<String> textFilter) {
+        this.textFilter = textFilter != null ? textFilter : ignored -> true;
+        //? if <1.20 {
+        this.textField.setValidator(this.textFilter::test);
+        //?} else {
+        /*this.textField.setFilter(this.textFilter);
+        *///?}
+        return this;
+    }
+
+    /** Selects the complete current value. */
+    public TextFieldComponent selectAll() {
+        //? if <1.20 {
+        textField.setCursorPositionEnd();
+        textField.setSelectionPos(0);
+        //?} else {
+        /*textField.setCursorPosition(textField.getValue().length());
+        textField.setHighlightPos(0);
+        *///?}
         return this;
     }
 
@@ -337,6 +364,7 @@ public class TextFieldComponent extends Component {
     private void applyNativeState() {
         textField.setEditable(isEnabled());
         textField.setVisible(isVisible());
+        textField.setFilter(textFilter);
         if (!isEnabled() && textField.isFocused()) {
             textField.setFocused(false);
         }

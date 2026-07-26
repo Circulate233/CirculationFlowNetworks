@@ -2,9 +2,6 @@ package com.circulation.circulation_networks.registry;
 
 import com.circulation.circulation_networks.api.node.IMachineNode;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
-import it.unimi.dsi.fastutil.objects.Reference2BooleanMap;
-import it.unimi.dsi.fastutil.objects.Reference2BooleanMaps;
-import it.unimi.dsi.fastutil.objects.Reference2BooleanOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
 import com.circulation.circulation_networks.api.IEnergyHandlerManager;
@@ -20,7 +17,9 @@ import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.NotNull;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 
 @SuppressWarnings("unused")
 public final class RegistryEnergyHandler {
@@ -39,8 +38,8 @@ public final class RegistryEnergyHandler {
     private static List<IEnergyHandlerManager> list = new ObjectArrayList<>();
     private static IEnergyHandlerManager[] managerArray = new IEnergyHandlerManager[0];
     private static boolean locked;
-    private static final Reference2BooleanMap<Class<?>> blackClassCache = Reference2BooleanMaps.synchronize(new Reference2BooleanOpenHashMap<>());
-    private static final Reference2BooleanMap<Class<?>> supplyBlackClassCache = Reference2BooleanMaps.synchronize(new Reference2BooleanOpenHashMap<>());
+    private static final Map<Class<?>, Boolean> blackClassCache = new ConcurrentHashMap<>();
+    private static final Map<Class<?>, Boolean> supplyBlackClassCache = new ConcurrentHashMap<>();
 
     private static ReferenceSet<Class<?>> registeredBlackClasses = new ReferenceOpenHashSet<>();
     private static ReferenceSet<Class<?>> registeredSupplyBlackClasses = new ReferenceOpenHashSet<>();
@@ -94,13 +93,13 @@ public final class RegistryEnergyHandler {
 
     public static boolean isBlack(TileEntity blockEntity) {
         if (blockEntity instanceof IMachineNodeBlockEntity) return true;
-        return blackClassCache.computeIfAbsent(blockEntity.getClass(), clazz ->
+        return blackClassCache.computeIfAbsent(blockEntity.getClass(), (Class<?> clazz) ->
             matchesExactClass(clazz, registeredBlackClassArray)
                 || matchesConfiguredClassRule(clazz, configuredBlackClassRules, blackPrefixArray));
     }
 
     public static boolean isSupplyBlack(TileEntity blockEntity) {
-        return supplyBlackClassCache.computeIfAbsent(blockEntity.getClass(), clazz ->
+        return supplyBlackClassCache.computeIfAbsent(blockEntity.getClass(), (Class<?> clazz) ->
             matchesExactClass(clazz, registeredSupplyBlackClassArray)
                 || matchesConfiguredClassRule(clazz, configuredSupplyBlackClassRules, supplyPrefixArray));
     }

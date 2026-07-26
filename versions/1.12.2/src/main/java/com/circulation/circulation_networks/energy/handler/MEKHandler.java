@@ -75,6 +75,8 @@ public class MEKHandler implements IEnergyHandler {
     private int blockMode = MODE_UNKNOWN;
     private boolean supportsSend;
     private boolean supportsReceive;
+    private boolean refreshPending;
+    private boolean refreshFailed;
 
     private static void clampToMaximum(EnergyAmount amount, BigInteger maximum) {
         if (amount == null || !amount.isInitialized() || amount.isNegative()) {
@@ -294,6 +296,12 @@ public class MEKHandler implements IEnergyHandler {
         energyType = structuralType(supportsSend, supportsReceive);
     }
 
+    /**
+     * Arms a lazy state refresh instead of re-resolving every bound machine on every tick. The dynamic
+     * transfer limits of energy cubes and induction ports must be sampled before a physical read, not at
+     * tick start, so the refresh is deferred to {@link #ensureRefreshed()} and is skipped entirely for a
+     * machine that no route selects this tick.
+     */
     @Override
     public HandlerTickResult beginServerTick(long epoch) {
         if (blockEntity == null) {
@@ -303,6 +311,32 @@ public class MEKHandler implements IEnergyHandler {
             throw new IllegalArgumentException("Mekanism handler epoch must increase: previous " + activeEpoch + ", got " + epoch);
         }
         activeEpoch = epoch;
+        if (refreshFailed) {
+            send = null;
+            receive = null;
+            energyType = EnergyType.INVALID;
+            creative = false;
+            maxReceive.setZero();
+            maxExtract.setZero();
+            refreshPending = false;
+            refreshFailed = false;
+            return HandlerTickResult.SUSPEND_UNTIL_REBIND;
+        }
+        refreshPending = true;
+        return HandlerTickResult.UNCHANGED;
+    }
+
+    /**
+     * Resolves the armed state refresh at most once per tick.
+     *
+     * @return {@code true} when this handler currently owns the backend its structural role requires
+     */
+    private boolean ensureRefreshed() {
+        if (!refreshPending) {
+            return !refreshFailed;
+        }
+        refreshPending = false;
+        TileEntity boundBlockEntity = Objects.requireNonNull(blockEntity, "blockEntity");
         send = null;
         receive = null;
         energyType = EnergyType.INVALID;
@@ -310,28 +344,28 @@ public class MEKHandler implements IEnergyHandler {
         maxReceive.setZero();
         maxExtract.setZero();
         boolean valid;
-        if (blockMode == MODE_ENERGY_CUBE && blockEntity instanceof TileEntityEnergyCube energyCube) {
+        if (blockMode == MODE_ENERGY_CUBE && boundBlockEntity instanceof TileEntityEnergyCube energyCube) {
             prepareEnergyCube(energyCube);
             valid = true;
-        } else if (blockMode == MODE_INDUCTION_PORT && INDUCTION_PORT.isInstance(blockEntity)) {
-            prepareInductionPort(blockEntity);
+        } else if (blockMode == MODE_INDUCTION_PORT && INDUCTION_PORT.isInstance(boundBlockEntity)) {
+            prepareInductionPort(boundBlockEntity);
             valid = true;
         } else if (blockMode == MODE_ORDINARY) {
-            valid = refreshOrdinaryCached(blockEntity);
+            valid = refreshOrdinaryCached(boundBlockEntity);
             if (!valid) {
-                valid = rediscoverRequiredOrdinary(blockEntity);
+                valid = rediscoverRequiredOrdinary(boundBlockEntity);
             }
         } else {
             valid = false;
         }
         if (valid && (supportsSend || supportsReceive)) {
             energyType = structuralType(supportsSend, supportsReceive);
-            return HandlerTickResult.UNCHANGED;
+            return true;
         }
         send = null;
         receive = null;
-        energyType = EnergyType.INVALID;
-        return HandlerTickResult.SUSPEND_UNTIL_REBIND;
+        refreshFailed = true;
+        return false;
     }
 
     @Override
@@ -356,6 +390,8 @@ public class MEKHandler implements IEnergyHandler {
         blockMode = MODE_UNKNOWN;
         supportsSend = false;
         supportsReceive = false;
+        refreshPending = false;
+        refreshFailed = false;
     }
 
     @Override
@@ -397,7 +433,7 @@ public class MEKHandler implements IEnergyHandler {
             }
             return accepted;
         } else {
-            if (receive == null) return EnergyAmounts.ZERO;
+            if (!ensureRefreshed() || receive == null) return EnergyAmounts.ZERO;
             EnergyAmount receivable = EnergyAmount.obtain(maxReceive);
             clampToMaximum(receivable, MAX_SCALED_DOUBLE_TRANSFER);
             if (!receivable.isZero()) {
@@ -409,7 +445,7 @@ public class MEKHandler implements IEnergyHandler {
 
     @Override
     public EnergyAmount extractEnergy(EnergyAmount maxExtract, @Nullable HubNode.HubMetadata hubMetadata) {
-        if (send == null) return EnergyAmounts.ZERO;
+        if (!ensureRefreshed() || send == null) return EnergyAmounts.ZERO;
         EnergyAmount extractable = EnergyAmount.obtain(maxExtract);
         clampToMaximum(extractable, MAX_SCALED_DOUBLE_TRANSFER);
         if (!extractable.isZero() && !creative) {
@@ -420,7 +456,7 @@ public class MEKHandler implements IEnergyHandler {
 
     @Override
     public EnergyAmount canExtractValue(@Nullable HubNode.HubMetadata hubMetadata) {
-        if (send == null) return EnergyAmounts.ZERO;
+        if (!ensureRefreshed() || send == null) return EnergyAmounts.ZERO;
         if (creative) return EnergyAmount.obtain(maxExtract);
         EnergyAmount extractable = EnergyAmountConversionUtils.obtainFromDoubleFloor(send.getEnergy() * 0.4D);
         return extractable.min(maxExtract);
@@ -431,7 +467,7 @@ public class MEKHandler implements IEnergyHandler {
         if (isItem) {
             return EnergyAmount.obtain(needEnergy);
         } else {
-            if (receive == null) return EnergyAmounts.ZERO;
+            if (!ensureRefreshed() || receive == null) return EnergyAmounts.ZERO;
             EnergyAmount receivable = EnergyAmountConversionUtils.obtainFromDoubleFloor((receive.getMaxEnergy() - receive.getEnergy()) * 0.4D);
             return receivable.min(maxReceive);
         }
@@ -439,6 +475,7 @@ public class MEKHandler implements IEnergyHandler {
 
     @Override
     public boolean canExtract(IEnergyHandler receiveHandler, @Nullable HubNode.HubMetadata hubMetadata) {
+        if (!ensureRefreshed()) return false;
         if (creative) return true;
         return send != null && send.getEnergy() >= 2.5;
     }
@@ -446,7 +483,8 @@ public class MEKHandler implements IEnergyHandler {
     @Override
     public boolean canReceive(IEnergyHandler sendHandler, @Nullable HubNode.HubMetadata hubMetadata) {
         if (isItem) return needEnergy.isPositive();
-        else return receive != null && (receive.getMaxEnergy() - receive.getEnergy()) * 0.4D > 0.0D;
+        if (!ensureRefreshed()) return false;
+        return receive != null && (receive.getMaxEnergy() - receive.getEnergy()) * 0.4D > 0.0D;
     }
 
     @Override

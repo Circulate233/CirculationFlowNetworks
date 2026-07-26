@@ -146,7 +146,8 @@ final class MachineTransferAccount {
         if (!sampleBudget(role, epoch, metadata, blockEntity)) {
             return false;
         }
-        return receiveBudget.isPositive(epoch);
+        // Sampling may have proven validity from the extract side alone, so the receive budget is resolved here.
+        return hasRemainingReceive(epoch, metadata);
     }
 
     public boolean hasExtractCandidate(long passId,
@@ -188,12 +189,20 @@ final class MachineTransferAccount {
             return budgetSampleValid;
         }
         IEnergyHandler.EnergyType physicalRole = effectiveRole();
-        initializeExtractIfRequired(physicalRole, epoch, metadata);
-        initializeReceiveIfRequired(physicalRole, epoch, metadata);
-        boolean extractPositive = physicalRole != IEnergyHandler.EnergyType.RECEIVE
-            && extractBudget.wasInitiallyPositive(epoch);
-        boolean receivePositive = physicalRole != IEnergyHandler.EnergyType.SEND
-            && receiveBudget.wasInitiallyPositive(epoch);
+        boolean extractPositive = false;
+        boolean receivePositive = false;
+        if (physicalRole != IEnergyHandler.EnergyType.RECEIVE) {
+            initializeExtract(epoch, metadata);
+            extractPositive = extractBudget.wasInitiallyPositive(epoch);
+        }
+        // A storage endpoint is already valid once its extract side has capacity, so the second physical probe
+        // is skipped. Both sides remain lazily resolvable, and the receive side is resolved on demand by
+        // hasRemainingReceive/sampleWarning.
+        if (physicalRole != IEnergyHandler.EnergyType.SEND
+            && !(physicalRole == IEnergyHandler.EnergyType.STORAGE && extractPositive)) {
+            initializeReceive(epoch, metadata);
+            receivePositive = receiveBudget.wasInitiallyPositive(epoch);
+        }
         boolean valid = switch (physicalRole) {
             case SEND -> extractPositive;
             case RECEIVE -> receivePositive;
@@ -264,11 +273,20 @@ final class MachineTransferAccount {
         throw new IllegalStateException("Physical account has no active structural role");
     }
 
+    /**
+     * Resolves the receive state a warning verdict needs while this account is still active.
+     * {@link #recordWarning(long, HubNode.HubMetadata)} runs after the binding window closed and can no longer
+     * probe the handler, so a sampled receive budget must be in place before settlement. A failed sample always
+     * throttles this endpoint, and a throttled endpoint reports from its cached verdict instead.
+     */
     void sampleWarning(IEnergyHandler.EnergyType role,
                        long epoch,
                        @Nullable HubNode.HubMetadata metadata,
                        CFNBlockEntityEx blockEntity) {
-        sampleBudget(role, epoch, metadata, blockEntity);
+        if (!sampleBudget(role, epoch, metadata, blockEntity)) {
+            return;
+        }
+        initializeReceive(epoch, metadata);
     }
 
     void recordWarning(long epoch, @Nullable HubNode.HubMetadata metadata) {
@@ -283,22 +301,6 @@ final class MachineTransferAccount {
 
     boolean hasCachedWarning() {
         return warningKnown && warningMissing;
-    }
-
-    private void initializeExtractIfRequired(IEnergyHandler.EnergyType role,
-                                             long epoch,
-                                             @Nullable HubNode.HubMetadata metadata) {
-        if (role != IEnergyHandler.EnergyType.RECEIVE) {
-            initializeExtract(epoch, metadata);
-        }
-    }
-
-    private void initializeReceiveIfRequired(IEnergyHandler.EnergyType role,
-                                             long epoch,
-                                             @Nullable HubNode.HubMetadata metadata) {
-        if (role != IEnergyHandler.EnergyType.SEND) {
-            initializeReceive(epoch, metadata);
-        }
     }
 
     public EnergyAmount remainingExtract(long epoch, @Nullable HubNode.HubMetadata metadata) {

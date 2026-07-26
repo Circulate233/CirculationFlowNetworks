@@ -79,6 +79,20 @@ public final class EnergyMachineManager {
     private static final long WARNING_RANGE_SYNC_INTERVAL_TICKS = 20L;
     private static final long WARNING_EVALUATION_INTERVAL_TICKS = 20L;
     private static final double WARNING_RENDER_DISTANCE_SQ = 48.0D * 48.0D;
+    /**
+     * Chunk radius that fully contains {@link #WARNING_RENDER_DISTANCE_SQ} around a player. It is a deliberate
+     * over-approximation of the exact distance test so warning sampling can be skipped for machines no player
+     * could ever be shown, without ever excluding a machine the exact test would accept.
+     */
+    private static final int WARNING_OBSERVER_CHUNK_RADIUS = 3;
+    /**
+     * Ticks that one read of a machine-scoped interaction tracker keeps per-machine accounting alive. It only has
+     * to outlast the polling interval of an open GUI or HUD so a continuously observed machine never falls out of
+     * the window between two reads.
+     */
+    private static final long MACHINE_INTERACTION_DEMAND_TICKS = 100L;
+    /** Backstop against unbounded growth if machine ticks stop draining queued statistics reads. */
+    private static final int MAX_DEFERRED_INTERACTION_QUERIES = 256;
     private static final int POSITION_READY_MAX_RESOLUTION_ATTEMPTS = 2;
     private static final int MIN_DISCOVERY_THROTTLE_TIMER =
         CFNBlockEntityEx.ENERGY_DISCOVERY_THROTTLE_TIMER - CFNBlockEntityEx.ENERGY_DISCOVERY_THROTTLE_JITTER;
@@ -94,6 +108,7 @@ public final class EnergyMachineManager {
     private final Int2ObjectMap<Long2ObjectMap<MachineRoute>> machineRoutesByPosition = new Int2ObjectOpenHashMap<>();
     private final Reference2LongMap<IEnergySupplyNode> nodeRescanTicks = new Reference2LongOpenHashMap<>();
     private final Object2ObjectMap<String, LongSet> warningPositionsScratch = new Object2ObjectOpenHashMap<>();
+    private final Object2ObjectMap<String, LongSet> warningObserverChunksScratch = new Object2ObjectOpenHashMap<>();
     private final WarningSnapshotSynchronizer warningSnapshots =
         new WarningSnapshotSynchronizer(WARNING_RANGE_SYNC_INTERVAL_TICKS);
     private final ObjectOpenHashSet<UUID> onlineWarningPlayerIdsScratch = new ObjectOpenHashSet<>();
@@ -121,6 +136,8 @@ public final class EnergyMachineManager {
     private final ObjectArrayList<LifecycleCommand> lifecycleInbox = new ObjectArrayList<>();
     private final ObjectArrayList<LifecycleCommand> lifecycleDrain = new ObjectArrayList<>();
     private final ObjectArrayList<CFNBlockEntityEx> discoveryThrottledBlockEntities = new ObjectArrayList<>();
+    private final ObjectArrayList<Runnable> deferredInteractionQueries = new ObjectArrayList<>();
+    private final ObjectArrayList<Runnable> deferredInteractionQueryDrain = new ObjectArrayList<>();
     private final Object2ObjectMap<PositionLifecycleKey, PositionLifecycleCommand> positionLifecycleInbox =
         new Object2ObjectOpenHashMap<>();
     private final Object2ObjectMap<PositionLifecycleKey, PositionLifecycleCommand> positionLifecycleDrain =
@@ -133,6 +150,7 @@ public final class EnergyMachineManager {
     private long warningSessionGeneration = 1L;
     private long interactionEpoch;
     private long transferPassId;
+    private long machineInteractionDemandEpoch = Long.MIN_VALUE;
     private int discoveryThrottleCursor;
     private boolean lifecycleDraining;
 
@@ -171,6 +189,10 @@ public final class EnergyMachineManager {
     private static double getPlayerDistanceSq(EntityPlayerMP player, BlockPos pos) {
         return player.getDistanceSq(pos.getX() + 0.5D, pos.getY() + 1.25D, pos.getZ() + 0.5D);
     }
+
+    private static BlockPos getPlayerBlockPos(EntityPlayerMP player) {
+        return player.getPosition();
+    }
     //?} else if <1.21 {
     /*private static MinecraftServer getServer() {
         return net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
@@ -207,6 +229,10 @@ public final class EnergyMachineManager {
         double dz = player.getZ() - (pos.getZ() + 0.5D);
         return dx * dx + dy * dy + dz * dz;
     }
+
+    private static BlockPos getPlayerBlockPos(ServerPlayer player) {
+        return player.blockPosition();
+    }
     *///?} else {
     /*private static MinecraftServer getServer() {
         return net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
@@ -242,6 +268,10 @@ public final class EnergyMachineManager {
         double dy = player.getY() - (pos.getY() + 1.25D);
         double dz = player.getZ() - (pos.getZ() + 0.5D);
         return dx * dx + dy * dy + dz * dz;
+    }
+
+    private static BlockPos getPlayerBlockPos(ServerPlayer player) {
+        return player.blockPosition();
     }
     *///?}
 
@@ -323,6 +353,7 @@ public final class EnergyMachineManager {
 
             if (evaluateWarnings) {
                 clearWarningPositionsScratch();
+                refreshWarningObserverChunks(server);
             }
             routingWindowOpen = true;
             beginPersistentRouting();
@@ -348,6 +379,47 @@ public final class EnergyMachineManager {
             settleAccountWarnings();
             sendWarningsToNearbyPlayers(server, warningPositionsScratch);
         }
+        drainDeferredInteractionQueries();
+    }
+
+    /**
+     * Queues a one-shot per-machine statistics read for the end of a machine tick that has already accounted for
+     * it. Per-machine accounting is demand-driven, so a read issued the moment a player asks for it would observe
+     * a tick that was never accounted; submitting the read instead renews the accounting window now and reports
+     * one fully accounted tick.
+     *
+     * @param query server-thread callback that performs the read and its output
+     */
+    public void submitDeferredInteractionQuery(Runnable query) {
+        Objects.requireNonNull(query, "query");
+        renewMachineInteractionDemand();
+        if (deferredInteractionQueries.size() >= MAX_DEFERRED_INTERACTION_QUERIES) {
+            CirculationFlowNetworks.LOGGER.warn(
+                "Dropping a deferred machine interaction query because {} are already pending",
+                deferredInteractionQueries.size()
+            );
+            return;
+        }
+        deferredInteractionQueries.add(query);
+    }
+
+    private void drainDeferredInteractionQueries() {
+        if (deferredInteractionQueries.isEmpty()) {
+            return;
+        }
+        deferredInteractionQueryDrain.addAll(deferredInteractionQueries);
+        deferredInteractionQueries.clear();
+        try {
+            for (int index = 0; index < deferredInteractionQueryDrain.size(); index++) {
+                try {
+                    deferredInteractionQueryDrain.get(index).run();
+                } catch (RuntimeException exception) {
+                    CirculationFlowNetworks.LOGGER.error("Deferred machine interaction query failed", exception);
+                }
+            }
+        } finally {
+            deferredInteractionQueryDrain.clear();
+        }
     }
 
     private void beginPersistentRouting() {
@@ -355,7 +427,6 @@ public final class EnergyMachineManager {
         for (int index = 0, count = localRoutes.routingGridCount(); index < count; index++) {
             IGrid grid = localRoutes.routingGridAt(index);
             try {
-                grid.getInteraction().prepareForTick(interactionEpoch);
                 grid.getParticipantIndex().beginRouting(interactionEpoch);
             } catch (RuntimeException exception) {
                 CirculationFlowNetworks.LOGGER.error("Failed to open machine routing for grid {}", grid.getId(), exception);
@@ -365,15 +436,32 @@ public final class EnergyMachineManager {
         for (int index = 0, count = channels.routingChannelCount(); index < count; index++) {
             ChannelParticipantIndex.ChannelEntry channel = channels.routingChannelAt(index);
             try {
-                for (int gridIndex = 0, gridCount = channel.gridCount(); gridIndex < gridCount; gridIndex++) {
-                    IGrid grid = channel.gridAt(gridIndex);
-                    grid.getInteraction().prepareForTick(interactionEpoch);
-                }
                 channels.beginRouting(channel.channelId(), interactionEpoch);
             } catch (RuntimeException exception) {
                 CirculationFlowNetworks.LOGGER.error("Failed to open machine routing for channel {}", channel.channelId(), exception);
             }
         }
+    }
+
+    /**
+     * Reports whether any of the three transfer phases can move energy at all. Each phase pairs two distinct
+     * role indexes, so a set of role indexes with fewer than two populated members has no eligible pair and the
+     * whole timed routing block can be skipped.
+     */
+    private static boolean hasTransferablePair(PriorityRoleIndex send,
+                                               PriorityRoleIndex storage,
+                                               PriorityRoleIndex receive) {
+        int populated = 0;
+        if (!send.isEmpty()) {
+            populated++;
+        }
+        if (!storage.isEmpty()) {
+            populated++;
+        }
+        if (!receive.isEmpty()) {
+            populated++;
+        }
+        return populated >= 2;
     }
 
     private void tickLocalRoutes() {
@@ -382,7 +470,8 @@ public final class EnergyMachineManager {
         for (int index = 0; index < routeCount; index++) {
             IGrid grid = routes.routingGridAt(index);
             GridParticipantIndex participants = grid.getParticipantIndex();
-            if (!participants.isRoutingActive()) {
+            if (!participants.isRoutingActive()
+                || !hasTransferablePair(participants.send(), participants.storage(), participants.receive())) {
                 continue;
             }
             long startNanos = System.nanoTime();
@@ -403,7 +492,8 @@ public final class EnergyMachineManager {
         int channelCount = channels.routingChannelCount();
         for (int index = 0; index < channelCount; index++) {
             ChannelParticipantIndex.ChannelEntry channel = channels.routingChannelAt(index);
-            if (!channel.isRoutingActive() || channel.routingEpoch() != interactionEpoch) {
+            if (!channel.isRoutingActive() || channel.routingEpoch() != interactionEpoch
+                || !hasTransferablePair(channel.send(), channel.storage(), channel.receive())) {
                 continue;
             }
             long startNanos = System.nanoTime();
@@ -578,7 +668,7 @@ public final class EnergyMachineManager {
                 continue;
             }
             swapRemove(discoveryThrottledBlockEntities, index);
-            submitLifecycle(blockEntity, MachineLifecyclePositionIndex.Action.READY);
+            submitLifecycle(blockEntity, MachineLifecyclePositionIndex.Action.DISCOVERY_RETRY);
         }
     }
 
@@ -1004,7 +1094,6 @@ public final class EnergyMachineManager {
             current.topologyChanged();
             return;
         }
-        int retainedPriority = current == null ? GridParticipantIndex.DEFAULT_PRIORITY : current.priority();
         removeMachineRoute(blockEntity);
         var world = blockEntity.cfn_getWorld();
         var position = blockEntity.cfn_getBlockPos();
@@ -1013,8 +1102,9 @@ public final class EnergyMachineManager {
                 blockEntity.cfn_getTypeName());
             return;
         }
-        MachineRoute route = new MachineRoute(blockEntity, runtime, getDimensionId(world), packBlockPosition(position), position,
-            retainedPriority);
+        MachineRoute route = new MachineRoute(
+            blockEntity, runtime, getDimensionId(world), packBlockPosition(position), position
+        );
         evictDisplacedMachineRoute(route.dimensionId, route.packedPosition, blockEntity);
         try {
             route.register();
@@ -1225,7 +1315,7 @@ public final class EnergyMachineManager {
             *///?}
         }
         for (CFNBlockEntityEx blockEntity : blockEntities) {
-            submitLifecycle(blockEntity, MachineLifecyclePositionIndex.Action.READY);
+            submitLifecycle(blockEntity, MachineLifecyclePositionIndex.Action.DISCOVERED);
         }
     }
 
@@ -1296,7 +1386,7 @@ public final class EnergyMachineManager {
         if (!(blockEntity instanceof IMachineNodeBlockEntity) && blockEntity.cfn_isEnergyBlacklisted()) {
             return hasScopeRetention(dimensionId, position, record);
         }
-        submitLifecycle(world, position, blockEntity, MachineLifecyclePositionIndex.Action.READY, null);
+        submitLifecycle(world, position, blockEntity, MachineLifecyclePositionIndex.Action.DISCOVERED, null);
         return true;
     }
 
@@ -1499,6 +1589,15 @@ public final class EnergyMachineManager {
             || packBlockPosition(position) != command.packedPosition()
             || !isCurrentBlockEntity(blockEntity)) {
             return;
+        }
+        if (command.action() == MachineLifecyclePositionIndex.Action.DISCOVERED) {
+            submitLifecycle(
+                world, position, blockEntity, MachineLifecyclePositionIndex.Action.DISCOVERY_RETRY, null
+            );
+            return;
+        }
+        if (command.action() == MachineLifecyclePositionIndex.Action.READY) {
+            cancelDiscoveryThrottle(blockEntity);
         }
         evictDisplacedMachineRoute(command.dimensionId(), command.packedPosition(), blockEntity);
         RegistrationResult result;
@@ -1710,6 +1809,9 @@ public final class EnergyMachineManager {
         }
         discoveryThrottledBlockEntities.clear();
         discoveryThrottleCursor = 0;
+        deferredInteractionQueries.clear();
+        deferredInteractionQueryDrain.clear();
+        machineInteractionDemandEpoch = Long.MIN_VALUE;
         nodeRescanTicks.clear();
         warningPositionsScratch.clear();
         warningSnapshots.clear();
@@ -1747,13 +1849,109 @@ public final class EnergyMachineManager {
     /**
      * Returns the current-tick interaction totals owned by a registered machine route.
      * Transfers through every linked grid contribute to this one tracker.
+     *
+     * <p>Per-machine accounting is demand-driven, so this call renews the accounting window. A tracker that was
+     * not being observed reports the current tick as zero and becomes accurate from the next tick onward.
      */
     @Nullable
     public synchronized Interaction getMachineInteraction(CFNBlockEntityEx blockEntity) {
         Objects.requireNonNull(blockEntity, "blockEntity");
+        renewMachineInteractionDemand();
         MachineRoute route = machineRoutes.get(blockEntity);
         return route != null && route.isQueryable() ? route.interaction : null;
     }
+
+    /**
+     * Keeps per-machine interaction accounting alive for {@link #MACHINE_INTERACTION_DEMAND_TICKS} more ticks.
+     *
+     * <p>Reading a machine-scoped tracker renews the window automatically. A consumer whose read is a one-shot
+     * action rather than a poll should call this while the read is still upcoming — otherwise the first read
+     * after a quiet period reports the current tick as zero.
+     */
+    public void renewMachineInteractionDemand() {
+        long epoch = interactionEpoch;
+        long renewed = epoch > Long.MAX_VALUE - MACHINE_INTERACTION_DEMAND_TICKS
+            ? Long.MAX_VALUE
+            : epoch + MACHINE_INTERACTION_DEMAND_TICKS;
+        if (renewed > machineInteractionDemandEpoch) {
+            machineInteractionDemandEpoch = renewed;
+        }
+    }
+
+    /** Reports whether any consumer read a machine-scoped tracker recently enough to require accounting. */
+    private boolean isMachineInteractionDemanded() {
+        return interactionEpoch <= machineInteractionDemandEpoch;
+    }
+
+    /**
+     * Returns one consistent priority and binding-identity snapshot for a currently connected machine.
+     * The target must still own its registered, bound and routed runtime and at least one active grid slot.
+     *
+     * @param blockEntity exact block-entity identity being inspected
+     * @return current priority state, or {@code null} when the target is not currently configurable
+     */
+    @Nullable
+    public synchronized ConnectedMachinePriority getConnectedMachinePriority(CFNBlockEntityEx blockEntity) {
+        Objects.requireNonNull(blockEntity, "blockEntity");
+        MachineRoute route = machineRoutes.get(blockEntity);
+        if (route == null || !route.isPriorityConfigurable(blockEntity)) {
+            return null;
+        }
+        return new ConnectedMachinePriority(
+            blockEntity.cfn_getEnergyPriority(), route.runtime.bindingGeneration()
+        );
+    }
+
+    /**
+     * Queues a runtime priority update and then persists it when the submitted binding identity is still current.
+     * The generation check, exact block-entity identity check and route/grid validation execute in this one synchronized
+     * critical section so a stale GUI cannot modify a replacement machine at the same position.
+     *
+     * @param blockEntity exact current block-entity identity resolved by the server
+     * @param expectedGeneration binding generation returned by {@link #getConnectedMachinePriority(CFNBlockEntityEx)}
+     * @param priority complete signed integer priority to apply
+     * @return {@code true} when the matching current binding accepted the update; otherwise {@code false}
+     */
+    public synchronized boolean setConnectedMachinePriority(CFNBlockEntityEx blockEntity,
+                                                            long expectedGeneration,
+                                                            int priority) {
+        Objects.requireNonNull(blockEntity, "blockEntity");
+        MachineRoute route = machineRoutes.get(blockEntity);
+        if (route == null || !route.isPriorityConfigurable(blockEntity)
+            || route.runtime.bindingGeneration() != expectedGeneration) {
+            return false;
+        }
+        if (blockEntity.cfn_getEnergyPriority() == priority) {
+            return true;
+        }
+        MachineBindingIndex.INSTANCE.updateMachinePriority(
+            route.dimensionId, route.packedPosition, route, priority
+        );
+        blockEntity.cfn_setEnergyPriority(priority);
+        return true;
+    }
+
+    /** Immutable GUI authority snapshot for one connected machine binding. */
+    public static final class ConnectedMachinePriority {
+        private final int priority;
+        private final long bindingGeneration;
+
+        private ConnectedMachinePriority(int priority, long bindingGeneration) {
+            this.priority = priority;
+            this.bindingGeneration = bindingGeneration;
+        }
+
+        /** Returns the persistent full-range signed machine priority. */
+        public int priority() {
+            return priority;
+        }
+
+        /** Returns the runtime binding identity that must accompany a later priority submission. */
+        public long bindingGeneration() {
+            return bindingGeneration;
+        }
+    }
+
     @Nullable
     private static HubNode.HubMetadata getHubMetadata(@Nullable IGrid grid) {
         if (grid == null) {
@@ -1805,6 +2003,33 @@ public final class EnergyMachineManager {
         }
     }
 
+    /**
+     * Rebuilds the chunk window that currently has a warning observer. Sampling a warning costs a real handler
+     * read, so the render-distance test that {@link #sendWarningsToNearbyPlayers} applies to finished snapshots
+     * is hoisted in front of sampling: a machine no player is near is never probed at all.
+     */
+    private void refreshWarningObserverChunks(MinecraftServer server) {
+        for (var chunks : warningObserverChunksScratch.values()) {
+            chunks.clear();
+        }
+        for (var player : server.getPlayerList().getPlayers()) {
+            String dimensionKey = getPlayerDimensionKey(player);
+            LongSet chunks = warningObserverChunksScratch.get(dimensionKey);
+            if (chunks == null) {
+                chunks = new LongOpenHashSet();
+                warningObserverChunksScratch.put(dimensionKey, chunks);
+            }
+            BlockPos position = getPlayerBlockPos(player);
+            int centerChunkX = ChunkCoordUtils.getChunkX(position);
+            int centerChunkZ = ChunkCoordUtils.getChunkZ(position);
+            for (int offsetX = -WARNING_OBSERVER_CHUNK_RADIUS; offsetX <= WARNING_OBSERVER_CHUNK_RADIUS; offsetX++) {
+                for (int offsetZ = -WARNING_OBSERVER_CHUNK_RADIUS; offsetZ <= WARNING_OBSERVER_CHUNK_RADIUS; offsetZ++) {
+                    chunks.add(ChunkCoordUtils.mergeChunkCoords(centerChunkX + offsetX, centerChunkZ + offsetZ));
+                }
+            }
+        }
+    }
+
     private void settleAccountWarnings() {
         LocalParticipantRoutingIndex localRoutes = LocalParticipantRoutingIndex.INSTANCE;
         for (int index = 0, count = localRoutes.routingGridCount(); index < count; index++) {
@@ -1831,7 +2056,7 @@ public final class EnergyMachineManager {
         warningCursor.prepare(receive);
         try {
             for (MachineTransferSlot slot = warningCursor.next(); slot != null; slot = warningCursor.next()) {
-                slot.prepareWarning(interactionEpoch);
+                slot.prepareWarning(interactionEpoch, warningObserverChunksScratch);
             }
         } finally {
             warningCursor.close();
@@ -1842,7 +2067,7 @@ public final class EnergyMachineManager {
         warningCursor.prepare(receive);
         try {
             for (MachineTransferSlot slot = warningCursor.next(); slot != null; slot = warningCursor.next()) {
-                slot.collectWarning(warningPositionsScratch, interactionEpoch);
+                slot.collectWarning(warningPositionsScratch, interactionEpoch, warningObserverChunksScratch);
             }
         } finally {
             warningCursor.close();
@@ -1903,23 +2128,31 @@ public final class EnergyMachineManager {
             if (!value.isPositive()) {
                 throw new IllegalArgumentException("Settled interaction value must be positive");
             }
+            if (INSTANCE.isMachineInteractionDemanded()) {
+                if (sender != null) {
+                    sender.recordMachineOutput(value, epoch);
+                }
+                if (receiver != null) {
+                    receiver.recordMachineInput(value, epoch);
+                }
+            }
             switch (this) {
                 case INTERACTION -> {
                     if (sender != null) {
-                        sender.recordOutput(value, epoch);
+                        sender.recordGridOutput(value, epoch);
                     }
                     if (receiver != null) {
-                        receiver.recordInput(value, epoch);
+                        receiver.recordGridInput(value, epoch);
                     }
                 }
                 case EXTRACT -> {
                     if (sender != null) {
-                        sender.recordOutput(value, epoch);
+                        sender.recordGridOutput(value, epoch);
                     }
                 }
                 case RECEIVE -> {
                     if (receiver != null) {
-                        receiver.recordInput(value, epoch);
+                        receiver.recordGridInput(value, epoch);
                     }
                 }
             }
@@ -2140,6 +2373,10 @@ public final class EnergyMachineManager {
                 && MachineBindingIndex.INSTANCE.binding(tileEntity) == binding;
         }
 
+        private long bindingGeneration() {
+            return bindingGeneration;
+        }
+
         private boolean hasBindingReference() {
             return binding != null;
         }
@@ -2182,7 +2419,7 @@ public final class EnergyMachineManager {
         private final long packedPosition;
         private final BlockPos position;
         private final boolean machineNode;
-        private final Interaction interaction = new Interaction();
+        private final Interaction interaction = new Interaction(true);
         private final Reference2ObjectMap<IGrid, MachineTransferSlot> slots = new Reference2ObjectOpenHashMap<>();
         private final Reference2ObjectMap<IEnergySupplyNode, SupplyMachineEdge> supplyEdges =
             new Reference2ObjectOpenHashMap<>();
@@ -2202,8 +2439,7 @@ public final class EnergyMachineManager {
                              MachineHandlerRuntime runtime,
                              int dimensionId,
                              long packedPosition,
-                             BlockPos position,
-                             int priority) {
+                             BlockPos position) {
             var world = tileEntity.cfn_getWorld();
             if (world == null) {
                 throw new IllegalStateException("Cannot create a machine route without a world");
@@ -2214,17 +2450,13 @@ public final class EnergyMachineManager {
             this.dimensionKey = getDimensionKey(world);
             this.packedPosition = packedPosition;
             this.position = position;
-            this.priority = priority;
+            this.priority = tileEntity.cfn_getEnergyPriority();
             this.machineNode = tileEntity instanceof IMachineNodeBlockEntity;
             effectiveGridRefCounts.defaultReturnValue(0);
         }
 
         private MachineHandlerRuntime runtime() {
             return runtime;
-        }
-
-        private int priority() {
-            return priority;
         }
 
         private boolean isValid(MachineHandlerRuntime expectedRuntime) {
@@ -2236,6 +2468,10 @@ public final class EnergyMachineManager {
                 && tileEntity.cfn_getMachineHandlerRuntime() == runtime;
         }
 
+        private boolean isPriorityConfigurable(CFNBlockEntityEx expectedBlockEntity) {
+            return tileEntity == expectedBlockEntity && isQueryable() && routeEnabled && !slots.isEmpty();
+        }
+
         private boolean hasSupplyNode(IEnergySupplyNode node) {
             return supplyEdges.containsKey(node);
         }
@@ -2245,7 +2481,7 @@ public final class EnergyMachineManager {
                 throw new IllegalStateException("Machine route cannot be registered in its current state");
             }
             MachineBindingIndex.INSTANCE.registerMachineRoute(dimensionId, packedPosition, this);
-            MachineBindingIndex.INSTANCE.updateMachinePriority(dimensionId, packedPosition, priority);
+            MachineBindingIndex.INSTANCE.updateMachinePriority(dimensionId, packedPosition, this, priority);
             registered = true;
             if (!machineNode) {
                 ReferenceSet<IEnergySupplyNode> supplyNodes = machineSupplyNodes.get(tileEntity);
@@ -2378,13 +2614,35 @@ public final class EnergyMachineManager {
 
         @Override
         public void updateMachinePriority(int priority) {
-            if (this.priority == priority) {
-                return;
+            MachineTransferSlot[] snapshot = slots.values().toArray(new MachineTransferSlot[0]);
+            GridParticipantIndex.MoveRollback[] rollbacks = new GridParticipantIndex.MoveRollback[snapshot.length];
+            try {
+                for (MachineTransferSlot slot : snapshot) {
+                    slot.validatePriority(this.priority);
+                }
+                for (int index = 0; index < snapshot.length; index++) {
+                    rollbacks[index] = snapshot[index].updatePriority(priority);
+                }
+            } catch (RuntimeException exception) {
+                boolean rollbackFailed = exception instanceof GridParticipantIndex.MoveRollbackException;
+                for (int index = rollbacks.length - 1; index >= 0; index--) {
+                    GridParticipantIndex.MoveRollback rollback = rollbacks[index];
+                    if (rollback == null) {
+                        continue;
+                    }
+                    try {
+                        rollback.owner().rollbackMove(rollback);
+                    } catch (RuntimeException rollbackException) {
+                        exception.addSuppressed(rollbackException);
+                        rollbackFailed = true;
+                    }
+                }
+                if (rollbackFailed) {
+                    throw new MachineBindingIndex.PriorityRollbackException(exception);
+                }
+                throw exception;
             }
             this.priority = priority;
-            for (MachineTransferSlot slot : slots.values()) {
-                slot.updatePriority(priority);
-            }
         }
 
         private void refreshMachineNodeGrid() {
@@ -2533,17 +2791,44 @@ public final class EnergyMachineManager {
         }
 
         private Throwable disposeSlots(@Nullable Throwable failure) {
-            MachineTransferSlot[] snapshot = slots.values().toArray(new MachineTransferSlot[0]);
-            slots.clear();
-            for (MachineTransferSlot slot : snapshot) {
+            int snapshotSize = slots.size();
+            IGrid[] gridSnapshot = new IGrid[snapshotSize];
+            MachineTransferSlot[] slotSnapshot = new MachineTransferSlot[snapshotSize];
+            int snapshotIndex = 0;
+            for (var entry : slots.reference2ObjectEntrySet()) {
+                gridSnapshot[snapshotIndex] = entry.getKey();
+                slotSnapshot[snapshotIndex] = entry.getValue();
+                snapshotIndex++;
+            }
+            if (snapshotIndex != snapshotSize) {
+                throw new IllegalStateException("Machine route slot map changed while creating a cleanup snapshot");
+            }
+            for (int index = 0; index < snapshotSize; index++) {
+                IGrid grid = gridSnapshot[index];
+                MachineTransferSlot slot = slotSnapshot[index];
+                boolean detached = false;
                 try {
                     slot.detachGrid();
+                    detached = true;
                 } catch (RuntimeException | Error exception) {
                     failure = aggregateFailure(failure, exception);
                     try {
                         slot.detachGrid();
+                        detached = true;
                     } catch (RuntimeException | Error retryException) {
                         failure = aggregateFailure(failure, retryException);
+                    }
+                }
+                if (detached) {
+                    try {
+                        if (slots.get(grid) != slot) {
+                            throw new IllegalStateException(
+                                "Machine route slot identity changed during cleanup"
+                            );
+                        }
+                        slots.remove(grid);
+                    } catch (RuntimeException | Error exception) {
+                        failure = aggregateFailure(failure, exception);
                     }
                 }
             }
@@ -2709,7 +2994,7 @@ public final class EnergyMachineManager {
         private final CFNBlockEntityEx blockEntity;
         private final long packedPosition;
         private final Interaction machineInteraction;
-        private final Interaction gridMachineInteraction = new Interaction();
+        private final Interaction gridMachineInteraction = new Interaction(true);
         @Nullable
         private MachineTransferAccount account;
         @Nullable
@@ -2727,7 +3012,9 @@ public final class EnergyMachineManager {
         @Nullable
         private String warningDimensionKey;
         private long warningPosLong;
+        private long warningChunkCoordinate;
         private boolean hasWarningTarget;
+        private boolean transferActive;
 
         MachineTransferSlot(CFNBlockEntityEx blockEntity,
                             long packedPosition,
@@ -2770,6 +3057,7 @@ public final class EnergyMachineManager {
             Objects.requireNonNull(endpointPolicy, "endpointPolicy");
             Objects.requireNonNull(failureContext, "failureContext");
             Objects.requireNonNull(interaction, "interaction");
+            transferActive = false;
             this.endpointPolicy = endpointPolicy;
             this.failureContext = failureContext;
             this.hubMetadata = hubMetadata;
@@ -2791,17 +3079,62 @@ public final class EnergyMachineManager {
             } else {
                 this.warningDimensionKey = warningDimensionKey;
                 this.warningPosLong = warningPosLong;
+                this.warningChunkCoordinate = ChunkCoordUtils.mergeChunkCoords(blockPosFromLong(warningPosLong));
                 hasWarningTarget = true;
             }
+            transferActive = true;
         }
 
-        void updatePriority(int priority) {
-            if (membership.isBound() && membership.priority() != priority) {
-                requireMembershipOwner().move(this, priority);
+        @Nullable
+        GridParticipantIndex.MoveRollback updatePriority(int priority) {
+            if (!membership.isBound()) {
+                if (membership.isChannelBound()) {
+                    throw new IllegalStateException("Machine slot retains channel membership without grid membership");
+                }
+                return null;
+            }
+            GridParticipantIndex owner = requireMembershipOwner();
+            IEnergyHandler.EnergyType role = Objects.requireNonNull(
+                membership.role(), "Machine slot membership has no transfer role"
+            );
+            owner.validateMove(this, role, priority);
+            if (membership.priority() != priority
+                || (membership.isChannelBound() && membership.channelPriority() != priority)) {
+                return owner.move(this, priority);
+            }
+            return null;
+        }
+
+        void validatePriority(int expectedPriority) {
+            if (!membership.isBound()) {
+                if (membership.isChannelBound()) {
+                    throw new GridParticipantIndex.MoveRollbackException(
+                        new IllegalStateException("Unbound machine slot retains channel membership")
+                    );
+                }
+                return;
+            }
+            try {
+                GridParticipantIndex owner = requireMembershipOwner();
+                IEnergyHandler.EnergyType role = Objects.requireNonNull(
+                    membership.role(), "Machine slot membership has no transfer role"
+                );
+                if (membership.priority() != expectedPriority
+                    || membership.isChannelBound() && membership.channelPriority() != expectedPriority) {
+                    throw new IllegalStateException("Machine slot priority does not match its route priority");
+                }
+                owner.validateMove(this, role, expectedPriority);
+            } catch (RuntimeException exception) {
+                if (exception instanceof GridParticipantIndex.MoveRollbackException rollbackException) {
+                    throw rollbackException;
+                }
+                throw new GridParticipantIndex.MoveRollbackException(exception);
             }
         }
 
         void suspendTransfer() {
+            transferActive = false;
+            hasWarningTarget = false;
             if (membership.isBound()) {
                 requireMembershipOwner().remove(this);
             }
@@ -2810,7 +3143,6 @@ public final class EnergyMachineManager {
             endpointPolicy = null;
             hubMetadata = null;
             failureContext = EnergyHandlerRuntime.FailureContext.UNKNOWN;
-            hasWarningTarget = false;
         }
 
         void detachGrid() {
@@ -2829,7 +3161,7 @@ public final class EnergyMachineManager {
         void attachGridTracking(IGrid grid, Interaction gridInteraction) {
             if (interactionGrid == grid) {
                 if (interaction != gridInteraction
-                    || grid.getMachineInteractions().get(packedPosition) != gridMachineInteraction) {
+                    || grid.getParticipantIndex().machineInteraction(packedPosition) != gridMachineInteraction) {
                     throw new IllegalStateException("Machine slot grid interaction identity changed without detach");
                 }
                 return;
@@ -2844,27 +3176,33 @@ public final class EnergyMachineManager {
 
         void requireGridTracking(IGrid grid, Interaction gridInteraction) {
             if (interactionGrid != grid || interaction != gridInteraction
-                || grid.getMachineInteractions().get(packedPosition) != gridMachineInteraction) {
+                || grid.getParticipantIndex().machineInteraction(packedPosition) != gridMachineInteraction) {
                 throw new IllegalStateException("Machine slot grid interaction tracking is inconsistent");
             }
         }
 
-        private void recordInput(EnergyAmount value, long epoch) {
+        private void recordGridInput(EnergyAmount value, long epoch) {
             Interaction gridInteraction = interaction;
             if (interactionGrid == null || gridInteraction == null) {
                 throw new IllegalStateException("Machine slot cannot record input without grid interaction tracking");
             }
             gridInteraction.recordPositiveInput(value, epoch);
+        }
+
+        private void recordMachineInput(EnergyAmount value, long epoch) {
             gridMachineInteraction.recordPositiveInput(value, epoch);
             machineInteraction.recordPositiveInput(value, epoch);
         }
 
-        private void recordOutput(EnergyAmount value, long epoch) {
+        private void recordGridOutput(EnergyAmount value, long epoch) {
             Interaction gridInteraction = interaction;
             if (interactionGrid == null || gridInteraction == null) {
                 throw new IllegalStateException("Machine slot cannot record output without grid interaction tracking");
             }
             gridInteraction.recordPositiveOutput(value, epoch);
+        }
+
+        private void recordMachineOutput(EnergyAmount value, long epoch) {
             gridMachineInteraction.recordPositiveOutput(value, epoch);
             machineInteraction.recordPositiveOutput(value, epoch);
         }
@@ -2909,15 +3247,17 @@ public final class EnergyMachineManager {
         }
 
         boolean isActive(long epoch) {
-            if (account == null || MachineBindingIndex.INSTANCE.isEnergyThrottled(blockEntity)) {
+            if (!transferActive || account == null || MachineBindingIndex.INSTANCE.isEnergyThrottled(blockEntity)) {
                 return false;
             }
             account.activate(epoch);
             return account.isActive(epoch);
         }
 
-        void collectWarning(Object2ObjectMap<String, LongSet> warningPositions, long epoch) {
-            if (!hasWarningTarget) {
+        void collectWarning(Object2ObjectMap<String, LongSet> warningPositions,
+                            long epoch,
+                            Object2ObjectMap<String, LongSet> observerChunks) {
+            if (!transferActive || !hasWarningTarget || !hasWarningObserver(observerChunks)) {
                 return;
             }
             MachineTransferAccount currentAccount = requireAccount();
@@ -2954,11 +3294,23 @@ public final class EnergyMachineManager {
             dimensionWarnings.add(warningPosLong);
         }
 
-        void prepareWarning(long epoch) {
-            if (!hasWarningTarget || !isActive(epoch)) {
+        /**
+         * Samples this endpoint's warning state only when a player could actually be shown it. Sampling and
+         * collecting share one observer window within a tick, so a skipped sample is always paired with a
+         * skipped collection and can never leave settlement without the receive state it requires.
+         */
+        void prepareWarning(long epoch, Object2ObjectMap<String, LongSet> observerChunks) {
+            if (!hasWarningTarget || !hasWarningObserver(observerChunks) || !isActive(epoch)) {
                 return;
             }
             requireAccount().sampleWarning(requireRole(), epoch, hubMetadata, blockEntity);
+        }
+
+        private boolean hasWarningObserver(Object2ObjectMap<String, LongSet> observerChunks) {
+            LongSet chunks = observerChunks.get(
+                Objects.requireNonNull(warningDimensionKey, "warningDimensionKey")
+            );
+            return chunks != null && chunks.contains(warningChunkCoordinate);
         }
 
         public boolean requiresPairMatch() {
@@ -3398,18 +3750,33 @@ public final class EnergyMachineManager {
     /**
      * Runtime input/output totals for one interaction owner. Values are initialized lazily by the first record in an
      * epoch; reads from any other epoch return the immutable zero value without touching retained data.
+     *
+     * <p>Grid-scoped trackers always accumulate. Machine-scoped trackers are demand-driven: every read renews a
+     * short accounting window, and outside that window per-machine totals are not maintained at all so an idle
+     * server pays nothing for statistics nobody observes. A first read after a quiet period therefore reports the
+     * current tick as zero and becomes accurate from the following tick onward.
      */
     public static class Interaction {
         private final EnergyAmount input = EnergyAmount.obtain(0L);
         private final EnergyAmount output = EnergyAmount.obtain(0L);
+        private final boolean machineScoped;
         private long interactionTimeNanos;
         private long preparedEpoch = Long.MIN_VALUE;
+
+        public Interaction() {
+            this(false);
+        }
+
+        Interaction(boolean machineScoped) {
+            this.machineScoped = machineScoped;
+        }
 
         /**
          * Returns a snapshot of settled input for the current machine tick. A current-epoch snapshot is owned by the
          * caller and must be recycled. A stale tracker returns {@link EnergyAmounts#ZERO}, which must not be recycled.
          */
         public EnergyAmount getInput() {
+            renewMachineDemand();
             return inputAt(INSTANCE.interactionEpoch);
         }
 
@@ -3418,16 +3785,19 @@ public final class EnergyMachineManager {
          * caller and must be recycled. A stale tracker returns {@link EnergyAmounts#ZERO}, which must not be recycled.
          */
         public EnergyAmount getOutput() {
+            renewMachineDemand();
             return outputAt(INSTANCE.interactionEpoch);
         }
 
         /** Returns current-tick settled input as text without creating an owned {@link EnergyAmount} snapshot. */
         public String getInputString() {
+            renewMachineDemand();
             return preparedEpoch == INSTANCE.interactionEpoch ? input.toString() : "0";
         }
 
         /** Returns current-tick settled output as text without creating an owned {@link EnergyAmount} snapshot. */
         public String getOutputString() {
+            renewMachineDemand();
             return preparedEpoch == INSTANCE.interactionEpoch ? output.toString() : "0";
         }
 
@@ -3443,6 +3813,12 @@ public final class EnergyMachineManager {
             return preparedEpoch == INSTANCE.interactionEpoch
                 ? Long.toString(interactionTimeNanos / 1_000L)
                 : "0";
+        }
+
+        private void renewMachineDemand() {
+            if (machineScoped) {
+                INSTANCE.renewMachineInteractionDemand();
+            }
         }
 
         void recordPositiveInput(EnergyAmount value, long epoch) {

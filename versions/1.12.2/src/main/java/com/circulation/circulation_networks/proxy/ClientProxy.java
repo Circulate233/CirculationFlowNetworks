@@ -13,6 +13,8 @@ import com.circulation.circulation_networks.client.render.RelayNodeRotatingRende
 import com.circulation.circulation_networks.client.render.RotatingBlockModelCache;
 import com.circulation.circulation_networks.client.render.RotatingModelRenderHelper;
 import com.circulation.circulation_networks.events.BlockEntityLifeCycleEvent;
+import com.circulation.circulation_networks.container.ContainerMachinePriority;
+import com.circulation.circulation_networks.gui.GuiMachinePriority;
 import com.circulation.circulation_networks.gui.component.base.ComponentAtlas;
 import com.circulation.circulation_networks.handlers.CirculationShielderRenderingHandler;
 import com.circulation.circulation_networks.handlers.ConfigOverrideRenderingHandler;
@@ -40,6 +42,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.util.EnumHand;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.client.event.ModelRegistryEvent;
@@ -144,6 +147,12 @@ public final class ClientProxy extends CommonProxy {
 
     @Override
     public @Nullable GuiContainer getClientGuiElement(int ID, EntityPlayer player, World world, int x, int y, int z) {
+        EnumHand priorityHand = ContainerMachinePriority.handFromGuiId(ID);
+        if (priorityHand != null) {
+            return new GuiMachinePriority(
+                new ContainerMachinePriority(player, world, new BlockPos(x, y, z), priorityHand)
+            );
+        }
         var tile = world.getTileEntity(new BlockPos(x, y, z));
         if (tile == null) {
             return null;

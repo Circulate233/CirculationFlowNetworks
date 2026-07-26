@@ -221,6 +221,21 @@ public final class API {
         return EnergyMachineManager.INSTANCE.getMachineInteraction(blockEntity);
     }
 
+    /**
+     * 提交一次延迟到「已完成记账的机器 tick 结束时」执行的逐设备统计读取。
+     * Submits a per-machine statistics read that runs at the end of a machine tick which already accounted for it.
+     *
+     * <p>逐设备统计按需记账：只有被观察时才累计。轮询式读取（GUI、HUD）每次读取都会自动续期，
+     * 而一次性读取（例如手持工具右键查询）若立即读取，会落在一个尚未记账的 tick 上而得到零，
+     * 因此应改用本方法——它先开启记账窗口，再在下一个完整记账的 tick 末尾回调。
+     * Polling consumers renew the window implicitly; a one-shot consumer should submit its read here instead.
+     *
+     * @param query 服务端主线程回调，负责实际读取与输出 / server-thread callback performing the read
+     */
+    public static void submitMachineInteractionQuery(@NotNull Runnable query) {
+        EnergyMachineManager.INSTANCE.submitDeferredInteractionQuery(query);
+    }
+
     // -------------------------------------------------------------------------
     // 中枢频道 / Hub channels
     // -------------------------------------------------------------------------

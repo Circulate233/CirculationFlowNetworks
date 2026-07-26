@@ -8,7 +8,8 @@
   "mixins": [
     "appliedenergistics2.MixinAENetworkProxy",
     "mc.MixinChunk",
-    "mc.MixinBlockEntity"
+    "mc.MixinBlockEntity",
+    "mc.MixinAnvilChunkLoader"
   ],
   "server": [
   ],

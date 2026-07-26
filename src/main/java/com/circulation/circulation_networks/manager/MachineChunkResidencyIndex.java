@@ -18,7 +18,9 @@ import java.util.function.Predicate;
 
 /**
  * Tracks primitive chunk residency separately from persistent machine-position buckets.
- * Chunk events only update the residency sets; tick-pre owns all transition work.
+ * Chunk events only update the residency sets and enqueue the affected bucket; tick-pre
+ * owns all transition work and only inspects buckets that a residency event touched, so a
+ * tick with no chunk activity costs nothing regardless of how many cold buckets are retained.
  *
  * @param <R> lightweight machine position record type
  */
@@ -26,11 +28,13 @@ final class MachineChunkResidencyIndex<R extends MachineChunkResidencyIndex.Posi
 
     private final Int2ObjectMap<LongSet> loadedChunks = new Int2ObjectOpenHashMap<>();
     private final Int2ObjectMap<Long2ObjectMap<Bucket<R>>> machineBuckets = new Int2ObjectOpenHashMap<>();
-    private final ObjectArrayList<BucketEntry<R>> bucketOrder = new ObjectArrayList<>();
+    private final ObjectArrayList<Bucket<R>> bucketOrder = new ObjectArrayList<>();
+    private final ObjectArrayList<Bucket<R>> residencyCandidates = new ObjectArrayList<>();
 
     /** Marks one chunk resident without touching machine records or runtime state. */
     public synchronized void markLoaded(int dimensionId, long chunkCoordinate) {
         loadedChunks.computeIfAbsent(dimensionId, ignored -> new LongOpenHashSet()).add(chunkCoordinate);
+        enqueueResidencyCandidate(dimensionId, chunkCoordinate);
     }
 
     /** Marks one chunk non-resident without touching machine records or runtime state. */
@@ -39,15 +43,29 @@ final class MachineChunkResidencyIndex<R extends MachineChunkResidencyIndex.Posi
         if (dimensionChunks == null) {
             return;
         }
-        dimensionChunks.remove(chunkCoordinate);
+        if (!dimensionChunks.remove(chunkCoordinate)) {
+            return;
+        }
         if (dimensionChunks.isEmpty()) {
             loadedChunks.remove(dimensionId);
         }
+        enqueueResidencyCandidate(dimensionId, chunkCoordinate);
     }
 
     /** Clears primitive residency for a dimension while retaining its cold machine records. */
     public synchronized void clearDimensionResidency(int dimensionId) {
-        loadedChunks.remove(dimensionId);
+        if (loadedChunks.remove(dimensionId) == null) {
+            return;
+        }
+        Long2ObjectMap<Bucket<R>> dimensionBuckets = machineBuckets.get(dimensionId);
+        if (dimensionBuckets == null) {
+            return;
+        }
+        for (Bucket<R> bucket : dimensionBuckets.values()) {
+            if (bucket.loaded) {
+                enqueueResidencyCandidate(bucket);
+            }
+        }
     }
 
     public synchronized boolean isMarkedLoaded(int dimensionId, long chunkCoordinate) {
@@ -63,10 +81,11 @@ final class MachineChunkResidencyIndex<R extends MachineChunkResidencyIndex.Posi
         );
         Bucket<R> bucket = dimensionBuckets.get(chunkCoordinate);
         if (bucket == null) {
-            bucket = new Bucket<>();
+            bucket = new Bucket<>(dimensionId, chunkCoordinate);
             bucket.loaded = isMarkedLoaded(dimensionId, chunkCoordinate);
             dimensionBuckets.put(chunkCoordinate, bucket);
-            bucketOrder.add(new BucketEntry<>(dimensionId, chunkCoordinate, bucket));
+            bucket.orderIndex = bucketOrder.size();
+            bucketOrder.add(bucket);
         }
         bucket.records.put(record.packedPosition(), record);
     }
@@ -95,37 +114,40 @@ final class MachineChunkResidencyIndex<R extends MachineChunkResidencyIndex.Posi
     public synchronized void removeIf(Predicate<R> predicate) {
         Objects.requireNonNull(predicate, "predicate");
         for (int index = bucketOrder.size() - 1; index >= 0; index--) {
-            BucketEntry<R> entry = bucketOrder.get(index);
-            entry.bucket.records.values().removeIf(predicate);
-            if (!entry.bucket.records.isEmpty()) {
+            Bucket<R> bucket = bucketOrder.get(index);
+            bucket.records.values().removeIf(predicate);
+            if (!bucket.records.isEmpty()) {
                 continue;
             }
-            bucketOrder.remove(index);
-            Long2ObjectMap<Bucket<R>> dimensionBuckets = machineBuckets.get(entry.dimensionId);
-            if (dimensionBuckets == null || dimensionBuckets.remove(entry.chunkCoordinate) != entry.bucket) {
+            Long2ObjectMap<Bucket<R>> dimensionBuckets = machineBuckets.get(bucket.dimensionId);
+            if (dimensionBuckets == null || dimensionBuckets.remove(bucket.chunkCoordinate) != bucket) {
                 throw new IllegalStateException("Machine bucket maps diverged during record pruning");
             }
+            removeBucketOrder(bucket);
+            dropResidencyCandidate(bucket);
             if (dimensionBuckets.isEmpty()) {
-                machineBuckets.remove(entry.dimensionId);
+                machineBuckets.remove(bucket.dimensionId);
             }
         }
     }
 
     /**
-     * Checks each machine bucket against the primitive residency marker exactly once and
-     * invokes transition work only when the bucket's residency changed.
+     * Checks every bucket whose chunk residency was touched since the previous tick and
+     * invokes transition work only when the bucket's residency actually changed. Buckets
+     * that no chunk event touched are never inspected.
      */
     public void tick(TransitionSink<R> sink) {
         Objects.requireNonNull(sink, "sink");
         List<Transition<R>> transitions = null;
         synchronized (this) {
-            for (int bucketIndex = 0, bucketCount = bucketOrder.size(); bucketIndex < bucketCount; bucketIndex++) {
-                BucketEntry<R> bucketEntry = bucketOrder.get(bucketIndex);
-                int dimensionId = bucketEntry.dimensionId;
-                LongSet dimensionResidency = loadedChunks.get(dimensionId);
-                long chunkCoordinate = bucketEntry.chunkCoordinate;
-                Bucket<R> bucket = bucketEntry.bucket;
-                boolean loaded = dimensionResidency != null && dimensionResidency.contains(chunkCoordinate);
+            if (residencyCandidates.isEmpty()) {
+                return;
+            }
+            for (int index = 0, count = residencyCandidates.size(); index < count; index++) {
+                Bucket<R> bucket = residencyCandidates.get(index);
+                bucket.candidateIndex = -1;
+                LongSet dimensionResidency = loadedChunks.get(bucket.dimensionId);
+                boolean loaded = dimensionResidency != null && dimensionResidency.contains(bucket.chunkCoordinate);
                 if (loaded == bucket.loaded) {
                     continue;
                 }
@@ -133,10 +155,11 @@ final class MachineChunkResidencyIndex<R extends MachineChunkResidencyIndex.Posi
                     transitions = new ArrayList<>();
                 }
                 transitions.add(new Transition<>(
-                    dimensionId, chunkCoordinate, loaded, new ArrayList<>(bucket.records.values())
+                    bucket.dimensionId, bucket.chunkCoordinate, loaded, new ArrayList<>(bucket.records.values())
                 ));
                 bucket.loaded = loaded;
             }
+            residencyCandidates.clear();
         }
         if (transitions == null) {
             return;
@@ -159,7 +182,44 @@ final class MachineChunkResidencyIndex<R extends MachineChunkResidencyIndex.Posi
     public synchronized void clear() {
         loadedChunks.clear();
         machineBuckets.clear();
+        for (int index = 0; index < bucketOrder.size(); index++) {
+            Bucket<R> bucket = bucketOrder.get(index);
+            bucket.orderIndex = -1;
+            bucket.candidateIndex = -1;
+        }
         bucketOrder.clear();
+        residencyCandidates.clear();
+    }
+
+    private void enqueueResidencyCandidate(int dimensionId, long chunkCoordinate) {
+        Long2ObjectMap<Bucket<R>> dimensionBuckets = machineBuckets.get(dimensionId);
+        Bucket<R> bucket = dimensionBuckets == null ? null : dimensionBuckets.get(chunkCoordinate);
+        if (bucket != null) {
+            enqueueResidencyCandidate(bucket);
+        }
+    }
+
+    private void enqueueResidencyCandidate(Bucket<R> bucket) {
+        if (bucket.candidateIndex >= 0) {
+            return;
+        }
+        bucket.candidateIndex = residencyCandidates.size();
+        residencyCandidates.add(bucket);
+    }
+
+    private void dropResidencyCandidate(Bucket<R> bucket) {
+        int candidateIndex = bucket.candidateIndex;
+        if (candidateIndex < 0) {
+            return;
+        }
+        bucket.candidateIndex = -1;
+        int lastIndex = residencyCandidates.size() - 1;
+        if (candidateIndex != lastIndex) {
+            Bucket<R> moved = residencyCandidates.get(lastIndex);
+            residencyCandidates.set(candidateIndex, moved);
+            moved.candidateIndex = candidateIndex;
+        }
+        residencyCandidates.remove(lastIndex);
     }
 
     private void removeEmptyBucket(int dimensionId,
@@ -170,6 +230,7 @@ final class MachineChunkResidencyIndex<R extends MachineChunkResidencyIndex.Posi
             return;
         }
         removeBucketOrder(bucket);
+        dropResidencyCandidate(bucket);
         dimensionBuckets.remove(chunkCoordinate);
         if (dimensionBuckets.isEmpty()) {
             machineBuckets.remove(dimensionId);
@@ -177,13 +238,18 @@ final class MachineChunkResidencyIndex<R extends MachineChunkResidencyIndex.Posi
     }
 
     private void removeBucketOrder(Bucket<R> bucket) {
-        for (int index = bucketOrder.size() - 1; index >= 0; index--) {
-            if (bucketOrder.get(index).bucket == bucket) {
-                bucketOrder.remove(index);
-                return;
-            }
+        int orderIndex = bucket.orderIndex;
+        if (orderIndex < 0 || orderIndex >= bucketOrder.size() || bucketOrder.get(orderIndex) != bucket) {
+            throw new IllegalStateException("Machine bucket is missing from stable iteration order");
         }
-        throw new IllegalStateException("Machine bucket is missing from stable iteration order");
+        bucket.orderIndex = -1;
+        int lastIndex = bucketOrder.size() - 1;
+        if (orderIndex != lastIndex) {
+            Bucket<R> moved = bucketOrder.get(lastIndex);
+            bucketOrder.set(orderIndex, moved);
+            moved.orderIndex = orderIndex;
+        }
+        bucketOrder.remove(lastIndex);
     }
 
     /** Lightweight record contract required for position-keyed cold storage. */
@@ -208,17 +274,17 @@ final class MachineChunkResidencyIndex<R extends MachineChunkResidencyIndex.Posi
     }
 
     private static final class Bucket<R extends PositionRecord> {
+        private final int dimensionId;
+        private final long chunkCoordinate;
         private final Long2ObjectMap<R> records = new Long2ObjectOpenHashMap<>();
         private boolean loaded;
-    }
+        private int orderIndex = -1;
+        private int candidateIndex = -1;
 
-    //? if <1.20
-    @Desugar
-    private record BucketEntry<R extends PositionRecord>(
-        int dimensionId,
-        long chunkCoordinate,
-        Bucket<R> bucket
-    ) {
+        private Bucket(int dimensionId, long chunkCoordinate) {
+            this.dimensionId = dimensionId;
+            this.chunkCoordinate = chunkCoordinate;
+        }
     }
 
     //? if <1.20

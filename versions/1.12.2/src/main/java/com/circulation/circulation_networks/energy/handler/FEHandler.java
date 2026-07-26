@@ -41,6 +41,8 @@ public class FEHandler implements IEnergyHandler {
     private boolean itemBound;
     private boolean supportsSend;
     private boolean supportsReceive;
+    private boolean refreshPending;
+    private boolean refreshFailed;
     private EnergyType energyType = EnergyType.INVALID;
 
     public static boolean supports(TileEntity tileEntity) {
@@ -162,6 +164,13 @@ public class FEHandler implements IEnergyHandler {
         discoverStructure(tileEntity);
     }
 
+    /**
+     * Arms a lazy capability refresh instead of resolving capabilities for every bound machine on every tick.
+     * 1.12.2 has no reliable capability invalidation event, so the refresh cannot be event-driven; it is instead
+     * deferred to the first physical read of this tick, which never happens for a machine that no route selects.
+     * A refresh failure observed lazily is reported through the ordinary zero-budget path and is escalated to
+     * {@link HandlerTickResult#SUSPEND_UNTIL_REBIND} on the following tick.
+     */
     @Override
     public HandlerTickResult beginServerTick(long epoch) {
         if (blockEntity == null) {
@@ -171,14 +180,35 @@ public class FEHandler implements IEnergyHandler {
             throw new IllegalArgumentException("FE handler epoch must increase: previous " + activeEpoch + ", got " + epoch);
         }
         activeEpoch = epoch;
-        if (energyType == EnergyType.INVALID
-            || !refreshCachedCapabilities() && !rediscoverRequiredCapabilities()) {
+        if (energyType == EnergyType.INVALID || refreshFailed) {
             send = null;
             receive = null;
             energyType = EnergyType.INVALID;
+            refreshPending = false;
+            refreshFailed = false;
             return HandlerTickResult.SUSPEND_UNTIL_REBIND;
         }
+        refreshPending = true;
         return HandlerTickResult.UNCHANGED;
+    }
+
+    /**
+     * Resolves the armed capability refresh at most once per tick.
+     *
+     * @return {@code true} when this handler currently owns every capability its structural role requires
+     */
+    private boolean ensureRefreshed() {
+        if (!refreshPending) {
+            return !refreshFailed;
+        }
+        refreshPending = false;
+        if (refreshCachedCapabilities() || rediscoverRequiredCapabilities()) {
+            return true;
+        }
+        send = null;
+        receive = null;
+        refreshFailed = true;
+        return false;
     }
 
     @Override
@@ -197,6 +227,8 @@ public class FEHandler implements IEnergyHandler {
         activeEpoch = Long.MIN_VALUE;
         supportsSend = false;
         supportsReceive = false;
+        refreshPending = false;
+        refreshFailed = false;
         energyType = EnergyType.INVALID;
     }
 
@@ -221,29 +253,32 @@ public class FEHandler implements IEnergyHandler {
         send = null;
         receive = null;
         itemBound = false;
+        refreshPending = false;
+        refreshFailed = false;
         energyType = EnergyType.INVALID;
     }
 
     @Override
     public EnergyAmount extractEnergy(EnergyAmount maxExtract, @Nullable HubNode.HubMetadata hubMetadata) {
-        return send == null ? EnergyAmounts.ZERO
+        return !ensureRefreshed() || send == null ? EnergyAmounts.ZERO
             : EnergyAmount.obtain(send.extractEnergy((int) maxExtract.asLongClamped(), false));
     }
 
     @Override
     public EnergyAmount receiveEnergy(EnergyAmount maxReceive, @Nullable HubNode.HubMetadata hubMetadata) {
-        return receive == null ? EnergyAmounts.ZERO
+        return !ensureRefreshed() || receive == null ? EnergyAmounts.ZERO
             : EnergyAmount.obtain(Math.max(0, receive.receiveEnergy((int) maxReceive.asLongClamped(), false)));
     }
 
     @Override
     public EnergyAmount canExtractValue(@Nullable HubNode.HubMetadata hubMetadata) {
-        return send == null ? EnergyAmounts.ZERO : EnergyAmount.obtain(send.extractEnergy(Integer.MAX_VALUE, true));
+        return !ensureRefreshed() || send == null ? EnergyAmounts.ZERO
+            : EnergyAmount.obtain(send.extractEnergy(Integer.MAX_VALUE, true));
     }
 
     @Override
     public EnergyAmount canReceiveValue(@Nullable HubNode.HubMetadata hubMetadata) {
-        return receive == null ? EnergyAmounts.ZERO
+        return !ensureRefreshed() || receive == null ? EnergyAmounts.ZERO
             : EnergyAmount.obtain(Math.max(0, receive.receiveEnergy(Integer.MAX_VALUE, true)));
     }
 

@@ -16,8 +16,6 @@ import java.util.Objects;
 public final class PriorityRoleIndex {
 
     /** Default transfer priority used when no explicit priority is supplied. */
-    public static final int DEFAULT_PRIORITY = 0;
-
     private final ParticipantMembershipScope membershipScope;
     private final Int2ObjectOpenHashMap<Bucket> bucketsByPriority = new Int2ObjectOpenHashMap<>();
     private Bucket firstBucket;
@@ -141,6 +139,93 @@ public final class PriorityRoleIndex {
         removeBucketIfEmpty(previous);
         return next;
     }
+
+    Bucket rollbackTransferTo(EnergyMachineManager.MachineTransferSlot participant,
+                              PriorityRoleIndex destination,
+                              Bucket originalBucket,
+                              int originalIndex) {
+        Objects.requireNonNull(participant, "participant");
+        Objects.requireNonNull(destination, "destination");
+        Objects.requireNonNull(originalBucket, "originalBucket");
+        if (membershipScope != destination.membershipScope) {
+            throw new IllegalArgumentException("Cannot roll back a participant between different membership scopes");
+        }
+        GridParticipantMembership membership = participant.membership();
+        if (!membership.isBound(membershipScope) || membership.ownerRoleIndex(membershipScope) != this) {
+            throw new IllegalStateException("Participant belongs to a different rollback source role index");
+        }
+        Bucket currentBucket = requireBucket(membership.bucket(membershipScope));
+        int currentIndex = requireIdentityIndex(currentBucket, participant);
+        if (originalBucket.owner != destination) {
+            throw new IllegalStateException("Rollback destination bucket belongs to another role index");
+        }
+        Bucket registeredOriginalBucket = destination.bucketsByPriority.get(originalBucket.priority);
+        boolean restoreOriginalBucket = registeredOriginalBucket == null;
+        if (!restoreOriginalBucket && registeredOriginalBucket != originalBucket) {
+            throw new IllegalStateException("Rollback destination priority is owned by another bucket");
+        }
+        if (restoreOriginalBucket
+            && (!originalBucket.participants.isEmpty()
+            || originalBucket.previous != null
+            || originalBucket.next != null)) {
+            throw new IllegalStateException("Detached rollback destination bucket is not empty and isolated");
+        }
+        int destinationSize = originalBucket.participants.size();
+        if (originalIndex < 0 || originalIndex > destinationSize) {
+            throw new IllegalStateException("Rollback destination index is outside the original bucket");
+        }
+        if (identityIndex(originalBucket, participant) >= 0) {
+            throw new IllegalStateException("Rollback destination bucket already contains the participant");
+        }
+        boolean pairMatching = participant.requiresPairMatch();
+        requireRemovalCounters(pairMatching);
+        if (destination != this) {
+            destination.requireCounterCapacity(pairMatching);
+        }
+        if (restoreOriginalBucket) {
+            destination.restoreDetachedBucket(originalBucket);
+        }
+        try {
+            originalBucket.participants.add(originalIndex, participant);
+        } catch (RuntimeException | Error exception) {
+            if (restoreOriginalBucket) {
+                try {
+                    destination.removeBucketIfEmpty(originalBucket);
+                } catch (RuntimeException | Error rollbackException) {
+                    exception.addSuppressed(rollbackException);
+                }
+            }
+            throw exception;
+        }
+        try {
+            if (currentBucket.participants.get(currentIndex) != participant) {
+                throw new IllegalStateException("Participant moved within its rollback source bucket");
+            }
+            currentBucket.participants.remove(currentIndex);
+        } catch (RuntimeException | Error exception) {
+            try {
+                rollbackDestinationInsert(originalBucket, originalIndex, participant);
+                if (restoreOriginalBucket) {
+                    destination.removeBucketIfEmpty(originalBucket);
+                }
+            } catch (RuntimeException | Error rollbackException) {
+                exception.addSuppressed(rollbackException);
+            }
+            throw exception;
+        }
+        size--;
+        destination.size++;
+        if (pairMatching) {
+            pairMatchingParticipants--;
+            destination.pairMatchingParticipants++;
+        }
+        removeBucketIfEmpty(currentBucket);
+        return originalBucket;
+    }
+
+    int participantIndex(Bucket bucket, EnergyMachineManager.MachineTransferSlot participant) {
+        return requireIdentityIndex(requireBucket(bucket), Objects.requireNonNull(participant, "participant"));
+    }
     /**
      * Returns the dense participant bucket for an exact priority.
      *
@@ -214,6 +299,15 @@ public final class PriorityRoleIndex {
         bucketsByPriority.put(priority, bucket);
         insertDescending(bucket);
         return bucket;
+    }
+
+    private void restoreDetachedBucket(Bucket bucket) {
+        if (bucket.owner != this || bucketsByPriority.get(bucket.priority) != null
+            || !bucket.participants.isEmpty() || bucket.previous != null || bucket.next != null) {
+            throw new IllegalStateException("Cannot restore a rollback bucket in its current state");
+        }
+        bucketsByPriority.put(bucket.priority, bucket);
+        insertDescending(bucket);
     }
 
     private void insertDescending(Bucket inserted) {
@@ -302,6 +396,15 @@ public final class PriorityRoleIndex {
             throw new IllegalStateException("Destination role index append rollback is inconsistent");
         }
         bucket.participants.remove(lastIndex);
+    }
+
+    private static void rollbackDestinationInsert(Bucket bucket,
+                                                  int index,
+                                                  EnergyMachineManager.MachineTransferSlot participant) {
+        if (index < 0 || index >= bucket.participants.size() || bucket.participants.get(index) != participant) {
+            throw new IllegalStateException("Destination role index insertion rollback is inconsistent");
+        }
+        bucket.participants.remove(index);
     }
 
     private void requireCounterCapacity(boolean pairMatching) {

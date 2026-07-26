@@ -63,6 +63,8 @@ public final class EIOHandler implements IEnergyHandler {
     private EnergyType energyType = EnergyType.INVALID;
     private boolean supportsSend;
     private boolean supportsReceive;
+    private boolean refreshPending;
+    private boolean refreshFailed;
     private long activeEpoch = Long.MIN_VALUE;
 
     public static boolean supports(TileEntity tileEntity) {
@@ -306,11 +308,37 @@ public final class EIOHandler implements IEnergyHandler {
             energyType = currentType;
             return changed ? HandlerTickResult.STATE_CHANGED : HandlerTickResult.UNCHANGED;
         }
-        if (!refreshOrdinary()) {
+        if (refreshFailed) {
             energyType = EnergyType.INVALID;
+            refreshPending = false;
+            refreshFailed = false;
             return HandlerTickResult.SUSPEND_UNTIL_REBIND;
         }
+        refreshPending = true;
         return HandlerTickResult.UNCHANGED;
+    }
+
+    /**
+     * Resolves the armed ordinary-backend refresh at most once per tick. 1.12.2 cannot rely on a capability
+     * invalidation event, so the refresh stays polled but is deferred to the first physical read, which never
+     * happens for a machine that no route selects this tick.
+     *
+     * @return {@code true} when this endpoint currently owns the backend its structural role requires
+     */
+    private boolean ensureRefreshed() {
+        if (!refreshPending) {
+            return !refreshFailed;
+        }
+        refreshPending = false;
+        if (refreshOrdinary()) {
+            return true;
+        }
+        legacySend = null;
+        legacyReceive = null;
+        machineSend = null;
+        machineReceive = null;
+        refreshFailed = true;
+        return false;
     }
 
     @Override
@@ -334,6 +362,8 @@ public final class EIOHandler implements IEnergyHandler {
         energyType = EnergyType.INVALID;
         supportsSend = false;
         supportsReceive = false;
+        refreshPending = false;
+        refreshFailed = false;
         activeEpoch = Long.MIN_VALUE;
     }
 
@@ -358,6 +388,7 @@ public final class EIOHandler implements IEnergyHandler {
     @Override
     public EnergyAmount receiveEnergy(EnergyAmount maximum, @Nullable HubNode.HubMetadata metadata) {
         requireOrdinaryBackend();
+        if (!ensureRefreshed()) return EnergyAmounts.ZERO;
         if (legacyReceive != null && receiveFacing != null) {
             int accepted = legacyReceive.receiveEnergy(receiveFacing, clamp(maximum.asLongClamped()), false);
             return accepted > 0 ? EnergyAmount.obtain(accepted) : EnergyAmounts.ZERO;
@@ -375,6 +406,7 @@ public final class EIOHandler implements IEnergyHandler {
     @Override
     public EnergyAmount extractEnergy(EnergyAmount maximum, @Nullable HubNode.HubMetadata metadata) {
         requireOrdinaryBackend();
+        if (!ensureRefreshed()) return EnergyAmounts.ZERO;
         if (legacySend != null) {
             int output = ((AbstractGeneratorEntity) legacySend).getMaxEnergySent();
             int stored = legacySend.getEnergyStored();
@@ -394,6 +426,7 @@ public final class EIOHandler implements IEnergyHandler {
     @Override
     public EnergyAmount canExtractValue(@Nullable HubNode.HubMetadata metadata) {
         requireOrdinaryBackend();
+        if (!ensureRefreshed()) return EnergyAmounts.ZERO;
         if (legacySend != null) return EnergyAmount.obtain(clamp(Integer.MAX_VALUE, legacySend.getEnergyStored(),
             ((AbstractGeneratorEntity) legacySend).getMaxEnergySent()));
         if (machineSend != null)
@@ -404,6 +437,7 @@ public final class EIOHandler implements IEnergyHandler {
     @Override
     public EnergyAmount canReceiveValue(@Nullable HubNode.HubMetadata metadata) {
         requireOrdinaryBackend();
+        if (!ensureRefreshed()) return EnergyAmounts.ZERO;
         if (legacyReceive != null && receiveFacing != null) {
             return EnergyAmount.obtain(Math.max(0, legacyReceive.receiveEnergy(receiveFacing, Integer.MAX_VALUE, true)));
         }

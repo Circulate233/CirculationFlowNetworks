@@ -140,6 +140,7 @@ final class MachineLifecyclePositionIndex<T> {
     enum Action {
         DISCOVERED,
         READY,
+        DISCOVERY_RETRY,
         MANAGER_UNAVAILABLE,
         INVALIDATE
     }

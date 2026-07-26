@@ -1,6 +1,7 @@
 package com.circulation.circulation_networks.network;
 
 import com.circulation.circulation_networks.packets.ConfigOverrideRendering;
+import com.circulation.circulation_networks.packets.ConfiguratorInteractionReport;
 import com.circulation.circulation_networks.packets.ContainerProgressBar;
 import com.circulation.circulation_networks.packets.ContainerValueConfig;
 import com.circulation.circulation_networks.packets.EnergyWarningRendering;
@@ -24,6 +25,7 @@ final class CFNNetworkPackets {
             NodeNetworkRendering.class,
             EnergyWarningRendering.class,
             ConfigOverrideRendering.class,
+            ConfiguratorInteractionReport.class,
             ContainerProgressBar.class,
             ContainerValueConfig.class,
             PocketNodeRendering.class,

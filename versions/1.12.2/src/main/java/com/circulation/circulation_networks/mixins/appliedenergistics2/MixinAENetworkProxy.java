@@ -1,6 +1,7 @@
 package com.circulation.circulation_networks.mixins.appliedenergistics2;
 
 import appeng.api.networking.IGridHost;
+import appeng.me.helpers.AENetworkProxy;
 import appeng.tile.networking.TileController;
 import appeng.tile.networking.TileEnergyAcceptor;
 import com.circulation.circulation_networks.api.CFNBlockEntityEx;
@@ -11,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(targets = "appeng.me.helpers.AENetworkProxy", remap = false)
+@Mixin(value = AENetworkProxy.class, remap = false)
 public abstract class MixinAENetworkProxy {
 
     @Inject(method = "gridChanged()V", at = @At("RETURN"), remap = false)

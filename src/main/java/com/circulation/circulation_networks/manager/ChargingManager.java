@@ -235,7 +235,8 @@ public final class ChargingManager {
             return;
         }
         ReferenceSet<EnergyTransferParticipant> chargingTargets = tickChargeTargetsByGrid.get(grid);
-        if (chargingTargets == null || chargingTargets.isEmpty() || !grid.getParticipantIndex().isRoutingActive()) {
+        if (chargingTargets == null || chargingTargets.isEmpty() || !grid.getParticipantIndex().isRoutingActive()
+            || grid.getParticipantIndex().send().isEmpty() && grid.getParticipantIndex().storage().isEmpty()) {
             return;
         }
         long startNanos = System.nanoTime();
@@ -260,7 +261,8 @@ public final class ChargingManager {
                 channelTargetsScratch.addAll(targets);
             }
         }
-        if (channelTargetsScratch.isEmpty() || !channel.isRoutingActive() || channel.routingEpoch() != epoch) {
+        if (channelTargetsScratch.isEmpty() || !channel.isRoutingActive() || channel.routingEpoch() != epoch
+            || channel.send().isEmpty() && channel.storage().isEmpty()) {
             return;
         }
         long startNanos = System.nanoTime();

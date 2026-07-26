@@ -60,11 +60,15 @@ public record CirculationConfiguratorSelection(ToolFunction function, int subMod
     public List<LocalizedComponent> tooltipLines() {
         List<LocalizedComponent> lines = new ObjectArrayList<>();
         lines.add(LocalizedComponent.withTranslatedArg(currentModeDisplayKey(), modeLangKey()));
-        lines.add(LocalizedComponent.withTranslatedArg(currentSubModeDisplayKey(), subModeLangKey()));
+        if (function.hasSubModes()) {
+            lines.add(LocalizedComponent.withTranslatedArg(currentSubModeDisplayKey(), subModeLangKey()));
+        }
         lines.add(LocalizedComponent.description(descriptionLangKey()));
         lines.add(LocalizedComponent.blank());
         lines.add(LocalizedComponent.of(switchModeUsageKey()));
-        lines.add(LocalizedComponent.of(switchSubModeUsageKey()));
+        if (function.hasSubModes()) {
+            lines.add(LocalizedComponent.of(switchSubModeUsageKey()));
+        }
         return lines;
     }
 }

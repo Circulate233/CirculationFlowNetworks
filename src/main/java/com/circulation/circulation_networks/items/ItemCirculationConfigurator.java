@@ -2,19 +2,25 @@ package com.circulation.circulation_networks.items;
 
 import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.api.API;
+import com.circulation.circulation_networks.api.CFNBlockEntityEx;
+import com.circulation.circulation_networks.api.EnergyAmount;
+import com.circulation.circulation_networks.api.IGrid;
 import com.circulation.circulation_networks.api.node.IChargingNode;
 import com.circulation.circulation_networks.api.node.IEnergySupplyNode;
 import com.circulation.circulation_networks.api.node.INode;
+import com.circulation.circulation_networks.container.ContainerMachinePriority;
 import com.circulation.circulation_networks.items.CirculationConfiguratorModeModel.ConfigurationMode;
 import com.circulation.circulation_networks.items.CirculationConfiguratorModeModel.ToolFunction;
 import com.circulation.circulation_networks.manager.EnergyTypeOverrideManager;
 import com.circulation.circulation_networks.manager.PocketNodeManager;
 import com.circulation.circulation_networks.packets.ConfigOverrideRendering;
+import com.circulation.circulation_networks.packets.ConfiguratorInteractionReport;
 import com.circulation.circulation_networks.packets.NodeNetworkRendering;
 import com.circulation.circulation_networks.packets.SpoceRendering;
 import com.circulation.circulation_networks.packets.ToggleItemFunctionMessage;
 import com.circulation.circulation_networks.registry.RegistryEnergyHandler;
 import com.circulation.circulation_networks.tooltip.LocalizedComponent;
+import com.circulation.circulation_networks.utils.FormatNumberUtils;
 //? if <1.20 {
 import com.circulation.circulation_networks.tiles.TileEntityMultiblockShell;
 import net.minecraft.util.math.Vec3d;
@@ -49,6 +55,7 @@ import net.minecraft.world.phys.HitResult;
 *///?}
 
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
@@ -68,9 +75,12 @@ public class ItemCirculationConfigurator extends BaseItem {
     public static void sendModeMessage(EntityPlayerMP player, CirculationConfiguratorSelection selection) {
         //? if <1.20 {
         TextComponentTranslation modeComponent = new TextComponentTranslation(selection.modeLangKey());
-        TextComponentTranslation submodeComponent = new TextComponentTranslation(selection.subModeLangKey());
-
         modeComponent.getStyle().setColor(TextFormatting.GOLD);
+        if (!selection.function().hasSubModes()) {
+            player.sendStatusMessage(modeComponent, true);
+            return;
+        }
+        TextComponentTranslation submodeComponent = new TextComponentTranslation(selection.subModeLangKey());
         submodeComponent.getStyle().setColor(TextFormatting.BLUE);
 
         TextComponentTranslation message = new TextComponentTranslation(
@@ -80,14 +90,29 @@ public class ItemCirculationConfigurator extends BaseItem {
         );
         player.sendStatusMessage(message, true);
         //?} else {
-        /*player.displayClientMessage(
+        /*Component modeComponent = Component.translatable(selection.modeLangKey()).withStyle(ChatFormatting.GOLD);
+        if (!selection.function().hasSubModes()) {
+            player.displayClientMessage(modeComponent, true);
+            return;
+        }
+        player.displayClientMessage(
             Component.translatable(
                 selection.modeDisplayKey(),
-                Component.translatable(selection.modeLangKey()).withStyle(ChatFormatting.GOLD),
+                modeComponent,
                 Component.translatable(selection.subModeLangKey()).withStyle(ChatFormatting.BLUE)
             ),
             true
         );
+        *///?}
+    }
+    //~}
+
+    //~ if >=1.20 'EntityPlayerMP' -> 'ServerPlayer' {
+    private static void sendInteractionMessage(EntityPlayerMP player, String messageKey, Object... args) {
+        //? if <1.20 {
+        player.sendMessage(new TextComponentTranslation(messageKey, args));
+        //?} else {
+        /*player.displayClientMessage(Component.translatable(messageKey, args), false);
         *///?}
     }
     //~}
@@ -137,23 +162,49 @@ public class ItemCirculationConfigurator extends BaseItem {
     }
     //~}
 
+    private static String formatEnergy(EnergyAmount amount) {
+        RegistryEnergyHandler.Pair unit = RegistryEnergyHandler.getPair(0);
+        if (!amount.isZero() && unit.multiplying() != 0.0D) {
+            amount.divide(unit.multiplying());
+        }
+        return FormatNumberUtils.formatNumber(amount) + " " + unit.unit();
+    }
+
+    //~ if >=1.20 'World ' -> 'Level ' {
+    private static boolean isChunkResident(World world, BlockPos pos) {
+        //? if <1.20 {
+        return world.getChunkProvider().getLoadedChunk(pos.getX() >> 4, pos.getZ() >> 4) != null;
+        //?} else {
+        /*return world.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4) != null;
+        *///?}
+    }
+    //~}
+
     //~ if >=1.20 'World ' -> 'Level ' {
     //~ if >=1.20 'world.getTileEntity(pos)' -> 'world.getBlockEntity(pos)' {
     //? if <1.20 {
     //~ if >=1.20 'TileEntityMultiblockShell' -> 'MultiblockShellBlockEntity' {
-    private static BlockPos resolveOriginPos(World world, BlockPos pos) {
+    private static @Nullable BlockPos resolveResidentOriginPos(World world, BlockPos pos) {
+        if (!isChunkResident(world, pos)) {
+            return null;
+        }
         var te = world.getTileEntity(pos);
         if (te instanceof TileEntityMultiblockShell shell && shell.canRedirect()) {
-            return shell.getOriginPos();
+            BlockPos origin = shell.getOriginPos();
+            return isChunkResident(world, origin) ? origin : null;
         }
         return pos;
     }
     //~}
     //?} else {
-    /*private static BlockPos resolveOriginPos(World world, BlockPos pos) {
+    /*private static @Nullable BlockPos resolveResidentOriginPos(World world, BlockPos pos) {
+        if (!isChunkResident(world, pos)) {
+            return null;
+        }
         var te = world.getTileEntity(pos);
         if (te instanceof MultiblockShellBlockEntity shell && shell.canRedirect()) {
-            return shell.getOriginPos();
+            BlockPos origin = shell.getOriginPos();
+            return isChunkResident(world, origin) ? origin : null;
         }
         return pos;
     }
@@ -169,11 +220,14 @@ public class ItemCirculationConfigurator extends BaseItem {
             return EnumActionResult.PASS;
         }
         if (world.isRemote) {
-            return API.getNodeAt(world, pos) != null
+            return isChunkResident(world, pos) && API.getNodeAt(world, pos) != null
                 ? EnumActionResult.SUCCESS
                 : EnumActionResult.PASS;
         }
-        BlockPos resolved = resolveOriginPos(world, pos);
+        BlockPos resolved = resolveResidentOriginPos(world, pos);
+        if (resolved == null) {
+            return EnumActionResult.PASS;
+        }
         if (!resolved.equals(pos)) {
             return EnumActionResult.PASS;
         }
@@ -189,11 +243,15 @@ public class ItemCirculationConfigurator extends BaseItem {
             return InteractionResult.PASS;
         }
         if (context.getLevel().isClientSide) {
-            return API.getNodeAt(context.getLevel(), context.getClickedPos()) != null
+            return isChunkResident(context.getLevel(), context.getClickedPos())
+                && API.getNodeAt(context.getLevel(), context.getClickedPos()) != null
                 ? InteractionResult.SUCCESS
                 : InteractionResult.PASS;
         }
-        BlockPos resolved = resolveOriginPos(context.getLevel(), context.getClickedPos());
+        BlockPos resolved = resolveResidentOriginPos(context.getLevel(), context.getClickedPos());
+        if (resolved == null) {
+            return InteractionResult.PASS;
+        }
         if (!resolved.equals(context.getClickedPos())) {
             return InteractionResult.PASS;
         }
@@ -207,23 +265,40 @@ public class ItemCirculationConfigurator extends BaseItem {
     @Override
     public @NotNull EnumActionResult onItemUse(@NotNull EntityPlayer player, @NotNull World worldIn, @NotNull BlockPos pos, @NotNull EnumHand hand, @NotNull EnumFacing facing, float hitX, float hitY, float hitZ) {
         if (worldIn.isRemote) {
-            return !player.isSneaking() && API.getNodeAt(worldIn, pos) != null
-                ? EnumActionResult.SUCCESS
-                : EnumActionResult.PASS;
+            CirculationConfiguratorSelection selection = CirculationConfiguratorSelection.fromStack(player.getHeldItem(hand));
+            if (player.isSneaking() && !selection.function().hasSubModes()) {
+                BlockPos target = resolveResidentOriginPos(worldIn, pos);
+                if (target == null) {
+                    return EnumActionResult.PASS;
+                }
+                return API.getNodeAt(worldIn, target) != null || worldIn.getTileEntity(target) != null
+                    ? EnumActionResult.SUCCESS
+                    : EnumActionResult.PASS;
+            }
+            return !player.isSneaking() && isChunkResident(worldIn, pos) && API.getNodeAt(worldIn, pos) != null
+                ? EnumActionResult.SUCCESS : EnumActionResult.PASS;
         }
         if (!(player instanceof EntityPlayerMP p)) {
+            return EnumActionResult.PASS;
+        }
+        if (!isChunkResident(worldIn, pos)) {
             return EnumActionResult.PASS;
         }
         if (!p.isSneaking() && PocketNodeManager.INSTANCE.removePocketNode(worldIn, pos, true)) {
             return EnumActionResult.SUCCESS;
         }
 
-        BlockPos target = resolveOriginPos(worldIn, pos);
-        ItemStack stack = p.getHeldItemMainhand();
+        BlockPos target = resolveResidentOriginPos(worldIn, pos);
+        if (target == null) {
+            return EnumActionResult.PASS;
+        }
+        ItemStack stack = p.getHeldItem(hand);
         CirculationConfiguratorSelection selection = CirculationConfiguratorSelection.fromStack(stack);
         return switch (selection.function()) {
-            case INSPECTION -> executeInspection(p, worldIn, target, selection.subMode());
+            case INSPECTION -> executeInspection(p, worldIn, target);
             case CONFIGURATION -> executeConfiguration(p, worldIn, target, selection.subMode());
+            case PRIORITY -> executePriority(p, worldIn, target, hand);
+            case INTERACTION -> executeInteraction(p, worldIn, target);
         };
     }
     //?} else {
@@ -231,27 +306,178 @@ public class ItemCirculationConfigurator extends BaseItem {
     public @NotNull InteractionResult useOn(@NotNull UseOnContext context) {
         Player player = context.getPlayer();
         if (context.getLevel().isClientSide) {
-            return player != null && !player.isShiftKeyDown()
+            if (player == null) {
+                return InteractionResult.PASS;
+            }
+            CirculationConfiguratorSelection selection = CirculationConfiguratorSelection.fromStack(context.getItemInHand());
+            if (player.isShiftKeyDown() && !selection.function().hasSubModes()) {
+                BlockPos target = resolveResidentOriginPos(context.getLevel(), context.getClickedPos());
+                if (target == null) {
+                    return InteractionResult.PASS;
+                }
+                return API.getNodeAt(context.getLevel(), target) != null || context.getLevel().getBlockEntity(target) != null
+                    ? InteractionResult.SUCCESS : InteractionResult.PASS;
+            }
+            return !player.isShiftKeyDown() && isChunkResident(context.getLevel(), context.getClickedPos())
                 && API.getNodeAt(context.getLevel(), context.getClickedPos()) != null
-                ? InteractionResult.SUCCESS
-                : InteractionResult.PASS;
+                ? InteractionResult.SUCCESS : InteractionResult.PASS;
         }
         if (!(player instanceof ServerPlayer p)) {
+            return InteractionResult.PASS;
+        }
+        if (!isChunkResident(context.getLevel(), context.getClickedPos())) {
             return InteractionResult.PASS;
         }
         if (!p.isShiftKeyDown() && PocketNodeManager.INSTANCE.removePocketNode(context.getLevel(), context.getClickedPos(), true)) {
             return InteractionResult.SUCCESS;
         }
 
-        BlockPos target = resolveOriginPos(context.getLevel(), context.getClickedPos());
+        BlockPos target = resolveResidentOriginPos(context.getLevel(), context.getClickedPos());
+        if (target == null) {
+            return InteractionResult.PASS;
+        }
         ItemStack stack = context.getItemInHand();
         CirculationConfiguratorSelection selection = CirculationConfiguratorSelection.fromStack(stack);
         return switch (selection.function()) {
-            case INSPECTION -> executeInspection(p, context.getLevel(), target, selection.subMode());
+            case INSPECTION -> executeInspection(p, context.getLevel(), target);
             case CONFIGURATION -> executeConfiguration(p, context.getLevel(), target, selection.subMode());
+            case PRIORITY -> executePriority(p, context.getLevel(), target, context.getHand());
+            case INTERACTION -> executeInteraction(p, context.getLevel(), target);
         };
     }
     *///?}
+
+    //? if <1.20 {
+    private EnumActionResult executePriority(EntityPlayerMP player, World world, BlockPos pos, EnumHand hand) {
+        if (!player.isSneaking()) {
+            return EnumActionResult.PASS;
+        }
+        ContainerMachinePriority.open(player, world, pos, hand);
+        return EnumActionResult.SUCCESS;
+    }
+    //?} else {
+    /*private InteractionResult executePriority(ServerPlayer player, Level world, BlockPos pos, InteractionHand hand) {
+        if (!player.isShiftKeyDown()) {
+            return InteractionResult.PASS;
+        }
+        ContainerMachinePriority.open(player, world, pos, hand);
+        return InteractionResult.SUCCESS;
+    }
+    *///?}
+
+    //? if <1.20 {
+    private EnumActionResult executeInteraction(EntityPlayerMP player, World world, BlockPos pos) {
+        if (!player.isSneaking()) {
+            return EnumActionResult.PASS;
+        }
+        return queueInteractionReport(player, world, pos)
+            ? EnumActionResult.SUCCESS : EnumActionResult.FAIL;
+    }
+    //?} else {
+    /*private InteractionResult executeInteraction(ServerPlayer player, Level world, BlockPos pos) {
+        if (!player.isShiftKeyDown()) {
+            return InteractionResult.PASS;
+        }
+        return queueInteractionReport(player, world, pos)
+            ? InteractionResult.SUCCESS : InteractionResult.FAIL;
+    }
+    *///?}
+
+    //~ if >=1.20 'EntityPlayerMP' -> 'ServerPlayer' {
+    //~ if >=1.20 'World ' -> 'Level ' {
+    //~ if >=1.20 'world.getTileEntity(pos)' -> 'world.getBlockEntity(pos)' {
+    private boolean queueInteractionReport(EntityPlayerMP player, World world, BlockPos pos) {
+        if (!isChunkResident(world, pos)) {
+            return false;
+        }
+        INode node = API.getNodeAt(world, pos);
+        var nativeBlockEntity = world.getTileEntity(pos);
+        boolean registeredMachine = nativeBlockEntity != null
+            && API.getMachineInteraction(CFNBlockEntityEx.cfn_cast(nativeBlockEntity)) != null;
+        if (!registeredMachine && node == null) {
+            sendInteractionMessage(player,
+                "item.circulation_networks.circulation_configurator.interaction.error.invalid_target");
+            return false;
+        }
+        API.submitMachineInteractionQuery(() -> sendInteractionReport(player, world, pos));
+        return true;
+    }
+    //~}
+    //~}
+    //~}
+
+    //~ if >=1.20 'EntityPlayerMP' -> 'ServerPlayer' {
+    //~ if >=1.20 'World ' -> 'Level ' {
+    //~ if >=1.20 'world.getTileEntity(pos)' -> 'world.getBlockEntity(pos)' {
+    private boolean sendInteractionReport(EntityPlayerMP player, World world, BlockPos pos) {
+        if (!isChunkResident(world, pos)) {
+            return false;
+        }
+        INode node = API.getNodeAt(world, pos);
+        var nativeBlockEntity = world.getTileEntity(pos);
+        var interaction = nativeBlockEntity != null
+            ? API.getMachineInteraction(CFNBlockEntityEx.cfn_cast(nativeBlockEntity)) : null;
+        boolean hasMachine = interaction != null;
+        String machineInput = "";
+        String machineOutput = "";
+        if (hasMachine) {
+            try (ConfiguratorInteractionQuery.MachineSnapshot snapshot =
+                     ConfiguratorInteractionQuery.snapshotMachine(interaction)) {
+                machineInput = formatEnergy(snapshot.input());
+                machineOutput = formatEnergy(snapshot.output());
+            }
+        }
+        boolean hasNetwork = false;
+        long[] inputPositions = new long[0];
+        String[] inputValues = new String[0];
+        long[] outputPositions = new long[0];
+        String[] outputValues = new String[0];
+        if (node != null) {
+            IGrid grid = node.getGrid();
+            if (grid == null) {
+                sendInteractionMessage(player,
+                    "item.circulation_networks.circulation_configurator.interaction.error.no_grid");
+            } else {
+                hasNetwork = true;
+                try (ConfiguratorInteractionQuery.GridSnapshot snapshot = ConfiguratorInteractionQuery.snapshotGrid(
+                    grid, packedPosition -> isChunkResident(world,
+                        ConfiguratorInteractionQuery.unpack(packedPosition)))) {
+                    inputPositions = rankingPositions(snapshot.inputs());
+                    inputValues = rankingValues(snapshot.inputs());
+                    outputPositions = rankingPositions(snapshot.outputs());
+                    outputValues = rankingValues(snapshot.outputs());
+                }
+            }
+        }
+        if (!hasMachine && !hasNetwork) {
+            sendInteractionMessage(player,
+                "item.circulation_networks.circulation_configurator.interaction.error.invalid_target");
+            return false;
+        }
+        CirculationFlowNetworks.sendToPlayer(new ConfiguratorInteractionReport(
+            hasMachine, packPos(pos), machineInput, machineOutput, hasNetwork,
+            inputPositions, inputValues, outputPositions, outputValues
+        ), player);
+        return true;
+    }
+
+    private static long[] rankingPositions(List<ConfiguratorInteractionQuery.RankedInteraction> ranking) {
+        long[] positions = new long[ranking.size()];
+        for (int index = 0; index < ranking.size(); index++) {
+            positions[index] = ranking.get(index).packedPosition();
+        }
+        return positions;
+    }
+
+    private static String[] rankingValues(List<ConfiguratorInteractionQuery.RankedInteraction> ranking) {
+        String[] values = new String[ranking.size()];
+        for (int index = 0; index < ranking.size(); index++) {
+            values[index] = formatEnergy(ranking.get(index).amount());
+        }
+        return values;
+    }
+    //~}
+    //~}
 
     @Override
     protected List<LocalizedComponent> buildTooltips(ItemStack stack) {
@@ -298,7 +524,7 @@ public class ItemCirculationConfigurator extends BaseItem {
     *///?}
 
     //? if <1.20 {
-    private EnumActionResult executeInspection(EntityPlayerMP player, World world, BlockPos pos, int subMode) {
+    private EnumActionResult executeInspection(EntityPlayerMP player, World world, BlockPos pos) {
         INode node = API.getNodeAt(world, pos);
         if (node == null) {
             return EnumActionResult.PASS;
@@ -322,7 +548,7 @@ public class ItemCirculationConfigurator extends BaseItem {
         return EnumActionResult.SUCCESS;
     }
     //?} else {
-    /*private InteractionResult executeInspection(ServerPlayer player, Level world, BlockPos pos, int subMode) {
+    /*private InteractionResult executeInspection(ServerPlayer player, Level world, BlockPos pos) {
         INode node = API.getNodeAt(world, pos);
         if (node == null) {
             return InteractionResult.PASS;
@@ -352,6 +578,9 @@ public class ItemCirculationConfigurator extends BaseItem {
         var manager = EnergyTypeOverrideManager.get();
         if (manager == null) {
             return EnumActionResult.FAIL;
+        }
+        if (!isChunkResident(world, pos)) {
+            return EnumActionResult.PASS;
         }
 
         INode node = API.getNodeAt(world, pos);
@@ -390,6 +619,9 @@ public class ItemCirculationConfigurator extends BaseItem {
         var manager = EnergyTypeOverrideManager.get();
         if (manager == null) {
             return InteractionResult.FAIL;
+        }
+        if (!isChunkResident(world, pos)) {
+            return InteractionResult.PASS;
         }
 
         INode node = API.getNodeAt(world, pos);

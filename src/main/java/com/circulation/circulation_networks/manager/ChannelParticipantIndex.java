@@ -9,6 +9,7 @@ import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
 import java.util.UUID;
@@ -101,15 +102,16 @@ public final class ChannelParticipantIndex {
             entry.validateRemoval(participant);
         }
     }
-    void onGridParticipantMoved(IGrid grid,
-                                EnergyMachineManager.MachineTransferSlot participant,
-                                IEnergyHandler.EnergyType role,
-                                int priority) {
+    @Nullable
+    MoveRollback onGridParticipantMoved(IGrid grid,
+                                        EnergyMachineManager.MachineTransferSlot participant,
+                                        IEnergyHandler.EnergyType role,
+                                        int priority) {
         UUID channelId = gridChannels.get(Objects.requireNonNull(grid, "grid"));
         if (channelId == null) {
-            return;
+            return null;
         }
-        requireChannel(channelId).move(participant, role, priority);
+        return requireChannel(channelId).move(participant, role, priority);
     }
     void validateGridParticipantMove(IGrid grid,
                                      EnergyMachineManager.MachineTransferSlot participant,
@@ -120,6 +122,11 @@ public final class ChannelParticipantIndex {
             entry.validateMove(participant, role, priority);
         }
     }
+
+    void rollbackGridParticipantMove(MoveRollback rollback) {
+        Objects.requireNonNull(rollback, "rollback");
+        rollback.owner.rollback(rollback);
+    }
     ChannelEntry channel(UUID channelId) {
         return channels.get(Objects.requireNonNull(channelId, "channelId"));
     }
@@ -129,6 +136,44 @@ public final class ChannelParticipantIndex {
 
     ChannelEntry routingChannelAt(int index) {
         return routingChannels.get(index);
+    }
+
+    static final class MoveRollback {
+
+        private final ChannelEntry owner;
+        private final EnergyMachineManager.MachineTransferSlot participant;
+        private final PriorityRoleIndex source;
+        private final PriorityRoleIndex.Bucket sourceBucket;
+        private final IEnergyHandler.EnergyType sourceRole;
+        private final int sourcePriority;
+        private final int sourceIndex;
+        private final PriorityRoleIndex destination;
+        private final IEnergyHandler.EnergyType destinationRole;
+        private final int destinationPriority;
+        @Nullable
+        private PriorityRoleIndex.Bucket destinationBucket;
+
+        private MoveRollback(ChannelEntry owner,
+                             EnergyMachineManager.MachineTransferSlot participant,
+                             PriorityRoleIndex source,
+                             PriorityRoleIndex.Bucket sourceBucket,
+                             IEnergyHandler.EnergyType sourceRole,
+                             int sourcePriority,
+                             int sourceIndex,
+                             PriorityRoleIndex destination,
+                             IEnergyHandler.EnergyType destinationRole,
+                             int destinationPriority) {
+            this.owner = owner;
+            this.participant = participant;
+            this.source = source;
+            this.sourceBucket = sourceBucket;
+            this.sourceRole = sourceRole;
+            this.sourcePriority = sourcePriority;
+            this.sourceIndex = sourceIndex;
+            this.destination = destination;
+            this.destinationRole = destinationRole;
+            this.destinationPriority = destinationPriority;
+        }
     }
     public void beginRouting(UUID channelId, long epoch) {
         requireChannel(channelId).beginRouting(epoch);
@@ -431,12 +476,56 @@ public final class ChannelParticipantIndex {
             participant.membership().clearChannel(owner, channelId);
         }
 
-        private void move(EnergyMachineManager.MachineTransferSlot participant, IEnergyHandler.EnergyType role, int priority) {
+        @Nullable
+        private MoveRollback move(EnergyMachineManager.MachineTransferSlot participant,
+                                  IEnergyHandler.EnergyType role,
+                                  int priority) {
             validateMove(participant, role, priority);
+            GridParticipantMembership membership = participant.membership();
             PriorityRoleIndex source = requireChannelRoleIndex(participant);
             PriorityRoleIndex destination = roleIndex(role);
+            IEnergyHandler.EnergyType sourceRole = Objects.requireNonNull(
+                membership.channelRole(), "participant channel membership role"
+            );
+            int sourcePriority = membership.channelPriority();
+            if (source == destination && sourcePriority == priority) {
+                return null;
+            }
+            PriorityRoleIndex.Bucket sourceBucket = Objects.requireNonNull(
+                membership.channelBucket(), "participant channel membership bucket"
+            );
+            int sourceIndex = source.participantIndex(sourceBucket, participant);
+            MoveRollback rollback = new MoveRollback(
+                this, participant, source, sourceBucket, sourceRole, sourcePriority, sourceIndex,
+                destination, role, priority
+            );
             PriorityRoleIndex.Bucket destinationBucket = source.transferTo(participant, destination, priority);
-            participant.membership().moveChannel(destination, destinationBucket, role, priority);
+            membership.moveChannel(destination, destinationBucket, role, priority);
+            rollback.destinationBucket = destinationBucket;
+            return rollback;
+        }
+
+        private void rollback(MoveRollback rollback) {
+            if (rollback.owner != this) {
+                throw new IllegalStateException("Channel move rollback belongs to another channel entry");
+            }
+            GridParticipantMembership membership = rollback.participant.membership();
+            PriorityRoleIndex.Bucket destinationBucket = Objects.requireNonNull(
+                rollback.destinationBucket, "Channel move rollback was not committed"
+            );
+            if (!channelId.equals(membership.channelId())
+                || membership.channelRole() != rollback.destinationRole
+                || membership.channelPriority() != rollback.destinationPriority
+                || requireChannelRoleIndex(rollback.participant) != rollback.destination
+                || membership.channelBucket() != destinationBucket) {
+                throw new IllegalStateException("Channel move rollback no longer matches participant membership");
+            }
+            PriorityRoleIndex.Bucket restoredBucket = rollback.destination.rollbackTransferTo(
+                rollback.participant, rollback.source, rollback.sourceBucket, rollback.sourceIndex
+            );
+            membership.moveChannel(
+                rollback.source, restoredBucket, rollback.sourceRole, rollback.sourcePriority
+            );
         }
 
         private void clear() {
