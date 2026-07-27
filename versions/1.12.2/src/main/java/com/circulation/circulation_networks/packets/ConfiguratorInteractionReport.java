@@ -1,20 +1,7 @@
 package com.circulation.circulation_networks.packets;
 
-import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.utils.Packet;
 import io.netty.buffer.ByteBuf;
-import net.minecraft.block.state.IBlockState;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.entity.EntityPlayerSP;
-import net.minecraft.item.ItemStack;
-import net.minecraft.util.EnumFacing;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.RayTraceResult;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.util.text.ITextComponent;
-import net.minecraft.util.text.TextComponentString;
-import net.minecraft.util.text.TextComponentTranslation;
-import net.minecraft.world.World;
 import net.minecraftforge.fml.common.network.ByteBufUtils;
 import net.minecraftforge.fml.common.network.simpleimpl.IMessage;
 import net.minecraftforge.fml.common.network.simpleimpl.MessageContext;
@@ -22,6 +9,8 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Arrays;
 import java.util.Objects;
+
+import static com.circulation.circulation_networks.CirculationFlowNetworks.proxy;
 
 public final class ConfiguratorInteractionReport implements Packet<ConfiguratorInteractionReport> {
 
@@ -81,76 +70,52 @@ public final class ConfiguratorInteractionReport implements Packet<ConfiguratorI
 
     @Override
     public @Nullable IMessage onMessage(ConfiguratorInteractionReport message, MessageContext context) {
-        Minecraft.getMinecraft().addScheduledTask(() -> display(message));
+        proxy.displayConfiguratorInteraction(message);
         return null;
     }
 
-    private static void display(ConfiguratorInteractionReport message) {
-        Minecraft minecraft = Minecraft.getMinecraft();
-        EntityPlayerSP player = minecraft.player;
-        World world = minecraft.world;
-        if (player == null || world == null) {
-            return;
-        }
-        if (message.hasMachine) {
-            BlockPos pos = BlockPos.fromLong(message.machinePosition);
-            player.sendMessage(new TextComponentTranslation(
-                "item.circulation_networks.circulation_configurator.interaction.machine.title",
-                resolveName(player, world, pos), pos.getX(), pos.getY(), pos.getZ()
-            ));
-            player.sendMessage(new TextComponentTranslation(
-                "item.circulation_networks.circulation_configurator.interaction.machine.input",
-                message.machineInput
-            ));
-            player.sendMessage(new TextComponentTranslation(
-                "item.circulation_networks.circulation_configurator.interaction.machine.output",
-                message.machineOutput
-            ));
-        }
-        if (message.hasNetwork) {
-            displayRanking(player, world,
-                "item.circulation_networks.circulation_configurator.interaction.network.input_top",
-                message.inputPositions, message.inputValues);
-            displayRanking(player, world,
-                "item.circulation_networks.circulation_configurator.interaction.network.output_top",
-                message.outputPositions, message.outputValues);
-        }
+    public boolean hasMachine() {
+        return hasMachine;
     }
 
-    private static void displayRanking(EntityPlayerSP player, World world, String titleKey,
-                                       long[] positions, String[] values) {
-        player.sendMessage(new TextComponentTranslation(titleKey));
-        if (positions.length == 0) {
-            player.sendMessage(new TextComponentTranslation(
-                "item.circulation_networks.circulation_configurator.interaction.network.empty"
-            ));
-            return;
-        }
-        for (int index = 0; index < positions.length; index++) {
-            BlockPos pos = BlockPos.fromLong(positions[index]);
-            player.sendMessage(new TextComponentTranslation(
-                "item.circulation_networks.circulation_configurator.interaction.network.entry",
-                index + 1, resolveName(player, world, pos), pos.getX(), pos.getY(), pos.getZ(), values[index]
-            ));
-        }
+    public long getMachinePosition() {
+        return machinePosition;
     }
 
-    private static ITextComponent resolveName(EntityPlayerSP player, World world, BlockPos pos) {
-        if (world.getChunkProvider().getLoadedChunk(pos.getX() >> 4, pos.getZ() >> 4) == null) {
-            return new TextComponentString(pos.toString());
-        }
-        IBlockState state = world.getBlockState(pos);
-        try {
-            Vec3d center = new Vec3d(pos).add(0.5D, 0.5D, 0.5D);
-            RayTraceResult target = new RayTraceResult(center, EnumFacing.UP, pos);
-            ItemStack picked = state.getBlock().getPickBlock(state, target, world, pos, player);
-            if (!picked.isEmpty()) {
-                return new TextComponentString(picked.getDisplayName());
-            }
-        } catch (RuntimeException exception) {
-            CirculationFlowNetworks.LOGGER.warn("Failed to resolve picked block name at {}", pos, exception);
-        }
-        return new TextComponentString(state.getBlock().getLocalizedName());
+    public String getMachineInput() {
+        return machineInput;
+    }
+
+    public String getMachineOutput() {
+        return machineOutput;
+    }
+
+    public boolean hasNetwork() {
+        return hasNetwork;
+    }
+
+    public int getInputCount() {
+        return inputPositions.length;
+    }
+
+    public long getInputPosition(int index) {
+        return inputPositions[index];
+    }
+
+    public String getInputValue(int index) {
+        return inputValues[index];
+    }
+
+    public int getOutputCount() {
+        return outputPositions.length;
+    }
+
+    public long getOutputPosition(int index) {
+        return outputPositions[index];
+    }
+
+    public String getOutputValue(int index) {
+        return outputValues[index];
     }
 
     private static long[] readPositions(ByteBuf buf) {

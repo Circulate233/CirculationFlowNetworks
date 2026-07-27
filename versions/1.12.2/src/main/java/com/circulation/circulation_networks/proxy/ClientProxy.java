@@ -29,6 +29,7 @@ import com.circulation.circulation_networks.handlers.SpoceRenderingHandlerGL32L2
 import com.circulation.circulation_networks.handlers.SpoceRenderingHandlerGL32L3;
 import com.circulation.circulation_networks.handlers.SpoceRenderingHandlerGL46L2;
 import com.circulation.circulation_networks.handlers.SpoceRenderingHandlerGL46L3;
+import com.circulation.circulation_networks.packets.ConfiguratorInteractionReport;
 import com.circulation.circulation_networks.registry.RegistryBlocks;
 import com.circulation.circulation_networks.registry.RegistryItems;
 import com.circulation.circulation_networks.tiles.BaseTileEntity;
@@ -38,12 +39,21 @@ import com.circulation.circulation_networks.tiles.nodes.TileEntityHub;
 import com.circulation.circulation_networks.tiles.nodes.TileEntityPortNode;
 import com.circulation.circulation_networks.tiles.nodes.TileEntityRelayNode;
 import com.circulation.circulation_networks.utils.CI18n;
+import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.ItemStack;
+import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumHand;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.RayTraceResult;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.TextComponentString;
+import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraft.world.World;
 import net.minecraftforge.client.event.ModelRegistryEvent;
 import net.minecraftforge.client.event.TextureStitchEvent;
@@ -137,6 +147,83 @@ public final class ClientProxy extends CommonProxy {
         MinecraftForge.EVENT_BUS.register(NodeHudRenderingHandler.INSTANCE);
         MinecraftForge.EVENT_BUS.register(ItemToolHandler.INSTANCE);
         MinecraftForge.EVENT_BUS.register(CirculationShielderRenderingHandler.INSTANCE);
+    }
+
+    @Override
+    public void displayConfiguratorInteraction(ConfiguratorInteractionReport message) {
+        Minecraft.getMinecraft().addScheduledTask(() -> displayConfiguratorInteractionNow(message));
+    }
+
+    private static void displayConfiguratorInteractionNow(ConfiguratorInteractionReport message) {
+        Minecraft minecraft = Minecraft.getMinecraft();
+        EntityPlayerSP player = minecraft.player;
+        World world = minecraft.world;
+        if (player == null || world == null) {
+            return;
+        }
+        if (message.hasMachine()) {
+            BlockPos pos = BlockPos.fromLong(message.getMachinePosition());
+            player.sendMessage(new TextComponentTranslation(
+                "item.circulation_networks.circulation_configurator.interaction.machine.title",
+                resolveInteractionName(player, world, pos), pos.getX(), pos.getY(), pos.getZ()
+            ));
+            player.sendMessage(new TextComponentTranslation(
+                "item.circulation_networks.circulation_configurator.interaction.machine.input",
+                message.getMachineInput()
+            ));
+            player.sendMessage(new TextComponentTranslation(
+                "item.circulation_networks.circulation_configurator.interaction.machine.output",
+                message.getMachineOutput()
+            ));
+        }
+        if (message.hasNetwork()) {
+            displayInteractionRanking(player, world,
+                "item.circulation_networks.circulation_configurator.interaction.network.input_top",
+                message, true);
+            displayInteractionRanking(player, world,
+                "item.circulation_networks.circulation_configurator.interaction.network.output_top",
+                message, false);
+        }
+    }
+
+    private static void displayInteractionRanking(EntityPlayerSP player, World world, String titleKey,
+                                                  ConfiguratorInteractionReport message, boolean input) {
+        player.sendMessage(new TextComponentTranslation(titleKey));
+        int count = input ? message.getInputCount() : message.getOutputCount();
+        if (count == 0) {
+            player.sendMessage(new TextComponentTranslation(
+                "item.circulation_networks.circulation_configurator.interaction.network.empty"
+            ));
+            return;
+        }
+        for (int index = 0; index < count; index++) {
+            long position = input ? message.getInputPosition(index) : message.getOutputPosition(index);
+            String value = input ? message.getInputValue(index) : message.getOutputValue(index);
+            BlockPos pos = BlockPos.fromLong(position);
+            player.sendMessage(new TextComponentTranslation(
+                "item.circulation_networks.circulation_configurator.interaction.network.entry",
+                index + 1, resolveInteractionName(player, world, pos),
+                pos.getX(), pos.getY(), pos.getZ(), value
+            ));
+        }
+    }
+
+    private static ITextComponent resolveInteractionName(EntityPlayerSP player, World world, BlockPos pos) {
+        if (world.getChunkProvider().getLoadedChunk(pos.getX() >> 4, pos.getZ() >> 4) == null) {
+            return new TextComponentString(pos.toString());
+        }
+        IBlockState state = world.getBlockState(pos);
+        try {
+            Vec3d center = new Vec3d(pos).add(0.5D, 0.5D, 0.5D);
+            RayTraceResult target = new RayTraceResult(center, EnumFacing.UP, pos);
+            ItemStack picked = state.getBlock().getPickBlock(state, target, world, pos, player);
+            if (!picked.isEmpty()) {
+                return new TextComponentString(picked.getDisplayName());
+            }
+        } catch (RuntimeException exception) {
+            CirculationFlowNetworks.LOGGER.warn("Failed to resolve picked block name at {}", pos, exception);
+        }
+        return new TextComponentString(state.getBlock().getLocalizedName());
     }
 
     @SubscribeEvent

@@ -136,6 +136,10 @@ public class CommonProxy implements IGuiHandler {
         NET_CHANNEL.registerMessage(aClass, aClass, id++, side);
     }
 
+    public void displayConfiguratorInteraction(ConfiguratorInteractionReport message) {
+        throw new IllegalStateException("Configurator interaction report dispatched through the server proxy");
+    }
+
     public void preInit(FMLPreInitializationEvent event) {
         NetworkRegistry.INSTANCE.registerGuiHandler(CirculationFlowNetworks.instance, this);
         registerMessage(CirculationShielderSyncPacket.class, Side.SERVER);
