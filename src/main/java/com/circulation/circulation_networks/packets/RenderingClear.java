@@ -9,6 +9,7 @@ import com.circulation.circulation_networks.handlers.NodeNetworkRenderingHandler
 import com.circulation.circulation_networks.handlers.PocketNodeRenderingHandler;
 import com.circulation.circulation_networks.handlers.SpoceRenderingHandler;
 import com.circulation.circulation_networks.utils.Packet;
+import net.minecraft.client.Minecraft;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
@@ -32,7 +33,7 @@ public final class RenderingClear implements Packet<RenderingClear> {
 
     public void handle(@NonNull RenderingClear message, @NonNull IPayloadContext context) {
         context.enqueueWork(() -> {
-            if (net.minecraft.client.Minecraft.getInstance().player == null) {
+            if (Minecraft.getInstance().player == null) {
                 return;
             }
             NodeNetworkRenderingHandler.INSTANCE.clearLinks();

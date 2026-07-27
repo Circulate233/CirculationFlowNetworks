@@ -88,7 +88,7 @@ public class SliderComponent extends Component {
     }
 
     private static int normalizedToRaw(double value) {
-        double clamped = Math.max(NORMALIZED_MIN, Math.min(NORMALIZED_MAX, value));
+        double clamped = Math.clamp(value, NORMALIZED_MIN, NORMALIZED_MAX);
         return (int) Math.round(clamped * NORMALIZED_SCALE);
     }
 

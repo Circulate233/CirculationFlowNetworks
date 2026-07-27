@@ -24,6 +24,7 @@ import com.circulation.circulation_networks.utils.CI18n;
 import com.circulation.circulation_networks.utils.FormatNumberUtils;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.player.Inventory;
 
 import java.util.List;
@@ -301,7 +302,7 @@ public class GuiHub extends CFNBaseGui<ContainerHub> {
     }
 
     private String trimToWidth(String text, int width) {
-        return net.minecraft.client.Minecraft.getInstance().font.plainSubstrByWidth(text == null ? "" : text, width);
+        return Minecraft.getInstance().font.plainSubstrByWidth(text == null ? "" : text, width);
     }
 
     private String boldTooltip(String key) {

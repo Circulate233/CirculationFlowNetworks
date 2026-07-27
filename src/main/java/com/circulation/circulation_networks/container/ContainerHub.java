@@ -5,7 +5,6 @@ import com.circulation.circulation_networks.api.hub.ChargingPreference;
 import com.circulation.circulation_networks.api.hub.NodeSnapshotList;
 import com.circulation.circulation_networks.api.hub.PermissionSnapshotList;
 import com.circulation.circulation_networks.api.node.IHubNode;
-import com.circulation.circulation_networks.manager.EnergyMachineManager;
 import com.circulation.circulation_networks.manager.HubChannelManager;
 import com.circulation.circulation_networks.network.hub.HubCapabilitys;
 import com.circulation.circulation_networks.utils.GuiSync;
@@ -170,7 +169,7 @@ public class ContainerHub extends CFNBaseContainer {
     }
 
     private void refreshEnergyStats(boolean refreshEnergy, boolean refreshLatency) {
-        var energy = EnergyMachineManager.INSTANCE.getInteraction().get(node.getGrid());
+        var energy = node.getGrid() == null ? null : node.getGrid().getInteraction();
         if (energy == null) {
             if (refreshEnergy) {
                 input = "0";
@@ -182,8 +181,8 @@ public class ContainerHub extends CFNBaseContainer {
             return;
         }
         if (refreshEnergy) {
-            input = energy.getInput().toString();
-            output = energy.getOutput().toString();
+            input = energy.getInputString();
+            output = energy.getOutputString();
         }
         if (refreshLatency) {
             interactionTimeMicros = energy.getInteractionTimeMicrosString();

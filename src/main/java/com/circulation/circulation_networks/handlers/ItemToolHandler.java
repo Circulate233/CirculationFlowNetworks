@@ -34,12 +34,17 @@ public class ItemToolHandler {
             return;
         }
 
+        CirculationConfiguratorSelection selection = CirculationConfiguratorSelection.fromStack(stack);
+        if (!selection.function().hasSubModes()) {
+            return;
+        }
+
         int mode = CirculationConfiguratorState.getSubMode(stack) + delta;
         CirculationConfiguratorState.setSubMode(stack, mode);
 
         CirculationFlowNetworks.sendToServer(new UpdateItemModeMessage(mode));
 
-        CirculationConfiguratorSelection selection = CirculationConfiguratorSelection.fromStack(stack);
+        selection = CirculationConfiguratorSelection.fromStack(stack);
         String modeName = CI18n.format(selection.modeLangKey());
         String subModeName = CI18n.format(selection.subModeLangKey());
 

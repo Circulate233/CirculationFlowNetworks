@@ -49,7 +49,7 @@ public final class NodeHudRequest implements Packet<NodeHudRequest> {
     }
 
     @Override
-    public NodeHudRequest decode(@NonNull RegistryFriendlyByteBuf buf) {
+    public @NotNull NodeHudRequest decode(@NonNull RegistryFriendlyByteBuf buf) {
         NodeHudRequest msg = new NodeHudRequest();
         msg.posLong = buf.readLong();
         return msg;
@@ -77,13 +77,13 @@ public final class NodeHudRequest implements Packet<NodeHudRequest> {
             String interactionTimeMicros = "0";
             int nodeCount = 0;
 
-            if (node.getGrid() != null) {
-                nodeCount = node.getGrid().getNodes().size();
-                EnergyMachineManager.Interaction interaction =
-                    EnergyMachineManager.INSTANCE.getInteraction().get(node.getGrid());
+            var grid = node.getGrid();
+            if (grid != null) {
+                nodeCount = grid.getNodes().size();
+                EnergyMachineManager.Interaction interaction = grid.getInteraction();
                 if (interaction != null) {
-                    input = interaction.getInput().toString();
-                    output = interaction.getOutput().toString();
+                    input = interaction.getInputString();
+                    output = interaction.getOutputString();
                     interactionTimeMicros = interaction.getInteractionTimeMicrosString();
                 }
             }

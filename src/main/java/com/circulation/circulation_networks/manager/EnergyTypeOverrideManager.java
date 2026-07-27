@@ -1,5 +1,6 @@
 package com.circulation.circulation_networks.manager;
 
+import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.api.IEnergyHandler;
 import com.circulation.circulation_networks.events.BlockEntityLifeCycleEvent;
 import com.circulation.circulation_networks.packets.ConfigOverrideRendering;
@@ -15,6 +16,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.File;
@@ -63,21 +65,30 @@ public final class EnergyTypeOverrideManager {
         return WorldResolveCompat.getPlayerDimensionId(player);
     }
 
-    private static String getDimensionId(net.minecraft.world.level.Level world) {
+    private static String getDimensionId(Level world) {
         return WorldResolveCompat.getDimensionId(world);
     }
 
     public void setOverride(String dim, BlockPos pos, IEnergyHandler.EnergyType type) {
-        overrides.computeIfAbsent(dim, _ -> new Long2ObjectOpenHashMap<>()).put(BlockPosCompat.toLong(pos), type);
+        if (type == null) {
+            throw new IllegalArgumentException("type must not be null");
+        }
+        long packedPos = BlockPosCompat.toLong(pos);
+        IEnergyHandler.EnergyType oldType = overrides.computeIfAbsent(dim, _ -> new Long2ObjectOpenHashMap<>())
+            .put(packedPos, type);
+        MachineBindingIndex.INSTANCE.onEnergyTypeOverrideChanged(dim.hashCode(), packedPos, oldType, type);
         markDirty();
     }
 
     public void clearOverride(String dim, BlockPos pos) {
         var dimMap = overrides.get(dim);
+        IEnergyHandler.EnergyType oldType = null;
+        long packedPos = BlockPosCompat.toLong(pos);
         if (dimMap != null) {
-            dimMap.remove(BlockPosCompat.toLong(pos));
+            oldType = dimMap.remove(packedPos);
             if (dimMap.isEmpty()) overrides.remove(dim);
         }
+        MachineBindingIndex.INSTANCE.onEnergyTypeOverrideChanged(dim.hashCode(), packedPos, oldType, null);
         markDirty();
     }
 
@@ -96,6 +107,15 @@ public final class EnergyTypeOverrideManager {
     @Nullable
     public Long2ObjectMap<IEnergyHandler.EnergyType> getOverridesForDim(String dim) {
         return overrides.get(dim);
+    }
+
+    public boolean isEmpty() {
+        return overrides.isEmpty();
+    }
+
+    public boolean hasOverridesForDim(String dim) {
+        var dimMap = overrides.get(dim);
+        return dimMap != null && !dimMap.isEmpty();
     }
 
     public void onBlockEntityInvalidate(BlockEntityLifeCycleEvent.Invalidate event) {
@@ -119,12 +139,19 @@ public final class EnergyTypeOverrideManager {
     private void loadFromFile() {
         File saveFile = new File(NetworkManager.getSaveFile(), "EnergyTypeOverride.dat");
         if (!saveFile.exists()) {
+            MachineBindingIndex.INSTANCE.onEnergyTypeOverridesLoaded(this);
             return;
         }
 
         try {
             CompoundTag nbt = NetworkManager.readCompressedNbt(saveFile);
-            if (nbt == null) return;
+            if (nbt == null) {
+                CirculationFlowNetworks.LOGGER.warn(
+                    "Energy type override file {} contains no data", saveFile.getAbsolutePath()
+                );
+                MachineBindingIndex.INSTANCE.onEnergyTypeOverridesLoaded(this);
+                return;
+            }
 
             overrides.clear();
             ListTag dims = NbtCompat.getListOrEmpty(nbt, "overrides");
@@ -145,8 +172,12 @@ public final class EnergyTypeOverrideManager {
                 }
                 if (!dimMap.isEmpty()) overrides.put(dim, dimMap);
             }
-        } catch (IOException ignored) {
+        } catch (IOException exception) {
+            CirculationFlowNetworks.LOGGER.error(
+                "Failed to load energy type overrides from {}", saveFile.getAbsolutePath(), exception
+            );
         }
+        MachineBindingIndex.INSTANCE.onEnergyTypeOverridesLoaded(this);
     }
 
     private boolean saveToFile() {
@@ -177,7 +208,10 @@ public final class EnergyTypeOverrideManager {
             NetworkManager.writeCompressedNbt(nbt, saveFile);
             m = false;
             return true;
-        } catch (IOException ignored) {
+        } catch (IOException exception) {
+            CirculationFlowNetworks.LOGGER.error(
+                "Failed to save energy type overrides to {}", saveFile.getAbsolutePath(), exception
+            );
             return false;
         }
     }

@@ -19,6 +19,7 @@ import com.circulation.circulation_networks.registry.CFNBlockEntityTypes;
 import com.circulation.circulation_networks.registry.CFNMenuTypes;
 import com.circulation.circulation_networks.registry.NodeTypes;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
@@ -186,7 +187,7 @@ public class BlockEntityHub extends BaseNodeBlockEntity<IHubNode> implements IHu
 
     @Override
     @NotNull
-    public CompoundTag getUpdateTag(net.minecraft.core.HolderLookup.@NotNull Provider registries) {
+    public CompoundTag getUpdateTag(HolderLookup.@NotNull Provider registries) {
         return saveCustomOnly(registries);
     }
 

@@ -10,6 +10,7 @@ import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
 import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 
 import static com.circulation.circulation_networks.client.render.RotatingBlockModelCache.CHARGING_IN_BASE;
@@ -32,7 +33,7 @@ public final class ChargingNodeRenderer implements BlockEntityRenderer<BlockEnti
 
     @Override
     public void extractRenderState(@NotNull BlockEntityChargingNode blockEntity, @NotNull CFNBlockEntityRenderState<BlockEntityChargingNode> renderState,
-                                   float partialTick, @NotNull net.minecraft.world.phys.Vec3 cameraPos,
+                                   float partialTick, @NotNull Vec3 cameraPos,
                                    ModelFeatureRenderer.CrumblingOverlay crumblingOverlay) {
         BlockEntityRenderState.extractBase(blockEntity, renderState, crumblingOverlay);
         renderState.blockEntity = blockEntity;

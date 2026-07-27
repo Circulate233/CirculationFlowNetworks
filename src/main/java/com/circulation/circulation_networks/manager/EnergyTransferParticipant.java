@@ -19,12 +19,7 @@ final class EnergyTransferParticipant {
     private IGrid grid;
     @Nullable
     private HubNode.HubMetadata hubMetadata;
-    @Nullable
-    private EnergyMachineManager.Interaction interaction;
-    private boolean recycleHandlerOnRecycle;
-    // Cached once in obtain() so the hot transfer loop reads a field instead of re-querying
-    // the handler for every sender/receiver pairing.
-    private boolean pairMatch;
+    private HandlerBindingPolicy policy;
 
     private EnergyTransferParticipant() {
     }
@@ -32,66 +27,63 @@ final class EnergyTransferParticipant {
     static EnergyTransferParticipant obtain(IEnergyHandler handler,
                                             @Nullable IGrid grid,
                                             @Nullable HubNode.HubMetadata hubMetadata) {
-        return obtain(handler, grid, hubMetadata, true);
-    }
-
-    static EnergyTransferParticipant obtain(IEnergyHandler handler,
-                                            @Nullable IGrid grid,
-                                            @Nullable HubNode.HubMetadata hubMetadata,
-                                            boolean recycleHandlerOnRecycle) {
         EnergyTransferParticipant p = POOL.obtain();
         p.handler = handler;
         p.grid = grid;
         p.hubMetadata = hubMetadata;
-        p.recycleHandlerOnRecycle = recycleHandlerOnRecycle;
-        p.pairMatch = handler.requiresPairMatch(hubMetadata);
+        p.policy = EnergyHandlerRuntime.policy(handler);
         return p;
     }
 
-    void setInteraction(@Nullable EnergyMachineManager.Interaction interaction) {
-        this.interaction = interaction;
+    boolean requiresPairMatch() {
+        return policy.pairMatching() == HandlerBindingPolicy.PairMatching.REQUIRED;
     }
 
-    /**
-     * Whether this participant opts into precise per-pair canExtract/canReceive matching.
-     * Default handlers return false, letting the transfer loop skip the per-pair predicate
-     * (the value-zero checks already gate transfers).
-     */
-    boolean requiresPairMatch() {
-        return pairMatch;
+    IEnergyHandler handler() {
+        return handler;
     }
 
     IEnergyHandler.EnergyType getType() {
-        return handler.getType(hubMetadata);
+        return EnergyHandlerRuntime.type(handler, hubMetadata);
     }
 
     EnergyAmount canExtractValue() {
-        return handler.canExtractValue(hubMetadata);
+        return EnergyHandlerRuntime.canExtract(handler, hubMetadata);
     }
 
     EnergyAmount canReceiveValue() {
-        return handler.canReceiveValue(hubMetadata);
+        return EnergyHandlerRuntime.canReceive(handler, hubMetadata);
     }
 
     boolean canExtract(EnergyTransferParticipant receiveParticipant) {
-        return handler.canExtract(receiveParticipant.handler, hubMetadata);
+        return EnergyHandlerRuntime.canExtract(handler, receiveParticipant.handler, hubMetadata);
     }
 
     boolean canReceive(EnergyTransferParticipant sendParticipant) {
-        return handler.canReceive(sendParticipant.handler, hubMetadata);
+        return EnergyHandlerRuntime.canReceive(handler, sendParticipant.handler, hubMetadata);
+    }
+
+    boolean canReceive(EnergyMachineManager.MachineTransferSlot sendSlot) {
+        return EnergyHandlerRuntime.canReceive(handler, sendSlot.handler(), hubMetadata);
     }
 
     EnergyAmount extractEnergy(EnergyAmount maxExtract) {
-        return handler.extractEnergy(maxExtract, hubMetadata);
+        return EnergyHandlerRuntime.extract(handler, maxExtract, hubMetadata);
     }
 
     EnergyAmount receiveEnergy(EnergyAmount maxReceive) {
-        return handler.receiveEnergy(maxReceive, hubMetadata);
-    }
-
-    @Nullable
-    EnergyMachineManager.Interaction interaction() {
-        return interaction;
+        EnergyAmount received = EnergyHandlerRuntime.receive(handler, maxReceive, hubMetadata);
+        if (!received.isNegative() && received.compareTo(maxReceive) <= 0) {
+            return received;
+        }
+        IllegalStateException violation = new IllegalStateException(
+            "Item energy handler returned " + received + " for receive request " + maxReceive
+        );
+        EnergyHandlerRuntime.logContractViolation(
+            handler, "receiveEnergy", EnergyHandlerRuntime.FailureContext.UNKNOWN, violation
+        );
+        received.recycle();
+        throw violation;
     }
 
     @Nullable
@@ -100,16 +92,10 @@ final class EnergyTransferParticipant {
     }
 
     void recycle() {
-        // Neutral-state guard (see ObjectPool): a live participant always has a non-null
-        // handler (set in obtain). Once recycled, reset() nulls it, so this cheaply absorbs
-        // a redundant recycle without the pool needing a contains check — and also avoids a
-        // NPE on the handler.clear() below.
         if (handler == null) {
             return;
         }
-        if (recycleHandlerOnRecycle) {
-            handler.clear();
-        }
+        EnergyHandlerRuntime.unbindItem(handler);
         POOL.recycle(this);
     }
 
@@ -117,8 +103,6 @@ final class EnergyTransferParticipant {
         handler = null;
         grid = null;
         hubMetadata = null;
-        interaction = null;
-        recycleHandlerOnRecycle = false;
-        pairMatch = false;
+        policy = null;
     }
 }

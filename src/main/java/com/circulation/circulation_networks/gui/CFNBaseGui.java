@@ -21,11 +21,14 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
+import net.neoforged.neoforge.client.event.ContainerScreenEvent;
+import net.neoforged.neoforge.common.NeoForge;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jspecify.annotations.NonNull;
 
 import java.lang.reflect.Method;
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -124,7 +127,7 @@ public abstract class CFNBaseGui<T extends CFNBaseContainer> extends AbstractCon
     public List<String> getContainerItemTooltipLines(ItemStack stack) {
         List<net.minecraft.network.chat.Component> lines = getTooltipFromContainerItem(stack);
         if (lines.isEmpty()) {
-            return java.util.Collections.emptyList();
+            return Collections.emptyList();
         }
 
         List<String> tooltip = new ObjectArrayList<>(lines.size());
@@ -232,8 +235,8 @@ public abstract class CFNBaseGui<T extends CFNBaseContainer> extends AbstractCon
         this.extractSlots(guiGraphics, mouseX, mouseY);
         extractSlotHighlight(guiGraphics, SLOT_HIGHLIGHT_FRONT_SPRITE);
 
-        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.post(
-            new net.neoforged.neoforge.client.event.ContainerScreenEvent.Render.Foreground(this, guiGraphics, mouseX, mouseY)
+        NeoForge.EVENT_BUS.post(
+            new ContainerScreenEvent.Render.Foreground(this, guiGraphics, mouseX, mouseY)
         );
         GuiGraphicsCompat.popPose(guiGraphics);
 

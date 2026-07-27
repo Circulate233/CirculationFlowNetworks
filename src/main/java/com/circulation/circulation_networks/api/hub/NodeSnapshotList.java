@@ -130,13 +130,13 @@ public final class NodeSnapshotList {
         Identifier location = Identifier.parse(visualId);
         var itemHolder = BuiltInRegistries.ITEM.get(Identifier.parse(visualId)).orElse(null);
         Item item = itemHolder != null ? itemHolder.value() : null;
-        if (item != null && item != net.minecraft.world.item.Items.AIR) {
+        if (item != null && item != Items.AIR) {
             return new ItemStack(item);
         }
         var blockHolder = BuiltInRegistries.BLOCK.get(Identifier.parse(visualId)).orElse(null);
         Block block = blockHolder != null ? blockHolder.value() : null;
         Item blockItem = Item.BY_BLOCK.getOrDefault(block, Items.AIR);
-        return blockItem != net.minecraft.world.item.Items.AIR ? new ItemStack(blockItem) : ItemStack.EMPTY;
+        return blockItem != Items.AIR ? new ItemStack(blockItem) : ItemStack.EMPTY;
     }
 
     private static int resolveItemIntId(String itemId) {

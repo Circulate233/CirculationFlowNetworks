@@ -3,6 +3,7 @@ package com.circulation.circulation_networks.packets;
 import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.handlers.SpoceRenderingHandler;
 import com.circulation.circulation_networks.utils.Packet;
+import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -46,7 +47,7 @@ public final class SpoceRendering implements Packet<SpoceRendering> {
 
     public void handle(@NonNull SpoceRendering message, @NonNull IPayloadContext context) {
         context.enqueueWork(() -> {
-            var mc = net.minecraft.client.Minecraft.getInstance();
+            var mc = Minecraft.getInstance();
             if (mc.level == null || SpoceRenderingHandler.INSTANCE == null) {
                 return;
             }

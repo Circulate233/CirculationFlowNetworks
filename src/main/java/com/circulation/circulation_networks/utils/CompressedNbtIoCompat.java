@@ -2,6 +2,7 @@ package com.circulation.circulation_networks.utils;
 
 import com.circulation.circulation_networks.CirculationFlowNetworks;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.nbt.NbtIo;
 import org.jetbrains.annotations.Nullable;
 
@@ -34,7 +35,7 @@ public final class CompressedNbtIoCompat {
     }
 
     public static CompoundTag readCompressedNbt(File file) throws IOException {
-        return NbtIo.readCompressed(file.toPath(), net.minecraft.nbt.NbtAccounter.unlimitedHeap());
+        return NbtIo.readCompressed(file.toPath(), NbtAccounter.unlimitedHeap());
     }
 
     public static void writeCompressedNbt(CompoundTag nbt, File file, Object lock) throws IOException {

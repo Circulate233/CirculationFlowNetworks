@@ -16,7 +16,11 @@ import com.circulation.circulation_networks.utils.CI18n;
 import com.circulation.circulation_networks.utils.FormatNumberUtils;
 import com.circulation.circulation_networks.utils.ScrollingTextHelper;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.Tesselator;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.math.Axis;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -281,8 +285,8 @@ public final class NodeHudRenderingHandler {
         float x3 = cx + (-(float) 25.0 * cos + (float) 25.0 * sin);
         float y3 = cy + (-(float) 25.0 * sin - (float) 25.0 * cos);
 
-        com.mojang.blaze3d.vertex.BufferBuilder buffer = com.mojang.blaze3d.vertex.Tesselator.getInstance()
-                                                                                             .begin(com.mojang.blaze3d.vertex.VertexFormat.Mode.QUADS, com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_TEX_COLOR);
+        BufferBuilder buffer = Tesselator.getInstance()
+                                                                                             .begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX_COLOR);
         buffer.addVertex(x0, y0, 0.0F).setUv(region.u0(), region.v1()).setColor(255, 255, 255, 255);
         buffer.addVertex(x1, y1, 0.0F).setUv(region.u1(), region.v1()).setColor(255, 255, 255, 255);
         buffer.addVertex(x2, y2, 0.0F).setUv(region.u1(), region.v0()).setColor(255, 255, 255, 255);

@@ -26,7 +26,7 @@ public final class RegistryItems {
     }
 
     private static void onRegisterItems(RegisterEvent event) {
-        event.register(net.minecraft.core.registries.Registries.ITEM, helper -> {
+        event.register(Registries.ITEM, helper -> {
             CFNItems.circulationConfigurator = register(helper, "circulation_configurator", ItemCirculationConfigurator::new);
             CFNItems.pocketPortNode = register(helper, "pocket_port_node", properties -> new ItemPocketNode(NodeTypes.PORT_NODE, properties));
             CFNItems.pocketChargingNode = register(helper, "pocket_charging_node", properties -> new ItemPocketNode(NodeTypes.CHARGING_NODE, properties));

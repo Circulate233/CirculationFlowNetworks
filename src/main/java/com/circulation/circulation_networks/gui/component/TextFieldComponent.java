@@ -50,6 +50,16 @@ public class TextFieldComponent extends Component {
         return this;
     }
 
+    public TextFieldComponent setTextFilter(Predicate<String> textFilter) {
+        textField.setTextFilter(textFilter != null ? textFilter : ignored -> true);
+        return this;
+    }
+
+    public TextFieldComponent selectAll() {
+        textField.selectAll();
+        return this;
+    }
+
     public int getMaxLength() {
         return maxLength;
     }

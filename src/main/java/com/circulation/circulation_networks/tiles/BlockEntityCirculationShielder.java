@@ -47,6 +47,9 @@ public class BlockEntityCirculationShielder extends BaseCFNBlockEntity implement
         this.min.set(this.getBlockPos().getX() - clamped, this.getBlockPos().getY() - clamped, this.getBlockPos().getZ() - clamped);
         this.max.set(this.getBlockPos().getX() + clamped, this.getBlockPos().getY() + clamped, this.getBlockPos().getZ() + clamped);
         this.scope = clamped;
+        if (level != null && !level.isClientSide()) {
+            CirculationShielderManager.INSTANCE.refreshActiveState(this, WorldResolveCompat.getDimensionId(level));
+        }
     }
 
     @Override
@@ -159,6 +162,7 @@ public class BlockEntityCirculationShielder extends BaseCFNBlockEntity implement
     }
 
     private void refreshActiveCache() {
+        boolean previousActive = cachedActive;
         boolean cachedPowered;
         if (level == null || level.isClientSide()) {
             cachedActive = false;
@@ -168,6 +172,9 @@ public class BlockEntityCirculationShielder extends BaseCFNBlockEntity implement
         cachedPowered = level.hasNeighborSignal(worldPosition);
         cachedActive = redstoneMode == cachedPowered;
         cachedActiveTick = level.getGameTime();
+        if (cachedActive != previousActive) {
+            CirculationShielderManager.INSTANCE.refreshActiveState(this, WorldResolveCompat.getDimensionId(level));
+        }
     }
 
     @Override

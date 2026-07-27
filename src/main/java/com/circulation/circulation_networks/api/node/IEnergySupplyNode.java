@@ -1,8 +1,7 @@
 package com.circulation.circulation_networks.api.node;
 
-import com.circulation.circulation_networks.registry.RegistryEnergyHandler;
+import com.circulation.circulation_networks.api.CFNBlockEntityEx;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.block.entity.BlockEntity;
 
 /**
  * 标识符，确定节点可用于与设备交互能量
@@ -17,7 +16,7 @@ public interface IEnergySupplyNode extends INode {
         return this.distanceSq(pos) <= getEnergyScopeSq();
     }
 
-    default boolean isBlacklisted(BlockEntity blockEntity) {
-        return RegistryEnergyHandler.isSupplyBlack(blockEntity);
+    default boolean isBlacklisted(CFNBlockEntityEx blockEntity) {
+        return blockEntity.cfn_isSupplyBlacklisted();
     }
 }

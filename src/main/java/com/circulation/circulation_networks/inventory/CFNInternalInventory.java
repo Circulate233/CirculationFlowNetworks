@@ -1,6 +1,7 @@
 package com.circulation.circulation_networks.inventory;
 
 import com.circulation.circulation_networks.utils.NbtCompat;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.Container;
@@ -275,20 +276,20 @@ public class CFNInternalInventory extends ItemStacksResourceHandler implements I
         notifyContentsChanged(slot, previousContents.copy());
     }
 
-    public void writeToNBT(final CompoundTag data, final String name, net.minecraft.core.HolderLookup.Provider provider) {
+    public void writeToNBT(final CompoundTag data, final String name, HolderLookup.Provider provider) {
         ProblemReporter.Collector reporter = new ProblemReporter.Collector();
         TagValueOutput output = TagValueOutput.createWithContext(reporter, provider);
         serialize(output);
         data.put(name, output.buildResult());
     }
 
-    public void readFromNBT(final CompoundTag data, final String name, net.minecraft.core.HolderLookup.Provider provider) {
+    public void readFromNBT(final CompoundTag data, final String name, HolderLookup.Provider provider) {
         if (data.contains(name)) {
             readFromNBT(NbtCompat.getCompoundOrEmpty(data, name), provider);
         }
     }
 
-    public void readFromNBT(final CompoundTag data, net.minecraft.core.HolderLookup.Provider provider) {
+    public void readFromNBT(final CompoundTag data, HolderLookup.Provider provider) {
         deserialize(TagValueInput.create(new ProblemReporter.Collector(), provider, data));
         syncKnownStacks();
     }

@@ -7,6 +7,7 @@ import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.input.MouseButtonInfo;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
@@ -55,7 +56,7 @@ public final class GuiGraphicsCompat {
 
     public static class CFNEditBox extends EditBox {
 
-        public CFNEditBox(Font font, int x, int y, int width, int height, net.minecraft.network.chat.Component narration) {
+        public CFNEditBox(Font font, int x, int y, int width, int height, Component narration) {
             super(font, x, y, width, height, narration);
         }
 

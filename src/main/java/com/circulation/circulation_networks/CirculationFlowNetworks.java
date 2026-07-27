@@ -24,9 +24,11 @@ import com.circulation.circulation_networks.tiles.BlockEntityMultiblockShell;
 import com.circulation.circulation_networks.utils.HubPlatformServices;
 import com.circulation.circulation_networks.utils.HubTeamServices;
 import com.circulation.circulation_networks.utils.Packet;
+import dev.ftb.mods.ftbteams.api.FTBTeamsAPI;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.NameAndId;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.neoforged.bus.api.IEventBus;
@@ -41,6 +43,7 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerChangedDimensionEvent;
 import net.neoforged.neoforge.event.level.ChunkEvent;
+import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.event.level.block.BreakBlockEvent;
 import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
@@ -77,6 +80,8 @@ public final class CirculationFlowNetworks {
         installPlatformServices();
         NeoForge.EVENT_BUS.addListener(this::onServerAboutToStart);
         NeoForge.EVENT_BUS.addListener(this::onChunkLoad);
+        NeoForge.EVENT_BUS.addListener(this::onChunkUnload);
+        NeoForge.EVENT_BUS.addListener(this::onLevelUnload);
         NeoForge.EVENT_BUS.addListener(this::onBlockBreak);
         NeoForge.EVENT_BUS.addListener(this::onServerStopping);
         NeoForge.EVENT_BUS.addListener(this::onPlayerLoggedIn);
@@ -126,7 +131,7 @@ public final class CirculationFlowNetworks {
             }
 
             @Override
-            public boolean hasChannelManagementOverride(net.minecraft.world.entity.player.Player player) {
+            public boolean hasChannelManagementOverride(Player player) {
                 if (!(player instanceof ServerPlayer serverPlayer)) {
                     return false;
                 }
@@ -147,7 +152,7 @@ public final class CirculationFlowNetworks {
             HubTeamServices.INSTANCE = new HubTeamServices() {
                 @Override
                 protected boolean arePlayersInSameTeamInternal(UUID firstPlayerId, UUID secondPlayerId) {
-                    var api = dev.ftb.mods.ftbteams.api.FTBTeamsAPI.api();
+                    var api = FTBTeamsAPI.api();
                     return api != null
                         && api.isManagerLoaded()
                         && api.getManager().arePlayersInSameTeam(firstPlayerId, secondPlayerId);
@@ -176,8 +181,27 @@ public final class CirculationFlowNetworks {
         if (!(event.getLevel() instanceof Level level) || level.isClientSide() || !(event.getChunk() instanceof LevelChunk chunk)) {
             return;
         }
+        EnergyMachineManager.INSTANCE.markChunkLoaded(
+            level.dimension().identifier().hashCode(), chunk.getPos().x(), chunk.getPos().z()
+        );
         NetworkManager.INSTANCE.validatePendingNodesInChunk(level, chunk.getPos().x(), chunk.getPos().z());
         PocketNodeManager.INSTANCE.onChunkLoad(level, chunk.getPos().x(), chunk.getPos().z());
+    }
+
+    private void onChunkUnload(ChunkEvent.Unload event) {
+        if (!(event.getLevel() instanceof Level level) || level.isClientSide()) {
+            return;
+        }
+        EnergyMachineManager.INSTANCE.markChunkUnloaded(
+            level.dimension().identifier().hashCode(), event.getChunk().getPos().x(), event.getChunk().getPos().z()
+        );
+    }
+
+    private void onLevelUnload(LevelEvent.Unload event) {
+        if (!(event.getLevel() instanceof Level level) || level.isClientSide()) {
+            return;
+        }
+        EnergyMachineManager.INSTANCE.clearDimensionChunkResidency(level.dimension().identifier().hashCode());
     }
 
     private void onBlockBreak(BreakBlockEvent event) {
@@ -191,9 +215,9 @@ public final class CirculationFlowNetworks {
         PocketNodeManager.INSTANCE.save();
         HubChannelManager.INSTANCE.save();
         EnergyTypeOverrideManager.save();
+        EnergyMachineManager.INSTANCE.onServerStop();
         NetworkManager.INSTANCE.onServerStop();
         PocketNodeManager.INSTANCE.onServerStop();
-        EnergyMachineManager.INSTANCE.onServerStop();
         EnergyTypeOverrideManager.onServerStop();
         ChargingManager.INSTANCE.onServerStop();
         HubChannelManager.INSTANCE.onServerStop();

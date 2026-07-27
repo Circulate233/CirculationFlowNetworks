@@ -11,6 +11,7 @@ import com.circulation.circulation_networks.blocks.nodes.BlockPortNode;
 import com.circulation.circulation_networks.blocks.nodes.BlockRelayNode;
 import com.circulation.circulation_networks.container.ContainerCirculationShielder;
 import com.circulation.circulation_networks.container.ContainerHub;
+import com.circulation.circulation_networks.container.ContainerMachinePriority;
 import com.circulation.circulation_networks.tiles.BlockEntityCirculationShielder;
 import com.circulation.circulation_networks.tiles.BlockEntityMultiblockShell;
 import com.circulation.circulation_networks.tiles.BlockEntityNodePedestal;
@@ -22,6 +23,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
@@ -98,6 +100,15 @@ public final class RegistryBlocks {
                 }
                 throw new IllegalArgumentException(String.valueOf(be));
             }));
+            CFNMenuTypes.MACHINE_PRIORITY_MENU = registerMenuType(helper, "machine_priority", IMenuTypeExtension.create((containerId, inv, buf) ->
+                new ContainerMachinePriority(
+                    CFNMenuTypes.MACHINE_PRIORITY_MENU,
+                    containerId,
+                    inv.player,
+                    buf.readBlockPos(),
+                    ContainerMachinePriority.handFromOrdinal(buf.readUnsignedByte())
+                )
+            ));
         });
     }
 
@@ -126,7 +137,7 @@ public final class RegistryBlocks {
         return type;
     }
 
-    private static <T extends net.minecraft.world.inventory.AbstractContainerMenu> MenuType<T> registerMenuType(
+    private static <T extends AbstractContainerMenu> MenuType<T> registerMenuType(
         RegisterEvent.RegisterHelper<MenuType<?>> helper, String name, MenuType<T> type) {
         helper.register(Identifier.parse(CirculationFlowNetworks.MOD_ID + ":" + name), type);
         return type;

@@ -2,6 +2,7 @@ package com.circulation.circulation_networks.packets;
 
 import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.api.IGrid;
+import com.circulation.circulation_networks.api.CFNBlockEntityEx;
 import com.circulation.circulation_networks.api.IMachineNodeBlockEntity;
 import com.circulation.circulation_networks.api.node.IEnergySupplyNode;
 import com.circulation.circulation_networks.api.node.INode;
@@ -26,7 +27,6 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.jetbrains.annotations.NotNull;
 import org.jspecify.annotations.NonNull;
@@ -95,7 +95,7 @@ public final class NodeNetworkRendering implements Packet<NodeNetworkRendering> 
         this.nodes = ReferenceSets.unmodifiable(relevant);
     }
 
-    public NodeNetworkRendering(Player player, BlockEntity blockEntity, INode node, int mode) {
+    public NodeNetworkRendering(Player player, CFNBlockEntityEx blockEntity, INode node, int mode) {
         this.dim = player.level().dimension().identifier().toString();
         this.grid = node.getGrid();
         this.mode = mode;
@@ -207,7 +207,7 @@ public final class NodeNetworkRendering implements Packet<NodeNetworkRendering> 
                 }
                 int count = 0;
                 for (var blockEntity : EnergyMachineManager.INSTANCE.getMachinesSuppliedBy(supplyNode)) {
-                    buf.writeLong(blockEntity.getBlockPos().asLong());
+                    buf.writeLong(blockEntity.cfn_getBlockPos().asLong());
                     buf.writeLong(targetNode.getPos().asLong());
                     count++;
                 }
@@ -219,14 +219,18 @@ public final class NodeNetworkRendering implements Packet<NodeNetworkRendering> 
             writeLinks(buf, () -> {
                 int count = 0;
                 for (var entry : entryList) {
-                    if (entry.blockEntity.getLevel() == null || !dim.equals(entry.blockEntity.getLevel().dimension().identifier().toString())) {
+                    var world = entry.blockEntity.cfn_getWorld();
+                    if (world == null) {
+                        continue;
+                    }
+                    if (!dim.equals(world.dimension().identifier().toString())) {
                         continue;
                     }
                     var node = entry.node;
                     if (node.getGrid() != grid) {
                         continue;
                     }
-                    buf.writeLong(entry.blockEntity.getBlockPos().asLong());
+                    buf.writeLong(entry.blockEntity.cfn_getBlockPos().asLong());
                     buf.writeLong(node.getPos().asLong());
                     count++;
                 }
@@ -275,6 +279,6 @@ public final class NodeNetworkRendering implements Packet<NodeNetworkRendering> 
         return TYPE;
     }
 
-    private record Pair(BlockEntity blockEntity, INode node) {
+    private record Pair(CFNBlockEntityEx blockEntity, INode node) {
     }
 }

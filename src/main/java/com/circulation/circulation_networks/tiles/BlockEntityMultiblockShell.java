@@ -2,6 +2,7 @@ package com.circulation.circulation_networks.tiles;
 
 import com.circulation.circulation_networks.registry.CFNBlockEntityTypes;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
@@ -96,7 +97,7 @@ public class BlockEntityMultiblockShell extends BlockEntity implements Nameable 
 
     @Override
     @NotNull
-    public CompoundTag getUpdateTag(net.minecraft.core.HolderLookup.@NotNull Provider registries) {
+    public CompoundTag getUpdateTag(HolderLookup.@NotNull Provider registries) {
         return saveCustomOnly(registries);
     }
 

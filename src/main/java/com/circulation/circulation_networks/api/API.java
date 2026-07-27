@@ -1,30 +1,29 @@
 package com.circulation.circulation_networks.api;
 
+import com.circulation.circulation_networks.handlers.PocketNodeRenderingHandler;
 import com.circulation.circulation_networks.api.node.IEnergySupplyNode;
 import com.circulation.circulation_networks.api.node.INode;
 import com.circulation.circulation_networks.api.node.NodeType;
-import com.circulation.circulation_networks.handlers.PocketNodeRenderingHandler;
+import it.unimi.dsi.fastutil.objects.ReferenceSet;
 import com.circulation.circulation_networks.manager.EnergyMachineManager;
 import com.circulation.circulation_networks.manager.HubChannelManager;
 import com.circulation.circulation_networks.manager.NetworkManager;
+import com.circulation.circulation_networks.registry.RegistryEnergyHandler;
 import com.circulation.circulation_networks.registry.NodeTypes;
 import com.circulation.circulation_networks.registry.PocketNodeItems;
-import com.circulation.circulation_networks.registry.RegistryEnergyHandler;
-import it.unimi.dsi.fastutil.objects.ReferenceSet;
-import net.minecraft.core.BlockPos;
+import static com.circulation.circulation_networks.utils.SideCompat.isClientWorld;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.entity.BlockEntity;
+
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-
 import java.util.Collection;
 import java.util.Set;
 import java.util.UUID;
-
-import static com.circulation.circulation_networks.utils.WorldResolveCompat.isClientWorld;
 
 /**
  * 仅作为一个API方法汇总。
@@ -199,8 +198,36 @@ public final class API {
      * @return 节点所供能的所有设备 / all machines supplied by this node
      */
     @NotNull
-    public static Set<BlockEntity> getMachinesSuppliedBy(@NotNull IEnergySupplyNode node) {
+    public static Set<CFNBlockEntityEx> getMachinesSuppliedBy(@NotNull IEnergySupplyNode node) {
         return EnergyMachineManager.INSTANCE.getMachinesSuppliedBy(node);
+    }
+
+    /**
+     * Returns the current-tick energy interaction totals for a registered machine. The input and output values combine
+     * settled transfers from every grid linked to that machine and read as zero when the machine has not interacted in
+     * the current tick.
+     *
+     * @param blockEntity registered machine block entity
+     * @return the machine-owned runtime tracker, or {@code null} when the machine has no active registration
+     */
+    @Nullable
+    public static EnergyMachineManager.Interaction getMachineInteraction(@NotNull CFNBlockEntityEx blockEntity) {
+        return EnergyMachineManager.INSTANCE.getMachineInteraction(blockEntity);
+    }
+
+    /**
+     * 提交一次延迟到「已完成记账的机器 tick 结束时」执行的逐设备统计读取。
+     * Submits a per-machine statistics read that runs at the end of a machine tick which already accounted for it.
+     *
+     * <p>逐设备统计按需记账：只有被观察时才累计。轮询式读取（GUI、HUD）每次读取都会自动续期，
+     * 而一次性读取（例如手持工具右键查询）若立即读取，会落在一个尚未记账的 tick 上而得到零，
+     * 因此应改用本方法——它先开启记账窗口，再在下一个完整记账的 tick 末尾回调。
+     * Polling consumers renew the window implicitly; a one-shot consumer should submit its read here instead.
+     *
+     * @param query 服务端主线程回调，负责实际读取与输出 / server-thread callback performing the read
+     */
+    public static void submitMachineInteractionQuery(@NotNull Runnable query) {
+        EnergyMachineManager.INSTANCE.submitDeferredInteractionQuery(query);
     }
 
     // -------------------------------------------------------------------------
@@ -324,11 +351,11 @@ public final class API {
     /**
      * 注册自定义的能量管理器。
      * 必须在 {@link RegistryEnergyHandler#lock()} 前完成注册。
-     * 当前 26.1 分支中，对应在公共注册阶段完成，并且必须早于 {@code FMLLoadCompleteEvent} 锁定。
+     * 1.12.2 中对应 {@code postInit} 前，1.20.1 / 1.21.1 中对应 {@code FMLLoadCompleteEvent} 前。
      * <p>
      * Registers a custom energy handler manager.
      * Registration must complete before {@link RegistryEnergyHandler#lock()}.
-     * On the current 26.1 branch, that means during common registration and before the {@code FMLLoadCompleteEvent} lock.
+     * That means before {@code postInit} on 1.12.2, and before {@code FMLLoadCompleteEvent} on 1.20.1 / 1.21.1.
      *
      * @param manager 要注册的能量管理器 / the manager to register
      */

@@ -1,6 +1,7 @@
 package com.circulation.circulation_networks.manager;
 
 import com.circulation.circulation_networks.CirculationFlowNetworks;
+import com.circulation.circulation_networks.api.CFNBlockEntityEx;
 import com.circulation.circulation_networks.api.IGrid;
 import com.circulation.circulation_networks.api.INodeBlockEntity;
 import com.circulation.circulation_networks.api.node.IHubNode;
@@ -392,7 +393,9 @@ public final class NetworkManager {
                     }
                     addNode(actual, blockEntity);
                     if (actual instanceof IMachineNode machineNode) {
-                        EnergyMachineManager.INSTANCE.addMachineNode(blockEntity);
+                        EnergyMachineManager.INSTANCE.addMachineNode(
+                            CFNBlockEntityEx.cfn_cast(blockEntity)
+                        );
                     }
                     mapped = posNodes.get(dimId).get(posLong);
                 }
@@ -456,12 +459,17 @@ public final class NetworkManager {
     }
 
     public void removeNode(String dim, BlockPos pos) {
-        var pMap = posNodes.get(dim);
-        if (pMap != null && pMap != posNodes.defaultReturnValue()) {
-            INode removedNode = pMap.get(BlockPosCompat.toLong(pos));
-            if (removedNode != null) {
-                removeNodeInternal(removedNode);
+        MachineBindingIndex.INSTANCE.beginTopologyTransaction();
+        try {
+            var pMap = posNodes.get(dim);
+            if (pMap != null && pMap != posNodes.defaultReturnValue()) {
+                INode removedNode = pMap.get(BlockPosCompat.toLong(pos));
+                if (removedNode != null) {
+                    removeNodeInternal(removedNode);
+                }
             }
+        } finally {
+            MachineBindingIndex.INSTANCE.endTopologyTransaction();
         }
     }
 
@@ -624,6 +632,15 @@ public final class NetworkManager {
             return validation;
         }
 
+        MachineBindingIndex.INSTANCE.beginTopologyTransaction();
+        try {
+            return addNodeValidated(newNode, blockEntity);
+        } finally {
+            MachineBindingIndex.INSTANCE.endTopologyTransaction();
+        }
+    }
+
+    private @NotNull AddNodeResult addNodeValidated(INode newNode, @Nullable BlockEntity blockEntity) {
         String dimId = getDimensionId(newNode);
         INode replacedNode = getIndexedNode(dimId, newNode.getPos());
         if (replacedNode != null && replacedNode != newNode) {
@@ -788,14 +805,12 @@ public final class NetworkManager {
     private IGrid allocGrid() {
         IGrid grid = new Grid(UUID.randomUUID());
         grids.put(grid.getId(), grid);
-        EnergyMachineManager.INSTANCE.getInteraction().put(grid, new EnergyMachineManager.Interaction());
         markGridDirty(grid);
         return grid;
     }
 
     private void destroyGrid(IGrid grid) {
         grids.remove(grid.getId());
-        EnergyMachineManager.INSTANCE.getInteraction().remove(grid);
         dirtyGrids.remove(grid);
         deleteFileAsync(new File(getSaveFile(), grid.getId().toString() + ".dat"));
     }
@@ -887,7 +902,6 @@ public final class NetworkManager {
         for (var entry : entries) {
             var grid = entry.grid();
             grids.put(grid.getId(), grid);
-            EnergyMachineManager.INSTANCE.getInteraction().put(grid, new EnergyMachineManager.Interaction());
 
             var registered = new ObjectArrayList<INode>();
             boolean collision = false;
@@ -910,7 +924,6 @@ public final class NetworkManager {
                     unregisterNodeIndices(entry.dimId, node);
                 }
                 grids.remove(grid.getId());
-                EnergyMachineManager.INSTANCE.getInteraction().remove(grid);
                 grid.getNodes().clear();
                 grid.setHubNode(null);
             }

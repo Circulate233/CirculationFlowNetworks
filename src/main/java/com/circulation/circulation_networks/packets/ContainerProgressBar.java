@@ -3,6 +3,7 @@ package com.circulation.circulation_networks.packets;
 import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.container.CFNBaseContainer;
 import com.circulation.circulation_networks.utils.Packet;
+import net.minecraft.client.Minecraft;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
@@ -46,7 +47,7 @@ public final class ContainerProgressBar implements Packet<ContainerProgressBar> 
         }
 
         context.enqueueWork(() -> {
-            var player = net.minecraft.client.Minecraft.getInstance().player;
+            var player = Minecraft.getInstance().player;
             if (player != null && player.containerMenu instanceof CFNBaseContainer container) {
                 container.updateFullProgressBar(message.id, message.numericValue);
             }

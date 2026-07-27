@@ -3,6 +3,7 @@ package com.circulation.circulation_networks.network;
 import com.circulation.circulation_networks.packets.BindHubChannel;
 import com.circulation.circulation_networks.packets.CirculationShielderSyncPacket;
 import com.circulation.circulation_networks.packets.ConfigOverrideRendering;
+import com.circulation.circulation_networks.packets.ConfiguratorInteractionReport;
 import com.circulation.circulation_networks.packets.ContainerProgressBar;
 import com.circulation.circulation_networks.packets.ContainerValueConfig;
 import com.circulation.circulation_networks.packets.CreateHubChannel;
@@ -13,6 +14,7 @@ import com.circulation.circulation_networks.packets.HubPluginSyncRequest;
 import com.circulation.circulation_networks.packets.NodeHudData;
 import com.circulation.circulation_networks.packets.NodeHudRequest;
 import com.circulation.circulation_networks.packets.NodeNetworkRendering;
+import com.circulation.circulation_networks.packets.MachinePriorityPackets;
 import com.circulation.circulation_networks.packets.PocketNodeRendering;
 import com.circulation.circulation_networks.packets.RenderingClear;
 import com.circulation.circulation_networks.packets.SpoceRendering;
@@ -51,6 +53,7 @@ public final class CFNNetwork {
         registerPlayToServer(registrar, ToggleItemFunctionMessage.class);
         registerPlayToServer(registrar, NodeHudRequest.class);
         registerPlayToServer(registrar, HubPluginSyncRequest.class);
+        registerPlayToServer(registrar, MachinePriorityPackets.Submit.class);
 
         registerPlayToClient(registrar, SpoceRendering.class);
         registerPlayToClient(registrar, NodeNetworkRendering.class);
@@ -61,6 +64,7 @@ public final class CFNNetwork {
         registerPlayToClient(registrar, RenderingClear.INSTANCE);
         registerPlayToClient(registrar, NodeHudData.class);
         registerPlayToClient(registrar, HubPluginSyncData.class);
+        registerPlayToClient(registrar, ConfiguratorInteractionReport.class);
     }
 
     public static <T extends Packet<T>> void sendToPlayer(T packet, ServerPlayer player) {

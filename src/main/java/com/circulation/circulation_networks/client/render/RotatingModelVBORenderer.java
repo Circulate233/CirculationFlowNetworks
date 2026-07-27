@@ -5,6 +5,7 @@ import com.mojang.blaze3d.vertex.QuadInstance;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.ObjectList;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.Sheets;
 import net.minecraft.client.renderer.SubmitNodeCollector;
@@ -12,7 +13,6 @@ import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
-import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.resources.model.geometry.BakedQuad;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -32,8 +32,8 @@ public final class RotatingModelVBORenderer {
     private static final QuadInstance FULL_BRIGHT_QUAD = new QuadInstance();
     private static final RenderType WORLD_CUTOUT_RENDER_TYPE = Sheets.cutoutBlockSheet();
     private static final RenderType WORLD_TRANSLUCENT_RENDER_TYPE = NeoForgeRenderTypes.BLOCK_ITEM_UNSORTED_TRANSLUCENT.get();
-    private static final RenderType WORLD_CUTOUT_NO_CULL_RENDER_TYPE = RenderTypes.entityCutout(TextureAtlas.LOCATION_BLOCKS);
-    private static final RenderType WORLD_TRANSLUCENT_NO_CULL_RENDER_TYPE = RenderTypes.entityTranslucent(TextureAtlas.LOCATION_BLOCKS);
+    private static final RenderType WORLD_CUTOUT_NO_CULL_RENDER_TYPE = RenderTypes.entityCutout(Sheets.BLOCKS_MAPPER.sheet());
+    private static final RenderType WORLD_TRANSLUCENT_NO_CULL_RENDER_TYPE = RenderTypes.entityTranslucent(Sheets.BLOCKS_MAPPER.sheet());
     private static final RenderType ITEM_CUTOUT_RENDER_TYPE = Sheets.cutoutBlockItemSheet();
     private static final RenderType ITEM_TRANSLUCENT_RENDER_TYPE = NeoForgeRenderTypes.BLOCK_ITEM_UNSORTED_TRANSLUCENT.get();
     private static int renderSessionDepth;
@@ -153,7 +153,7 @@ public final class RotatingModelVBORenderer {
                                          float angle, float pivotX, float pivotY, float pivotZ,
                                          float axisX, float axisY, float axisZ, boolean noCull) {
         SubmitNodeCollector submitNodeCollector = renderSessionCollector;
-        if (submitNodeCollector == null || !(level instanceof net.minecraft.client.multiplayer.ClientLevel clientLevel)) {
+        if (submitNodeCollector == null || !(level instanceof ClientLevel clientLevel)) {
             return;
         }
         BlockStateModel model = RotatingBlockModelCache.get(modelLocation);

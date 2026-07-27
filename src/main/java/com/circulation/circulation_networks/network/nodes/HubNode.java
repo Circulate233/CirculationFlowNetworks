@@ -49,6 +49,12 @@ public final class HubNode extends Node implements IHubNode {
     private CFNInternalInventory plugins = EmptyPluginsInventory.INSTANCE;
     private boolean syncingChannelState;
 
+    private void markGridSnapshotDirty() {
+        if (getGrid() != null) {
+            getGrid().markSnapshotDirty();
+        }
+    }
+
     public HubNode(CompoundTag tag) {
         super(NodeTypes.HUB, tag);
         this.energyScope = NbtCompat.getDoubleOr(tag, "energyScope", 0.0D);
@@ -98,6 +104,7 @@ public final class HubNode extends Node implements IHubNode {
     @Override
     public void setPermissionMode(PermissionMode mode) {
         this.permissionMode = mode;
+        markGridSnapshotDirty();
         if (!syncingChannelState && shouldSyncChannelManager()) {
             HubChannelManager.INSTANCE.updateChannelFromHub(this);
         }
@@ -118,10 +125,12 @@ public final class HubNode extends Node implements IHubNode {
             return;
         }
         hubData.put(capability, stack);
+        markGridSnapshotDirty();
     }
 
     public void removePluginData(HubPluginCapability<?> capability) {
         hubData.remove(capability);
+        markGridSnapshotDirty();
     }
 
     @Override
@@ -132,6 +141,7 @@ public final class HubNode extends Node implements IHubNode {
     @Override
     public void setChannelId(@NotNull UUID channelId) {
         this.channelId = channelId != null ? channelId : EMPTY;
+        markGridSnapshotDirty();
         if (!syncingChannelState && shouldSyncChannelManager()) {
             HubChannelManager.INSTANCE.bindHub(this);
         }
@@ -145,6 +155,7 @@ public final class HubNode extends Node implements IHubNode {
     @Override
     public void setChannelName(@NotNull String channelName) {
         this.channelName = channelName != null ? channelName : "";
+        markGridSnapshotDirty();
         if (!syncingChannelState && shouldSyncChannelManager()) {
             HubChannelManager.INSTANCE.updateChannelFromHub(this);
         }
@@ -170,6 +181,7 @@ public final class HubNode extends Node implements IHubNode {
             }
         }
         playerPreferences.put(playerId, preference);
+        markGridSnapshotDirty();
     }
 
     @Override
@@ -190,6 +202,7 @@ public final class HubNode extends Node implements IHubNode {
     @Override
     public void setOwner(@Nullable UUID owner) {
         this.owner = owner;
+        markGridSnapshotDirty();
         if (!syncingChannelState && shouldSyncChannelManager()) {
             HubChannelManager.INSTANCE.updateChannelFromHub(this);
         }
@@ -220,6 +233,7 @@ public final class HubNode extends Node implements IHubNode {
     @Override
     public void setExplicitPermission(UUID playerId, HubPermissionLevel permissionLevel) {
         explicitPermissions.put(playerId, permissionLevel);
+        markGridSnapshotDirty();
         if (!syncingChannelState && shouldSyncChannelManager()) {
             HubChannelManager.INSTANCE.updateChannelFromHub(this);
         }
@@ -228,6 +242,7 @@ public final class HubNode extends Node implements IHubNode {
     @Override
     public void removeExplicitPermission(UUID playerId) {
         explicitPermissions.remove(playerId);
+        markGridSnapshotDirty();
         if (!syncingChannelState && shouldSyncChannelManager()) {
             HubChannelManager.INSTANCE.updateChannelFromHub(this);
         }
@@ -266,6 +281,7 @@ public final class HubNode extends Node implements IHubNode {
             channelName = channel.getName();
             explicitPermissions.clear();
             explicitPermissions.putAll(channel.getExplicitPermissions());
+            markGridSnapshotDirty();
         } finally {
             syncingChannelState = false;
         }
@@ -278,6 +294,7 @@ public final class HubNode extends Node implements IHubNode {
             channelName = "";
             permissionMode = PermissionMode.PUBLIC;
             explicitPermissions.clear();
+            markGridSnapshotDirty();
         } finally {
             syncingChannelState = false;
         }

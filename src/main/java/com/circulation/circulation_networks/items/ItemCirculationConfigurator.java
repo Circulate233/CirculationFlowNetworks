@@ -2,14 +2,19 @@ package com.circulation.circulation_networks.items;
 
 import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.api.API;
+import com.circulation.circulation_networks.api.CFNBlockEntityEx;
+import com.circulation.circulation_networks.api.EnergyAmount;
+import com.circulation.circulation_networks.api.IGrid;
 import com.circulation.circulation_networks.api.node.IChargingNode;
 import com.circulation.circulation_networks.api.node.IEnergySupplyNode;
 import com.circulation.circulation_networks.api.node.INode;
+import com.circulation.circulation_networks.container.ContainerMachinePriority;
 import com.circulation.circulation_networks.items.CirculationConfiguratorModeModel.ConfigurationMode;
 import com.circulation.circulation_networks.items.CirculationConfiguratorModeModel.ToolFunction;
 import com.circulation.circulation_networks.manager.EnergyTypeOverrideManager;
 import com.circulation.circulation_networks.manager.PocketNodeManager;
 import com.circulation.circulation_networks.packets.ConfigOverrideRendering;
+import com.circulation.circulation_networks.packets.ConfiguratorInteractionReport;
 import com.circulation.circulation_networks.packets.NodeNetworkRendering;
 import com.circulation.circulation_networks.packets.SpoceRendering;
 import com.circulation.circulation_networks.packets.ToggleItemFunctionMessage;
@@ -17,6 +22,7 @@ import com.circulation.circulation_networks.registry.CFNItems;
 import com.circulation.circulation_networks.registry.RegistryEnergyHandler;
 import com.circulation.circulation_networks.tiles.BlockEntityMultiblockShell;
 import com.circulation.circulation_networks.tooltip.LocalizedComponent;
+import com.circulation.circulation_networks.utils.FormatNumberUtils;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -29,6 +35,7 @@ import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.HitResult;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
@@ -39,13 +46,22 @@ public class ItemCirculationConfigurator extends BaseItem {
     }
 
     public static void sendModeMessage(ServerPlayer player, CirculationConfiguratorSelection selection) {
+        Component mode = Component.translatable(selection.modeLangKey()).withStyle(ChatFormatting.GOLD);
+        if (!selection.function().hasSubModes()) {
+            player.sendOverlayMessage(mode);
+            return;
+        }
         player.sendOverlayMessage(
             Component.translatable(
                 selection.modeDisplayKey(),
-                Component.translatable(selection.modeLangKey()).withStyle(ChatFormatting.GOLD),
+                mode,
                 Component.translatable(selection.subModeLangKey()).withStyle(ChatFormatting.BLUE)
             )
         );
+    }
+
+    private static void sendInteractionMessage(ServerPlayer player, String messageKey, Object... args) {
+        player.sendSystemMessage(Component.translatable(messageKey, args));
     }
 
     private static void sendFeedbackMessage(ServerPlayer player, String messageKey, String detailKey) {
@@ -75,10 +91,26 @@ public class ItemCirculationConfigurator extends BaseItem {
         return pos.asLong();
     }
 
-    private static BlockPos resolveOriginPos(Level world, BlockPos pos) {
+    private static String formatEnergy(EnergyAmount amount) {
+        RegistryEnergyHandler.Pair unit = RegistryEnergyHandler.getPair(0);
+        if (!amount.isZero() && unit.multiplying() != 0.0D) {
+            amount.divide(unit.multiplying());
+        }
+        return FormatNumberUtils.formatNumber(amount) + " " + unit.unit();
+    }
+
+    private static boolean isChunkResident(Level world, BlockPos pos) {
+        return world.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4) != null;
+    }
+
+    private static @Nullable BlockPos resolveResidentOriginPos(Level world, BlockPos pos) {
+        if (!isChunkResident(world, pos)) {
+            return null;
+        }
         var te = world.getBlockEntity(pos);
         if (te instanceof BlockEntityMultiblockShell shell && shell.canRedirect()) {
-            return shell.getOriginPos();
+            BlockPos origin = shell.getOriginPos();
+            return isChunkResident(world, origin) ? origin : null;
         }
         return pos;
     }
@@ -94,7 +126,10 @@ public class ItemCirculationConfigurator extends BaseItem {
                 ? InteractionResult.SUCCESS
                 : InteractionResult.PASS;
         }
-        BlockPos resolved = resolveOriginPos(context.getLevel(), context.getClickedPos());
+        BlockPos resolved = resolveResidentOriginPos(context.getLevel(), context.getClickedPos());
+        if (resolved == null) {
+            return InteractionResult.PASS;
+        }
         if (!resolved.equals(context.getClickedPos())) {
             return InteractionResult.PASS;
         }
@@ -107,10 +142,19 @@ public class ItemCirculationConfigurator extends BaseItem {
     public @NotNull InteractionResult useOn(@NotNull UseOnContext context) {
         Player player = context.getPlayer();
         if (context.getLevel().isClientSide()) {
-            return player != null && !player.isShiftKeyDown()
+            if (player == null) {
+                return InteractionResult.PASS;
+            }
+            CirculationConfiguratorSelection selection = CirculationConfiguratorSelection.fromStack(context.getItemInHand());
+            if (player.isShiftKeyDown() && !selection.function().hasSubModes()) {
+                BlockPos target = resolveResidentOriginPos(context.getLevel(), context.getClickedPos());
+                return target != null && (API.getNodeAt(context.getLevel(), target) != null
+                    || context.getLevel().getBlockEntity(target) != null)
+                    ? InteractionResult.SUCCESS : InteractionResult.PASS;
+            }
+            return !player.isShiftKeyDown() && isChunkResident(context.getLevel(), context.getClickedPos())
                 && API.getNodeAt(context.getLevel(), context.getClickedPos()) != null
-                ? InteractionResult.SUCCESS
-                : InteractionResult.PASS;
+                ? InteractionResult.SUCCESS : InteractionResult.PASS;
         }
         if (!(player instanceof ServerPlayer p)) {
             return InteractionResult.PASS;
@@ -119,13 +163,118 @@ public class ItemCirculationConfigurator extends BaseItem {
             return InteractionResult.SUCCESS;
         }
 
-        BlockPos target = resolveOriginPos(context.getLevel(), context.getClickedPos());
+        BlockPos target = resolveResidentOriginPos(context.getLevel(), context.getClickedPos());
+        if (target == null) {
+            return InteractionResult.PASS;
+        }
         ItemStack stack = context.getItemInHand();
         CirculationConfiguratorSelection selection = CirculationConfiguratorSelection.fromStack(stack);
         return switch (selection.function()) {
             case INSPECTION -> executeInspection(p, context.getLevel(), target, selection.subMode());
             case CONFIGURATION -> executeConfiguration(p, context.getLevel(), target, selection.subMode());
+            case PRIORITY -> executePriority(p, context.getLevel(), target, context.getHand());
+            case INTERACTION -> executeInteraction(p, context.getLevel(), target);
         };
+    }
+
+    private InteractionResult executePriority(ServerPlayer player, Level world, BlockPos pos, InteractionHand hand) {
+        if (!player.isShiftKeyDown()) {
+            return InteractionResult.PASS;
+        }
+        ContainerMachinePriority.open(player, world, pos, hand);
+        return InteractionResult.SUCCESS;
+    }
+
+    private InteractionResult executeInteraction(ServerPlayer player, Level world, BlockPos pos) {
+        if (!player.isShiftKeyDown()) {
+            return InteractionResult.PASS;
+        }
+        return queueInteractionReport(player, world, pos) ? InteractionResult.SUCCESS : InteractionResult.FAIL;
+    }
+
+    private boolean queueInteractionReport(ServerPlayer player, Level world, BlockPos pos) {
+        if (!isChunkResident(world, pos)) {
+            return false;
+        }
+        INode node = API.getNodeAt(world, pos);
+        var nativeBlockEntity = world.getBlockEntity(pos);
+        boolean registeredMachine = nativeBlockEntity != null
+            && API.getMachineInteraction(CFNBlockEntityEx.cfn_cast(nativeBlockEntity)) != null;
+        if (!registeredMachine && node == null) {
+            sendInteractionMessage(player,
+                "item.circulation_networks.circulation_configurator.interaction.error.invalid_target");
+            return false;
+        }
+        API.submitMachineInteractionQuery(() -> sendInteractionReport(player, world, pos));
+        return true;
+    }
+
+    private boolean sendInteractionReport(ServerPlayer player, Level world, BlockPos pos) {
+        if (!isChunkResident(world, pos)) {
+            return false;
+        }
+        INode node = API.getNodeAt(world, pos);
+        var nativeBlockEntity = world.getBlockEntity(pos);
+        var interaction = nativeBlockEntity != null
+            ? API.getMachineInteraction(CFNBlockEntityEx.cfn_cast(nativeBlockEntity)) : null;
+        boolean hasMachine = interaction != null;
+        String machineInput = "";
+        String machineOutput = "";
+        if (hasMachine) {
+            try (ConfiguratorInteractionQuery.MachineSnapshot snapshot =
+                     ConfiguratorInteractionQuery.snapshotMachine(interaction)) {
+                machineInput = formatEnergy(snapshot.input());
+                machineOutput = formatEnergy(snapshot.output());
+            }
+        }
+        boolean hasNetwork = false;
+        long[] inputPositions = new long[0];
+        String[] inputValues = new String[0];
+        long[] outputPositions = new long[0];
+        String[] outputValues = new String[0];
+        if (node != null) {
+            IGrid grid = node.getGrid();
+            if (grid == null) {
+                sendInteractionMessage(player,
+                    "item.circulation_networks.circulation_configurator.interaction.error.no_grid");
+            } else {
+                hasNetwork = true;
+                try (ConfiguratorInteractionQuery.GridSnapshot snapshot = ConfiguratorInteractionQuery.snapshotGrid(
+                    grid, packedPosition -> isChunkResident(world,
+                        ConfiguratorInteractionQuery.unpack(packedPosition)))) {
+                    inputPositions = rankingPositions(snapshot.inputs());
+                    inputValues = rankingValues(snapshot.inputs());
+                    outputPositions = rankingPositions(snapshot.outputs());
+                    outputValues = rankingValues(snapshot.outputs());
+                }
+            }
+        }
+        if (!hasMachine && !hasNetwork) {
+            sendInteractionMessage(player,
+                "item.circulation_networks.circulation_configurator.interaction.error.invalid_target");
+            return false;
+        }
+        CirculationFlowNetworks.sendToPlayer(new ConfiguratorInteractionReport(
+            hasMachine, packPos(pos), machineInput, machineOutput, hasNetwork,
+            inputPositions, inputValues, outputPositions, outputValues
+        ), player);
+        return true;
+    }
+
+    private static long[] rankingPositions(List<ConfiguratorInteractionQuery.RankedInteraction> ranking) {
+        long[] positions = new long[ranking.size()];
+        for (int index = 0; index < ranking.size(); index++) {
+            positions[index] = ranking.get(index).packedPosition();
+        }
+        return positions;
+    }
+
+    private static String[] rankingValues(List<ConfiguratorInteractionQuery.RankedInteraction> ranking) {
+        String[] values = new String[ranking.size()];
+        for (int index = 0; index < ranking.size(); index++) {
+            values[index] = formatEnergy(ranking.get(index).amount());
+        }
+        return values;
     }
 
     @Override

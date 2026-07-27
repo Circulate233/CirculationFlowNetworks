@@ -27,13 +27,17 @@ public final class CirculationConfiguratorModeModel {
     }
 
     public enum ToolFunction {
-        INSPECTION(InspectionMode.values().length),
-        CONFIGURATION(ConfigurationMode.values().length);
+        INSPECTION(InspectionMode.values().length, true),
+        CONFIGURATION(ConfigurationMode.values().length, true),
+        PRIORITY(1, false),
+        INTERACTION(1, false);
 
         private final int subModeCount;
+        private final boolean hasSubModes;
 
-        ToolFunction(int subModeCount) {
+        ToolFunction(int subModeCount, boolean hasSubModes) {
             this.subModeCount = subModeCount;
+            this.hasSubModes = hasSubModes;
         }
 
         public static ToolFunction fromID(int id) {
@@ -42,6 +46,10 @@ public final class CirculationConfiguratorModeModel {
 
         public int getSubModeCount() {
             return subModeCount;
+        }
+
+        public boolean hasSubModes() {
+            return hasSubModes;
         }
 
         public String getLangKey() {
@@ -56,6 +64,7 @@ public final class CirculationConfiguratorModeModel {
             return switch (this) {
                 case INSPECTION -> InspectionMode.fromID(subMode).getLangKey();
                 case CONFIGURATION -> ConfigurationMode.fromID(subMode).getLangKey();
+                case PRIORITY, INTERACTION -> throw new IllegalStateException(name() + " does not define sub-modes");
             };
         }
     }

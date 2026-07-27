@@ -3,6 +3,7 @@ package com.circulation.circulation_networks.blocks;
 import com.circulation.circulation_networks.tiles.BlockEntityMultiblockShell;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
+import net.minecraft.client.particle.ParticleEngine;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceKey;
@@ -31,6 +32,7 @@ import net.minecraft.world.level.pathfinder.PathComputationType;
 import net.minecraft.world.level.redstone.Orientation;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
@@ -48,14 +50,14 @@ public class MultiblockShellBlock extends Block implements EntityBlock {
 
     public static final IClientBlockExtensions PARTICLE_CLIENT_EXTENSIONS = new IClientBlockExtensions() {
         @Override
-        public boolean addHitEffects(BlockState state, Level level, @Nullable net.minecraft.world.phys.HitResult target,
-                                     net.minecraft.client.particle.ParticleEngine manager) {
+        public boolean addHitEffects(BlockState state, Level level, @Nullable HitResult target,
+                                     ParticleEngine manager) {
             return true;
         }
 
         @Override
         public boolean addDestroyEffects(BlockState state, Level level, BlockPos pos,
-                                         net.minecraft.client.particle.ParticleEngine manager) {
+                                         ParticleEngine manager) {
             return true;
         }
     };

@@ -359,7 +359,7 @@ public final class ChannelSettingsDialogComponent extends DraggableComponent {
         }
 
         @Override
-        protected @NotNull java.util.List<LocalizedComponent> getTooltip(int mouseX, int mouseY) {
+        protected @NotNull List<LocalizedComponent> getTooltip(int mouseX, int mouseY) {
             if (mode == DialogMode.CREATE) {
                 return Collections.singletonList(() -> CI18n.format("gui.channel_settings.tooltip.create"));
             }

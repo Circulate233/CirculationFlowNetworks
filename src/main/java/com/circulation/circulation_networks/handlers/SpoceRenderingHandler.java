@@ -26,6 +26,7 @@ import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.math.Axis;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.RenderPipelines;
@@ -126,8 +127,8 @@ public class SpoceRenderingHandler {
         Matrix4fStack modelViewStack = RenderSystem.getModelViewStack();
         modelViewStack.pushMatrix();
         drawSphere(r, g, b, radius, 0.2F);
-        modelViewStack.rotate(com.mojang.math.Axis.YP.rotationDegrees(rotation));
-        modelViewStack.rotate(com.mojang.math.Axis.XP.rotationDegrees(rotation * 0.5F));
+        modelViewStack.rotate(Axis.YP.rotationDegrees(rotation));
+        modelViewStack.rotate(Axis.XP.rotationDegrees(rotation * 0.5F));
         float wireRadius = radius + 0.01F;
         modelViewStack.scale(wireRadius, wireRadius, wireRadius);
         drawBuckyBallWireframe(wireR, wireG, wireB, 0.8F);

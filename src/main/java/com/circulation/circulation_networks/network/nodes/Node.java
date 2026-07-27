@@ -4,8 +4,10 @@ import com.circulation.circulation_networks.api.IGrid;
 import com.circulation.circulation_networks.api.node.INode;
 import com.circulation.circulation_networks.api.node.NodeContext;
 import com.circulation.circulation_networks.api.node.NodeType;
+import com.circulation.circulation_networks.manager.MachineBindingIndex;
 import com.circulation.circulation_networks.math.Vec3d;
 import com.circulation.circulation_networks.math.Vec3i;
+import com.circulation.circulation_networks.registry.NodeTypes;
 import com.circulation.circulation_networks.utils.BlockPosCompat;
 import com.circulation.circulation_networks.utils.NbtCompat;
 import com.circulation.circulation_networks.utils.WorldResolveCompat;
@@ -24,6 +26,8 @@ import org.jetbrains.annotations.Nullable;
 
 import java.lang.ref.WeakReference;
 import java.util.Objects;
+
+import static com.circulation.circulation_networks.utils.SideCompat.isServerWorld;
 
 public class Node implements INode {
 
@@ -94,8 +98,8 @@ public class Node implements INode {
     }
 
     private static NodeType<?> resolveNodeType(CompoundTag nbt) {
-        NodeType<?> resolved = com.circulation.circulation_networks.registry.NodeTypes.getById(NbtCompat.getStringOr(nbt, "type", ""));
-        return resolved != null ? resolved : com.circulation.circulation_networks.registry.NodeTypes.RELAY_NODE;
+        NodeType<?> resolved = NodeTypes.getById(NbtCompat.getStringOr(nbt, "type", ""));
+        return resolved != null ? resolved : NodeTypes.RELAY_NODE;
     }
 
     public @NotNull BlockPos getPos() {
@@ -121,9 +125,17 @@ public class Node implements INode {
     }
 
     public void setActive(boolean active) {
+        if (this.active == active) {
+            return;
+        }
+        boolean oldActive = this.active;
+        IGrid oldGrid = grid;
+        if (isServerWorld(getWorld())) {
+            MachineBindingIndex.INSTANCE.onNodeActiveChanged(this, oldActive, active, oldGrid);
+        }
         this.active = active;
         if (!active) {
-            grid = null;
+            setGrid(null);
             clearNeighbors();
         }
     }
@@ -196,6 +208,13 @@ public class Node implements INode {
 
     @Override
     public void setGrid(IGrid grid) {
+        IGrid oldGrid = this.grid;
+        if (oldGrid == grid) {
+            return;
+        }
+        if (isServerWorld(getWorld())) {
+            MachineBindingIndex.INSTANCE.onNodeGridChanged(this, oldGrid, grid);
+        }
         this.grid = grid;
     }
 

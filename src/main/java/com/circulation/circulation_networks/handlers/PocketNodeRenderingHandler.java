@@ -4,7 +4,9 @@ import com.circulation.circulation_networks.api.node.INode;
 import com.circulation.circulation_networks.client.render.PocketNodeModelCache;
 import com.circulation.circulation_networks.pocket.PocketNodeClientHost;
 import com.circulation.circulation_networks.pocket.PocketNodeRecord;
+import com.circulation.circulation_networks.utils.WorldResolveCompat;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.math.Axis;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
@@ -54,7 +56,7 @@ public final class PocketNodeRenderingHandler {
     private static String getDimensionId(
         Level world
     ) {
-        return com.circulation.circulation_networks.utils.WorldResolveCompat.getDimensionId(world);
+        return WorldResolveCompat.getDimensionId(world);
     }
 
     private static void applyFaceTransform(PoseStack poseStack, Direction face) {
@@ -62,25 +64,25 @@ public final class PocketNodeRenderingHandler {
         switch (resolved) {
             case DOWN -> {
                 poseStack.translate(0.0D, -FACE_OFFSET, 0.0D);
-                poseStack.mulPose(com.mojang.math.Axis.XP.rotationDegrees(90.0F));
-                poseStack.mulPose(com.mojang.math.Axis.ZP.rotationDegrees(180.0F));
+                poseStack.mulPose(Axis.XP.rotationDegrees(90.0F));
+                poseStack.mulPose(Axis.ZP.rotationDegrees(180.0F));
             }
             case NORTH -> {
                 poseStack.translate(0.0D, 0.0D, -FACE_OFFSET);
-                poseStack.mulPose(com.mojang.math.Axis.YP.rotationDegrees(180.0F));
+                poseStack.mulPose(Axis.YP.rotationDegrees(180.0F));
             }
             case SOUTH -> poseStack.translate(0.0D, 0.0D, FACE_OFFSET);
             case WEST -> {
                 poseStack.translate(-FACE_OFFSET, 0.0D, 0.0D);
-                poseStack.mulPose(com.mojang.math.Axis.YN.rotationDegrees(90.0F));
+                poseStack.mulPose(Axis.YN.rotationDegrees(90.0F));
             }
             case EAST -> {
                 poseStack.translate(FACE_OFFSET, 0.0D, 0.0D);
-                poseStack.mulPose(com.mojang.math.Axis.YP.rotationDegrees(90.0F));
+                poseStack.mulPose(Axis.YP.rotationDegrees(90.0F));
             }
             default -> {
                 poseStack.translate(0.0D, FACE_OFFSET, 0.0D);
-                poseStack.mulPose(com.mojang.math.Axis.XP.rotationDegrees(-90.0F));
+                poseStack.mulPose(Axis.XP.rotationDegrees(-90.0F));
             }
         }
         poseStack.scale(FACE_SCALE, FACE_SCALE, FACE_SCALE);

@@ -11,6 +11,7 @@ import net.minecraft.client.Minecraft;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
+import org.joml.Matrix4f;
 
 import java.util.Map;
 import java.util.WeakHashMap;
@@ -29,7 +30,7 @@ public final class CirculationShielderRenderingHandler {
     private final ReferenceSet<ICirculationShielderBlockEntity> clientShielders = new ReferenceOpenHashSet<>();
     private final Map<ICirculationShielderBlockEntity, Float> animProgress = new WeakHashMap<>();
     private final Map<ICirculationShielderBlockEntity, Float> lastAnimProgress = new WeakHashMap<>();
-    private org.joml.Matrix4f cachedEventViewMatrix;
+    private Matrix4f cachedEventViewMatrix;
 
     public void clear() {
         clientShielders.clear();
@@ -102,7 +103,7 @@ public final class CirculationShielderRenderingHandler {
 
         if (clientShielders.isEmpty()) return;
 
-        cachedEventViewMatrix = new org.joml.Matrix4f(event.getModelViewMatrix());
+        cachedEventViewMatrix = new Matrix4f(event.getModelViewMatrix());
         for (ICirculationShielderBlockEntity shielder : clientShielders) {
             if (shielder.isShowingRange()) {
                 animProgress.putIfAbsent(shielder, 0.0f);

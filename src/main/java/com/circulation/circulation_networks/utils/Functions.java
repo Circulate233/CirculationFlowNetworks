@@ -17,7 +17,7 @@ public final class Functions {
 
     @SuppressWarnings("unchecked")
     @NotNull
-    public static <N extends INode> N createNode(@org.jetbrains.annotations.NotNull NodeType<? extends N> nodeType, @org.jetbrains.annotations.NotNull NodeContext context) {
+    public static <N extends INode> N createNode(@NotNull NodeType<? extends N> nodeType, @NotNull NodeContext context) {
         NodeCreator creator = NodeTypes.getCreator(nodeType.id());
         if (creator == null) {
             throw new IllegalArgumentException("No creator registered for node type: " + nodeType.id());

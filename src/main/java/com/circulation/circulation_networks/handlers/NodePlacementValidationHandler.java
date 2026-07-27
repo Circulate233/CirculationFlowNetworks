@@ -5,6 +5,7 @@ import com.circulation.circulation_networks.api.node.NodeContext;
 import com.circulation.circulation_networks.manager.NetworkManager;
 import com.circulation.circulation_networks.network.nodes.NodeFactory;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
@@ -31,7 +32,7 @@ public final class NodePlacementValidationHandler {
     }
 
     private static @Nullable PlacementData resolvePlacement(Player player, InteractionHand hand, BlockPos clickedPos,
-                                                            net.minecraft.core.Direction face, BlockHitResult hitResult,
+                                                            Direction face, BlockHitResult hitResult,
                                                             BlockItem blockItem) {
         BlockPlaceContext context = new BlockPlaceContext(
             new UseOnContext(player, hand, new BlockHitResult(hitResult.getLocation(), face, clickedPos, hitResult.isInside()))

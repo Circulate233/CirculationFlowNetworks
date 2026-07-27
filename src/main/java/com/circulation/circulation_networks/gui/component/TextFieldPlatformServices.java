@@ -3,7 +3,10 @@ package com.circulation.circulation_networks.gui.component;
 import com.circulation.circulation_networks.client.compat.GuiGraphicsCompat;
 import com.circulation.circulation_networks.gui.CFNBaseGui;
 import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.function.Predicate;
 
 public final class TextFieldPlatformServices {
 
@@ -20,6 +23,10 @@ public final class TextFieldPlatformServices {
         String getText();
 
         void setText(String text);
+
+        void setTextFilter(Predicate<String> textFilter);
+
+        void selectAll();
 
         void setMaxLength(int maxLength);
 
@@ -49,6 +56,7 @@ public final class TextFieldPlatformServices {
         private int height;
         private boolean enabled = true;
         private boolean visible = true;
+        private Predicate<String> textFilter = ignored -> true;
 
         private ModernTextField(int x, int y, int width, int height, int maxLength) {
             this.maxLength = Math.max(0, maxLength);
@@ -64,7 +72,7 @@ public final class TextFieldPlatformServices {
                 y,
                 width,
                 height,
-                net.minecraft.network.chat.Component.literal("")
+                Component.literal("")
             );
             editBox.setCanLoseFocus(true);
             editBox.setMaxLength(Math.max(0, maxLength));
@@ -79,6 +87,18 @@ public final class TextFieldPlatformServices {
         @Override
         public void setText(String text) {
             field.setValue(text != null ? text : "");
+        }
+
+        @Override
+        public void setTextFilter(Predicate<String> textFilter) {
+            this.textFilter = textFilter;
+            field.setFilter(textFilter);
+        }
+
+        @Override
+        public void selectAll() {
+            field.setCursorPosition(field.getValue().length());
+            field.setHighlightPos(0);
         }
 
         @Override
@@ -117,6 +137,7 @@ public final class TextFieldPlatformServices {
             this.visible = visible;
             field.setEditable(enabled);
             field.setVisible(visible);
+            field.setFilter(textFilter);
             if (!enabled && field.isFocused()) {
                 field.setFocused(false);
             }
@@ -159,6 +180,7 @@ public final class TextFieldPlatformServices {
             this.width = width;
             this.height = height;
             field = createField(x, y, width, height, maxLength);
+            field.setFilter(textFilter);
             field.setValue(text);
             field.setFocused(focused);
         }

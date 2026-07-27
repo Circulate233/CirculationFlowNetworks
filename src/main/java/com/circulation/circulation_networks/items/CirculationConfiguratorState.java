@@ -3,11 +3,10 @@ package com.circulation.circulation_networks.items;
 import com.circulation.circulation_networks.items.CirculationConfiguratorModeModel.ToolFunction;
 import com.circulation.circulation_networks.utils.Functions;
 import com.circulation.circulation_networks.utils.NbtCompat;
-import net.minecraft.core.component.DataComponents;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.component.CustomData;
-
 
 public final class CirculationConfiguratorState {
 
@@ -34,8 +33,9 @@ public final class CirculationConfiguratorState {
     }
 
     public static void setSubMode(ItemStack stack, int subMode) {
+        int normalizedSubMode = CirculationConfiguratorModeModel.wrapSubMode(subMode, getFunction(stack));
         CompoundTag tag = Functions.getOrCreateTagCompound(stack);
-        putInt(tag, MODE_KEY, subMode);
+        putInt(tag, MODE_KEY, normalizedSubMode);
         Functions.saveTagCompound(stack, tag);
     }
 
@@ -61,7 +61,6 @@ public final class CirculationConfiguratorState {
     private static void putInt(CompoundTag nbt, String key, int value) {
         nbt.putInt(key, value);
     }
-
 
     public record ToggleResult(ToolFunction previousFunction, ToolFunction currentFunction) {
 

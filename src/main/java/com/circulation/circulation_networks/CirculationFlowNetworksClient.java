@@ -16,6 +16,7 @@ import com.circulation.circulation_networks.client.render.RotatingModelVBORender
 import com.circulation.circulation_networks.events.BlockEntityLifeCycleEvent;
 import com.circulation.circulation_networks.gui.GuiCirculationShielder;
 import com.circulation.circulation_networks.gui.GuiHub;
+import com.circulation.circulation_networks.gui.GuiMachinePriority;
 import com.circulation.circulation_networks.gui.component.base.ComponentAtlas;
 import com.circulation.circulation_networks.handlers.CirculationShielderRenderingHandler;
 import com.circulation.circulation_networks.handlers.ConfigOverrideRenderingHandler;
@@ -37,6 +38,7 @@ import net.minecraft.client.resources.language.I18n;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforge.client.event.AddClientReloadListenersEvent;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
@@ -50,6 +52,8 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 import net.neoforged.neoforge.common.NeoForge;
 
+import java.io.File;
+
 final class CirculationFlowNetworksClient {
 
     private static final Identifier COMPONENT_ATLAS_RELOAD_LISTENER_ID =
@@ -61,7 +65,7 @@ final class CirculationFlowNetworksClient {
 
     static void init(IEventBus modEventBus) {
         RenderingBackend.setInstance(new RenderingBackendImpl());
-        java.io.File modConfigDir = new java.io.File(net.neoforged.fml.loading.FMLPaths.CONFIGDIR.get().toFile(), CirculationFlowNetworks.MOD_ID);
+        File modConfigDir = new File(FMLPaths.CONFIGDIR.get().toFile(), CirculationFlowNetworks.MOD_ID);
         ComponentAtlas.INSTANCE.configure(modConfigDir);
         // Use addListener instead of register() to avoid NeoForge restriction
         // on @SubscribeEvent methods in superclass when registering a subclass
@@ -136,6 +140,7 @@ final class CirculationFlowNetworksClient {
     private static void onRegisterMenuScreens(RegisterMenuScreensEvent event) {
         event.register(CFNMenuTypes.HUB_MENU, GuiHub::new);
         event.register(CFNMenuTypes.CIRCULATION_SHIELDER_MENU, GuiCirculationShielder::new);
+        event.register(CFNMenuTypes.MACHINE_PRIORITY_MENU, GuiMachinePriority::new);
     }
 
     private static void onRegisterClientExtensions(RegisterClientExtensionsEvent event) {

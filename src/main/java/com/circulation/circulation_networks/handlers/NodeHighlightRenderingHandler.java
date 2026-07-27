@@ -1,6 +1,7 @@
 package com.circulation.circulation_networks.handlers;
 
 import com.circulation.circulation_networks.client.render.ClientAnimationTicker;
+import com.circulation.circulation_networks.utils.WorldResolveCompat;
 import com.mojang.blaze3d.pipeline.BlendFunction;
 import com.mojang.blaze3d.pipeline.ColorTargetState;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
@@ -15,6 +16,7 @@ import net.minecraft.core.BlockPos;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
+import org.joml.Matrix4f;
 
 import java.util.Optional;
 
@@ -45,7 +47,7 @@ public final class NodeHighlightRenderingHandler {
     private NodeHighlightRenderingHandler() {
     }
 
-    private static void addLine(VertexConsumer builder, PoseStack.Pose pose, org.joml.Matrix4f matrix,
+    private static void addLine(VertexConsumer builder, PoseStack.Pose pose, Matrix4f matrix,
                                 float x1, float y1, float z1, float x2, float y2, float z2,
                                 int r, int g, int b, int a) {
         float nx = x2 - x1;
@@ -81,7 +83,7 @@ public final class NodeHighlightRenderingHandler {
         if (mc.level == null || mc.player == null || targetPos == null) {
             return;
         }
-        if (!com.circulation.circulation_networks.utils.WorldResolveCompat.getDimensionId(mc.level).equals(targetDimId)) {
+        if (!WorldResolveCompat.getDimensionId(mc.level).equals(targetDimId)) {
             return;
         }
         long clientTick = ClientAnimationTicker.ticks();

@@ -1,8 +1,8 @@
 package com.circulation.circulation_networks.api;
 
+import org.jetbrains.annotations.NotNull;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import org.jetbrains.annotations.NotNull;
 
 public interface IEnergyHandlerManager extends Comparable<IEnergyHandlerManager> {
 

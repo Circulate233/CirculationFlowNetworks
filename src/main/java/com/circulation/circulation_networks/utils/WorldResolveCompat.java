@@ -1,12 +1,15 @@
 package com.circulation.circulation_networks.utils;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.storage.LevelResource;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -54,7 +57,7 @@ public final class WorldResolveCompat {
         return !isClientWorld(world);
     }
 
-    public static java.util.List<? extends net.minecraft.world.entity.player.Player> getPlayers(@NotNull Level world) {
+    public static List<? extends Player> getPlayers(@NotNull Level world) {
         return world.players();
     }
 
@@ -62,35 +65,35 @@ public final class WorldResolveCompat {
         return world.dimension().identifier().toString();
     }
 
-    public static String getPlayerDimensionId(net.minecraft.server.level.ServerPlayer player) {
+    public static String getPlayerDimensionId(ServerPlayer player) {
         return player.level().dimension().identifier().toString();
     }
 
-    public static String getPlayerDimensionId(net.minecraft.world.entity.player.Player player) {
+    public static String getPlayerDimensionId(Player player) {
         return player.level().dimension().identifier().toString();
     }
 
-    public static String getBlockVisualId(Level world, net.minecraft.core.BlockPos pos) {
+    public static String getBlockVisualId(Level world, BlockPos pos) {
         return ResourceIdCompat.getBlockId(world.getBlockState(pos).getBlock());
     }
 
     @Nullable
-    public static net.minecraft.world.level.block.entity.BlockEntity getBlockEntity(Level world, net.minecraft.core.BlockPos pos) {
+    public static BlockEntity getBlockEntity(Level world, BlockPos pos) {
         return world.getBlockEntity(pos);
     }
 
-    public static void destroyBlock(Level world, net.minecraft.core.BlockPos pos) {
+    public static void destroyBlock(Level world, BlockPos pos) {
         world.destroyBlock(pos, true, null);
     }
 
-    public static double getPlayerDistanceSq(net.minecraft.server.level.ServerPlayer player, net.minecraft.core.BlockPos pos) {
+    public static double getPlayerDistanceSq(ServerPlayer player, BlockPos pos) {
         double dx = player.getX() - (pos.getX() + 0.5D);
         double dy = player.getY() - (pos.getY() + 1.25D);
         double dz = player.getZ() - (pos.getZ() + 0.5D);
         return dx * dx + dy * dy + dz * dz;
     }
 
-    public static long getPackedPos(net.minecraft.world.level.block.entity.BlockEntity blockEntity) {
+    public static long getPackedPos(BlockEntity blockEntity) {
         return BlockPosCompat.toLong(blockEntity.getBlockPos());
     }
 
@@ -111,6 +114,6 @@ public final class WorldResolveCompat {
     }
 
     public static Path getRootSavePath() {
-        return Objects.requireNonNull(getCurrentServer()).getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT);
+        return Objects.requireNonNull(getCurrentServer()).getWorldPath(LevelResource.ROOT);
     }
 }
