@@ -1,17 +1,11 @@
 {
-  "package": "com.circulation.circulation_networks.mixins",
+  "package": "com.circulation.circulation_networks.mixins.appliedenergistics2",
   "required": true,
   "refmap": "mixins.circulation_networks.refmap.json",
   "target": "@env(DEFAULT)",
   "minVersion": "0.8.5",
   "compatibilityLevel": "JAVA_8",
   "mixins": [
-    "mc.MixinChunk",
-    "mc.MixinBlockEntity",
-    "mc.MixinAnvilChunkLoader"
-  ],
-  "server": [
-  ],
-  "client": [
+    "MixinAENetworkProxy"
   ]
 }
