@@ -55,9 +55,9 @@ public class MEKHandler implements IEnergyHandler {
     private final EnergyAmount maxExtract = EnergyAmount.obtain(MAX_SCALED_DOUBLE_TRANSFER);
     private final EnergyAmount needEnergy = EnergyAmount.obtain(0L);
     @Nullable
-    private IStrictEnergyStorage send;
+    private IStrictEnergyOutputter send;
     @Nullable
-    private IStrictEnergyStorage receive;
+    private IStrictEnergyAcceptor receive;
     private boolean isItem;
     private IEnergizedItem receiveItem;
     private ItemStack stack = ItemStack.EMPTY;
@@ -95,19 +95,19 @@ public class MEKHandler implements IEnergyHandler {
     }
 
     private void bindOrdinaryHint(TileEntity tileEntity) {
-        if (!(tileEntity instanceof IStrictEnergyStorage storage)) {
+        if (!(tileEntity instanceof IStrictEnergyStorage)) {
             return;
         }
         if (sendState == ROLE_SUPPORTED && sendFacing != null) {
             if (tileEntity instanceof IStrictEnergyOutputter outputter && outputter.canOutputEnergy(sendFacing)) {
-                send = storage;
+                send = outputter;
             } else {
                 sendState = ROLE_UNKNOWN;
             }
         }
         if (receiveState == ROLE_SUPPORTED && receiveFacing != null) {
             if (tileEntity instanceof IStrictEnergyAcceptor acceptor && acceptor.canReceiveEnergy(receiveFacing)) {
-                receive = storage;
+                receive = acceptor;
             } else {
                 receiveState = ROLE_UNKNOWN;
             }
@@ -115,7 +115,6 @@ public class MEKHandler implements IEnergyHandler {
     }
 
     private int bindOrdinarySide(TileEntity tileEntity,
-                                 IStrictEnergyStorage storage,
                                  EnumFacing facing,
                                  boolean needSendScan,
                                  boolean needReceiveScan) {
@@ -126,7 +125,7 @@ public class MEKHandler implements IEnergyHandler {
         if (needSendScan) {
             attempted |= 1;
             if (tileEntity instanceof IStrictEnergyOutputter outputter && outputter.canOutputEnergy(facing)) {
-                send = storage;
+                send = outputter;
                 sendFacing = facing;
                 sendState = ROLE_SUPPORTED;
             }
@@ -134,7 +133,7 @@ public class MEKHandler implements IEnergyHandler {
         if (needReceiveScan) {
             attempted |= 2;
             if (tileEntity instanceof IStrictEnergyAcceptor acceptor && acceptor.canReceiveEnergy(facing)) {
-                receive = storage;
+                receive = acceptor;
                 receiveFacing = facing;
                 receiveState = ROLE_SUPPORTED;
             }
@@ -148,22 +147,27 @@ public class MEKHandler implements IEnergyHandler {
         receive = tileEntity;
         energyType = EnergyType.STORAGE;
         double maxOutput = tileEntity.getMaxOutput();
-        EnergyAmountConversionUtils.setFromDoubleFloor(maxExtract, maxOutput);
-        EnergyAmountConversionUtils.setFromDoubleFloor(maxReceive, maxOutput);
+        setFromJoules(maxExtract, maxOutput);
+        setFromJoules(maxReceive, maxOutput);
     }
 
     private void prepareInductionPort(TileEntity tileEntity) {
-        if (!(tileEntity instanceof IStrictEnergyStorage storage)) {
+        if (!(tileEntity instanceof IStrictEnergyStorage)) {
             throw new IllegalStateException("Mekanism induction port does not implement IStrictEnergyStorage: "
                 + describeTile(tileEntity, INDUCTION_PORT.layoutName()));
         }
-        send = storage;
-        receive = storage;
+        if (!(tileEntity instanceof IStrictEnergyOutputter outputter)
+            || !(tileEntity instanceof IStrictEnergyAcceptor acceptor)) {
+            throw new IllegalStateException("Mekanism induction port does not expose strict transfer APIs: "
+                + describeTile(tileEntity, INDUCTION_PORT.layoutName()));
+        }
+        send = outputter;
+        receive = acceptor;
         energyType = EnergyType.STORAGE;
         var matrixData = INDUCTION_PORT.structure(tileEntity);
         if (matrixData != null) {
-            EnergyAmountConversionUtils.setFromDoubleFloor(maxExtract, matrixData.getRemainingOutput());
-            EnergyAmountConversionUtils.setFromDoubleFloor(maxReceive, matrixData.getRemainingInput());
+            setFromJoules(maxExtract, matrixData.getRemainingOutput());
+            setFromJoules(maxReceive, matrixData.getRemainingInput());
         }
     }
 
@@ -179,8 +183,8 @@ public class MEKHandler implements IEnergyHandler {
         if (tileEntity instanceof IEnergyWrapper energyWrapper) {
             double maxOutput = energyWrapper.getMaxOutput();
             if (maxOutput != 0.0D) {
-                EnergyAmountConversionUtils.setFromDoubleFloor(maxExtract, maxOutput);
-                EnergyAmountConversionUtils.setFromDoubleFloor(maxReceive, maxOutput);
+                setFromJoules(maxExtract, maxOutput);
+                setFromJoules(maxReceive, maxOutput);
                 return;
             }
         }
@@ -189,7 +193,7 @@ public class MEKHandler implements IEnergyHandler {
     }
 
     private void prepareOrdinaryBlock(TileEntity tileEntity) {
-        if (!(tileEntity instanceof IStrictEnergyStorage storage)) {
+        if (!(tileEntity instanceof IStrictEnergyStorage)) {
             energyType = EnergyType.INVALID;
             return;
         }
@@ -200,7 +204,7 @@ public class MEKHandler implements IEnergyHandler {
         boolean attemptedReceive = false;
         for (var i = 0; i < EnumFacing.VALUES.length; i++) {
             if (!needSendScan && !needReceiveScan) break;
-            int attempted = bindOrdinarySide(tileEntity, storage, EnumFacing.VALUES[i], needSendScan, needReceiveScan);
+            int attempted = bindOrdinarySide(tileEntity, EnumFacing.VALUES[i], needSendScan, needReceiveScan);
             attemptedSend |= (attempted & 1) != 0;
             attemptedReceive |= (attempted & 2) != 0;
             needSendScan = send == null && sendState == ROLE_UNKNOWN;
@@ -218,23 +222,23 @@ public class MEKHandler implements IEnergyHandler {
     }
 
     private boolean refreshOrdinaryCached(TileEntity tileEntity) {
-        if (!(tileEntity instanceof IStrictEnergyStorage storage)) {
+        if (!(tileEntity instanceof IStrictEnergyStorage)) {
             return false;
         }
         if (supportsSend && sendFacing != null && tileEntity instanceof IStrictEnergyOutputter outputter
             && outputter.canOutputEnergy(sendFacing)) {
-            send = storage;
+            send = outputter;
         }
         if (supportsReceive && receiveFacing != null && tileEntity instanceof IStrictEnergyAcceptor acceptor
             && acceptor.canReceiveEnergy(receiveFacing)) {
-            receive = storage;
+            receive = acceptor;
         }
         prepareOrdinaryTransferLimits(tileEntity);
         return (!supportsSend || send != null) && (!supportsReceive || receive != null);
     }
 
     private boolean rediscoverRequiredOrdinary(TileEntity tileEntity) {
-        if (!(tileEntity instanceof IStrictEnergyStorage storage)) {
+        if (!(tileEntity instanceof IStrictEnergyStorage)) {
             return false;
         }
         send = null;
@@ -244,12 +248,12 @@ public class MEKHandler implements IEnergyHandler {
         for (EnumFacing facing : EnumFacing.VALUES) {
             if (supportsSend && send == null && tileEntity instanceof IStrictEnergyOutputter outputter
                 && outputter.canOutputEnergy(facing)) {
-                send = storage;
+                send = outputter;
                 sendFacing = facing;
             }
             if (supportsReceive && receive == null && tileEntity instanceof IStrictEnergyAcceptor acceptor
                 && acceptor.canReceiveEnergy(facing)) {
-                receive = storage;
+                receive = acceptor;
                 receiveFacing = facing;
             }
         }
@@ -436,10 +440,13 @@ public class MEKHandler implements IEnergyHandler {
             if (!ensureRefreshed() || receive == null) return EnergyAmounts.ZERO;
             EnergyAmount receivable = EnergyAmount.obtain(maxReceive);
             clampToMaximum(receivable, MAX_SCALED_DOUBLE_TRANSFER);
-            if (!receivable.isZero()) {
-                receive.setEnergy(receive.getEnergy() + EnergyAmountConversionUtils.toDoubleClamped(receivable) * FE_TO_MEK_RATIO);
+            receivable.min(this.maxReceive);
+            if (receivable.isZero()) {
+                return receivable;
             }
-            return receivable;
+            double requested = toJoules(receivable);
+            receivable.recycle();
+            return resultFromJoules(receive.acceptEnergy(receiveFacing, requested, false), requested, "acceptEnergy");
         }
     }
 
@@ -448,18 +455,21 @@ public class MEKHandler implements IEnergyHandler {
         if (!ensureRefreshed() || send == null) return EnergyAmounts.ZERO;
         EnergyAmount extractable = EnergyAmount.obtain(maxExtract);
         clampToMaximum(extractable, MAX_SCALED_DOUBLE_TRANSFER);
-        if (!extractable.isZero() && !creative) {
-            send.setEnergy(send.getEnergy() - EnergyAmountConversionUtils.toDoubleClamped(extractable) * FE_TO_MEK_RATIO);
+        extractable.min(this.maxExtract);
+        if (extractable.isZero() || creative) {
+            return extractable;
         }
-        return extractable;
+        double requested = toJoules(extractable);
+        extractable.recycle();
+        return resultFromJoules(send.pullEnergy(sendFacing, requested, false), requested, "pullEnergy");
     }
 
     @Override
     public EnergyAmount canExtractValue(@Nullable HubNode.HubMetadata hubMetadata) {
         if (!ensureRefreshed() || send == null) return EnergyAmounts.ZERO;
         if (creative) return EnergyAmount.obtain(maxExtract);
-        EnergyAmount extractable = EnergyAmountConversionUtils.obtainFromDoubleFloor(send.getEnergy() * 0.4D);
-        return extractable.min(maxExtract);
+        double requested = toJoules(maxExtract);
+        return resultFromJoules(send.pullEnergy(sendFacing, requested, true), requested, "simulate pullEnergy");
     }
 
     @Override
@@ -468,8 +478,9 @@ public class MEKHandler implements IEnergyHandler {
             return EnergyAmount.obtain(needEnergy);
         } else {
             if (!ensureRefreshed() || receive == null) return EnergyAmounts.ZERO;
-            EnergyAmount receivable = EnergyAmountConversionUtils.obtainFromDoubleFloor((receive.getMaxEnergy() - receive.getEnergy()) * 0.4D);
-            return receivable.min(maxReceive);
+            double requested = toJoules(maxReceive);
+            return resultFromJoules(receive.acceptEnergy(receiveFacing, requested, true), requested,
+                "simulate acceptEnergy");
         }
     }
 
@@ -477,19 +488,39 @@ public class MEKHandler implements IEnergyHandler {
     public boolean canExtract(IEnergyHandler receiveHandler, @Nullable HubNode.HubMetadata hubMetadata) {
         if (!ensureRefreshed()) return false;
         if (creative) return true;
-        return send != null && send.getEnergy() >= 2.5;
+        return send != null && send.pullEnergy(sendFacing, FE_TO_MEK_RATIO, true) >= FE_TO_MEK_RATIO;
     }
 
     @Override
     public boolean canReceive(IEnergyHandler sendHandler, @Nullable HubNode.HubMetadata hubMetadata) {
         if (isItem) return needEnergy.isPositive();
         if (!ensureRefreshed()) return false;
-        return receive != null && (receive.getMaxEnergy() - receive.getEnergy()) * 0.4D > 0.0D;
+        return receive != null && receive.acceptEnergy(receiveFacing, FE_TO_MEK_RATIO, true) >= FE_TO_MEK_RATIO;
     }
 
     @Override
     public EnergyType getType(@Nullable HubNode.HubMetadata hubMetadata) {
         return energyType;
+    }
+
+    private static void setFromJoules(EnergyAmount target, double joules) {
+        EnergyAmountConversionUtils.setFromDoubleFloor(target, joules / FE_TO_MEK_RATIO);
+    }
+
+    private static double toJoules(EnergyAmount amount) {
+        double joules = EnergyAmountConversionUtils.toDoubleClamped(amount) * FE_TO_MEK_RATIO;
+        if (!Double.isFinite(joules) || joules < 0.0D) {
+            throw new IllegalArgumentException("Mekanism transfer request is not a finite non-negative value: " + joules);
+        }
+        return joules;
+    }
+
+    private static EnergyAmount resultFromJoules(double transferred, double requested, String operation) {
+        if (!Double.isFinite(transferred) || transferred < 0.0D || transferred > requested) {
+            throw new IllegalStateException("Mekanism " + operation + " returned " + transferred
+                + " J for a " + requested + " J request");
+        }
+        return EnergyAmountConversionUtils.obtainFromDoubleFloor(transferred / FE_TO_MEK_RATIO);
     }
 
     private static InductionPortAccess resolveInductionPortAccess() {

@@ -21,14 +21,18 @@ public interface CFNBlockEntityEx {
     int MAX_ENERGY_THROTTLE_TIMER = SATURATED_ENERGY_THROTTLE_STAGE * 5 / 4;
 
     /** Base retry delay for a scoped block entity that currently has no available energy handler manager. */
-    int ENERGY_DISCOVERY_THROTTLE_TIMER = 200;
+    int ENERGY_DISCOVERY_THROTTLE_TIMER = 2000;
 
-    /** Symmetric jitter applied to unsupported-machine discovery retries. */
-    int ENERGY_DISCOVERY_THROTTLE_JITTER = 10;
+    /** Number of consecutive ticks across which unsupported-machine discovery retries are distributed. */
+    int ENERGY_DISCOVERY_THROTTLE_SPREAD = 100;
+
+    /** Smallest unsupported-machine discovery retry delay. */
+    int MIN_ENERGY_DISCOVERY_THROTTLE_TIMER =
+        ENERGY_DISCOVERY_THROTTLE_TIMER - ENERGY_DISCOVERY_THROTTLE_SPREAD / 2;
 
     /** Largest value stored in the shared throttle timer field. */
     int MAX_STORED_ENERGY_THROTTLE_TIMER =
-        ENERGY_DISCOVERY_THROTTLE_TIMER + ENERGY_DISCOVERY_THROTTLE_JITTER;
+        MIN_ENERGY_DISCOVERY_THROTTLE_TIMER + ENERGY_DISCOVERY_THROTTLE_SPREAD - 1;
 
     /**
      * Converts a Minecraft block entity received from an unmodified platform API into its CFN extension view.
@@ -140,14 +144,15 @@ public interface CFNBlockEntityEx {
     void cfn_loadEnergyPriority(int priority);
 
     /**
-     * Returns the remaining energy backoff ticks. A non-zero value suppresses
-     * all handler and budget reads for the current server tick.
+     * Returns the active energy backoff marker. Budget backoff stores its remaining ticks; unsupported-machine
+     * discovery stores its scheduled delay while the exact due tick is owned by the discovery time wheel.
+     * A non-zero value suppresses all handler and budget reads for the current server tick.
      */
     int cfn_getEnergyThrottleTimer();
 
     /**
-     * Sets the remaining energy backoff ticks. Budget backoff uses {@code 0..40}; unsupported-machine discovery uses
-     * {@code 190..210}. Values between those ranges are reserved for the same internal countdown mechanism.
+     * Sets the energy backoff marker. Budget backoff uses {@code 0..40}; unsupported-machine discovery uses
+     * {@code 1950..2049}. Values between those ranges are reserved for internal scheduling.
      */
     void cfn_setEnergyThrottleTimer(int timer);
 

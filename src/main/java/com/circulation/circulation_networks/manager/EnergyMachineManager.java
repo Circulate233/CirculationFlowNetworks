@@ -95,9 +95,12 @@ public final class EnergyMachineManager {
     private static final int MAX_DEFERRED_INTERACTION_QUERIES = 256;
     private static final int POSITION_READY_MAX_RESOLUTION_ATTEMPTS = 2;
     private static final int MIN_DISCOVERY_THROTTLE_TIMER =
-        CFNBlockEntityEx.ENERGY_DISCOVERY_THROTTLE_TIMER - CFNBlockEntityEx.ENERGY_DISCOVERY_THROTTLE_JITTER;
+        CFNBlockEntityEx.MIN_ENERGY_DISCOVERY_THROTTLE_TIMER;
     private static final int DISCOVERY_THROTTLE_TIMER_COUNT =
-        CFNBlockEntityEx.ENERGY_DISCOVERY_THROTTLE_JITTER * 2 + 1;
+        CFNBlockEntityEx.ENERGY_DISCOVERY_THROTTLE_SPREAD;
+    private static final int DISCOVERY_THROTTLE_WHEEL_SIZE =
+        CFNBlockEntityEx.MAX_STORED_ENERGY_THROTTLE_TIMER + 1;
+    private static final long NO_DISCOVERY_THROTTLE_MEMBERSHIP = Long.MIN_VALUE;
     private final Int2ObjectMap<Long2ObjectMap<ReferenceSet<IEnergySupplyNode>>> scopeNode = new Int2ObjectOpenHashMap<>();
     private final Int2ObjectMap<Object2ObjectMap<IEnergySupplyNode, LongSet>> nodeScope = new Int2ObjectOpenHashMap<>();
     private final Reference2ObjectMap<INode, ReferenceSet<CFNBlockEntityEx>> gridMachineMap = new Reference2ObjectOpenHashMap<>();
@@ -135,7 +138,11 @@ public final class EnergyMachineManager {
         };
     private final ObjectArrayList<LifecycleCommand> lifecycleInbox = new ObjectArrayList<>();
     private final ObjectArrayList<LifecycleCommand> lifecycleDrain = new ObjectArrayList<>();
-    private final ObjectArrayList<CFNBlockEntityEx> discoveryThrottledBlockEntities = new ObjectArrayList<>();
+    private final ObjectArrayList<ObjectArrayList<CFNBlockEntityEx>> discoveryThrottleWheel =
+        new ObjectArrayList<>(DISCOVERY_THROTTLE_WHEEL_SIZE);
+    private final ObjectArrayList<CFNBlockEntityEx> discoveryThrottleDrain = new ObjectArrayList<>();
+    private final Reference2LongMap<CFNBlockEntityEx> discoveryThrottleMembership =
+        new Reference2LongOpenHashMap<>();
     private final ObjectArrayList<Runnable> deferredInteractionQueries = new ObjectArrayList<>();
     private final ObjectArrayList<Runnable> deferredInteractionQueryDrain = new ObjectArrayList<>();
     private final Object2ObjectMap<PositionLifecycleKey, PositionLifecycleCommand> positionLifecycleInbox =
@@ -152,6 +159,7 @@ public final class EnergyMachineManager {
     private long transferPassId;
     private long machineInteractionDemandEpoch = Long.MIN_VALUE;
     private int discoveryThrottleCursor;
+    private int discoveryThrottleWheelCursor;
     private boolean lifecycleDraining;
 
     {
@@ -159,6 +167,10 @@ public final class EnergyMachineManager {
         nodeScope.defaultReturnValue(Object2ObjectMaps.emptyMap());
         gridMachineMap.defaultReturnValue(ReferenceSets.emptySet());
         supplyNodeMachines.defaultReturnValue(ReferenceSets.emptySet());
+        discoveryThrottleMembership.defaultReturnValue(NO_DISCOVERY_THROTTLE_MEMBERSHIP);
+        for (int index = 0; index < DISCOVERY_THROTTLE_WHEEL_SIZE; index++) {
+            discoveryThrottleWheel.add(new ObjectArrayList<>());
+        }
     }
 
     //? if <1.20 {
@@ -337,7 +349,7 @@ public final class EnergyMachineManager {
         boolean evaluateWarnings;
         try {
             reconcileMachineChunkResidency();
-            advanceDiscoveryThrottleTimers();
+            advanceDiscoveryThrottleWheel();
             loadPositionLifecycle(server);
             loadCache();
             if (interactionEpoch == Long.MAX_VALUE) {
@@ -635,8 +647,17 @@ public final class EnergyMachineManager {
     }
 
     private boolean isDiscoveryThrottled(CFNBlockEntityEx blockEntity) {
-        return blockEntity.cfn_getEnergyLastThrottleTimer() == 0
-            && blockEntity.cfn_getEnergyThrottleTimer() != 0;
+        if (blockEntity.cfn_getEnergyLastThrottleTimer() != 0) {
+            if (discoveryThrottleMembership.containsKey(blockEntity)) {
+                throw new IllegalStateException("Energy-budget backoff retained a discovery throttle membership");
+            }
+            return false;
+        }
+        boolean marked = blockEntity.cfn_getEnergyThrottleTimer() != 0;
+        if (marked != discoveryThrottleMembership.containsKey(blockEntity)) {
+            throw new IllegalStateException("Discovery throttle marker and wheel membership disagree");
+        }
+        return marked;
     }
 
     void scheduleDiscoveryThrottle(CFNBlockEntityEx blockEntity) {
@@ -644,57 +665,126 @@ public final class EnergyMachineManager {
             || blockEntity.cfn_getEnergyLastThrottleTimer() != 0) {
             throw new IllegalStateException("Cannot schedule discovery retry over an existing energy throttle");
         }
+        if (discoveryThrottleMembership.containsKey(blockEntity)) {
+            throw new IllegalStateException("Discovery throttle already contains the block entity");
+        }
         int timer = MIN_DISCOVERY_THROTTLE_TIMER + discoveryThrottleCursor;
         discoveryThrottleCursor++;
         if (discoveryThrottleCursor == DISCOVERY_THROTTLE_TIMER_COUNT) {
             discoveryThrottleCursor = 0;
         }
+        int bucketIndex = discoveryThrottleWheelCursor + timer;
+        if (bucketIndex >= DISCOVERY_THROTTLE_WHEEL_SIZE) {
+            bucketIndex -= DISCOVERY_THROTTLE_WHEEL_SIZE;
+        }
+        ObjectArrayList<CFNBlockEntityEx> bucket = discoveryThrottleWheel.get(bucketIndex);
+        int entryIndex = bucket.size();
         blockEntity.cfn_setEnergyThrottleTimer(timer);
-        discoveryThrottledBlockEntities.add(blockEntity);
+        bucket.add(blockEntity);
+        discoveryThrottleMembership.put(blockEntity, packDiscoveryThrottleMembership(bucketIndex, entryIndex));
     }
 
-    void advanceDiscoveryThrottleTimers() {
-        for (int index = discoveryThrottledBlockEntities.size() - 1; index >= 0; index--) {
-            CFNBlockEntityEx blockEntity = discoveryThrottledBlockEntities.get(index);
+    void advanceDiscoveryThrottleWheel() {
+        if (!discoveryThrottleDrain.isEmpty()) {
+            throw new IllegalStateException("Discovery throttle expiry drain was not cleared");
+        }
+        discoveryThrottleWheelCursor++;
+        if (discoveryThrottleWheelCursor == DISCOVERY_THROTTLE_WHEEL_SIZE) {
+            discoveryThrottleWheelCursor = 0;
+        }
+        ObjectArrayList<CFNBlockEntityEx> bucket = discoveryThrottleWheel.get(discoveryThrottleWheelCursor);
+        int count = bucket.size();
+        if (count == 0) {
+            return;
+        }
+        for (int index = 0; index < count; index++) {
+            CFNBlockEntityEx blockEntity = bucket.get(index);
             if (blockEntity.cfn_getEnergyLastThrottleTimer() != 0) {
                 throw new IllegalStateException("Discovery throttle acquired an energy-budget backoff stage");
             }
             int timer = blockEntity.cfn_getEnergyThrottleTimer();
-            if (timer <= 0) {
-                throw new IllegalStateException("Discovery throttle list contains a block entity without a timer");
+            if (timer < MIN_DISCOVERY_THROTTLE_TIMER
+                || timer > CFNBlockEntityEx.MAX_STORED_ENERGY_THROTTLE_TIMER) {
+                throw new IllegalStateException("Discovery throttle bucket contains an invalid marker: " + timer);
             }
-            blockEntity.cfn_setEnergyThrottleTimer(--timer);
-            if (timer != 0) {
-                continue;
+            long expectedMembership = packDiscoveryThrottleMembership(discoveryThrottleWheelCursor, index);
+            if (discoveryThrottleMembership.getLong(blockEntity) != expectedMembership) {
+                throw new IllegalStateException("Discovery throttle bucket membership is inconsistent");
             }
-            swapRemove(discoveryThrottledBlockEntities, index);
-            submitLifecycle(blockEntity, MachineLifecyclePositionIndex.Action.DISCOVERY_RETRY);
+        }
+        discoveryThrottleDrain.addAll(bucket);
+        for (int index = 0; index < count; index++) {
+            CFNBlockEntityEx blockEntity = bucket.get(index);
+            long removed = discoveryThrottleMembership.removeLong(blockEntity);
+            long expectedMembership = packDiscoveryThrottleMembership(discoveryThrottleWheelCursor, index);
+            if (removed != expectedMembership) {
+                throw new IllegalStateException("Discovery throttle membership changed during expiry");
+            }
+            blockEntity.cfn_setEnergyThrottleTimer(0);
+        }
+        bucket.clear();
+        try {
+            for (int index = 0; index < count; index++) {
+                submitLifecycle(discoveryThrottleDrain.get(index), MachineLifecyclePositionIndex.Action.DISCOVERY_RETRY);
+            }
+        } finally {
+            discoveryThrottleDrain.clear();
         }
     }
 
     void cancelDiscoveryThrottle(CFNBlockEntityEx blockEntity) {
         if (blockEntity.cfn_getEnergyLastThrottleTimer() != 0) {
+            if (discoveryThrottleMembership.containsKey(blockEntity)) {
+                throw new IllegalStateException("Energy-budget backoff retained a discovery throttle membership");
+            }
             return;
         }
         int timer = blockEntity.cfn_getEnergyThrottleTimer();
         if (timer == 0) {
+            if (discoveryThrottleMembership.containsKey(blockEntity)) {
+                throw new IllegalStateException("Discovery throttle membership exists without a marker");
+            }
             return;
         }
-        int foundIndex = -1;
-        for (int index = 0; index < discoveryThrottledBlockEntities.size(); index++) {
-            if (discoveryThrottledBlockEntities.get(index) != blockEntity) {
-                continue;
-            }
-            if (foundIndex >= 0) {
-                throw new IllegalStateException("Discovery throttle list contains a duplicate block entity");
-            }
-            foundIndex = index;
+        long membership = discoveryThrottleMembership.getLong(blockEntity);
+        if (membership == NO_DISCOVERY_THROTTLE_MEMBERSHIP) {
+            throw new IllegalStateException("Block entity has a discovery marker without a wheel membership");
         }
-        if (foundIndex < 0) {
-            throw new IllegalStateException("Block entity has a discovery timer without a discovery throttle entry");
-        }
-        swapRemove(discoveryThrottledBlockEntities, foundIndex);
+        removeDiscoveryThrottleMembership(blockEntity, membership);
         blockEntity.cfn_setEnergyThrottleTimer(0);
+    }
+
+    private void removeDiscoveryThrottleMembership(CFNBlockEntityEx blockEntity, long membership) {
+        int bucketIndex = (int) (membership >>> 32);
+        int entryIndex = (int) membership;
+        if (bucketIndex < 0 || bucketIndex >= DISCOVERY_THROTTLE_WHEEL_SIZE) {
+            throw new IllegalStateException("Discovery throttle membership has an invalid bucket index");
+        }
+        ObjectArrayList<CFNBlockEntityEx> bucket = discoveryThrottleWheel.get(bucketIndex);
+        int lastIndex = bucket.size() - 1;
+        if (entryIndex < 0 || entryIndex > lastIndex || bucket.get(entryIndex) != blockEntity) {
+            throw new IllegalStateException("Discovery throttle membership does not point to its block entity");
+        }
+        CFNBlockEntityEx moved = bucket.get(lastIndex);
+        if (entryIndex != lastIndex) {
+            long expectedMovedMembership = packDiscoveryThrottleMembership(bucketIndex, lastIndex);
+            if (discoveryThrottleMembership.getLong(moved) != expectedMovedMembership) {
+                throw new IllegalStateException("Discovery throttle moved membership is inconsistent");
+            }
+        }
+        long removed = discoveryThrottleMembership.removeLong(blockEntity);
+        if (removed != membership) {
+            throw new IllegalStateException("Discovery throttle membership changed during removal");
+        }
+        if (entryIndex != lastIndex) {
+            bucket.set(entryIndex, moved);
+            discoveryThrottleMembership.put(moved, packDiscoveryThrottleMembership(bucketIndex, entryIndex));
+        }
+        bucket.remove(lastIndex);
+    }
+
+    private static long packDiscoveryThrottleMembership(int bucketIndex, int entryIndex) {
+        return ((long) bucketIndex << 32) | (entryIndex & 0xffffffffL);
     }
 
     private static <T> void swapRemove(ObjectArrayList<T> list, int index) {
@@ -1804,11 +1894,16 @@ public final class EnergyMachineManager {
         machineRoutes.clear();
         machineRoutesByPosition.clear();
         machineChunkResidency.clear();
-        for (int index = 0; index < discoveryThrottledBlockEntities.size(); index++) {
-            discoveryThrottledBlockEntities.get(index).cfn_setEnergyThrottleTimer(0);
+        for (CFNBlockEntityEx blockEntity : discoveryThrottleMembership.keySet()) {
+            blockEntity.cfn_setEnergyThrottleTimer(0);
         }
-        discoveryThrottledBlockEntities.clear();
+        for (int index = 0; index < discoveryThrottleWheel.size(); index++) {
+            discoveryThrottleWheel.get(index).clear();
+        }
+        discoveryThrottleDrain.clear();
+        discoveryThrottleMembership.clear();
         discoveryThrottleCursor = 0;
+        discoveryThrottleWheelCursor = 0;
         deferredInteractionQueries.clear();
         deferredInteractionQueryDrain.clear();
         machineInteractionDemandEpoch = Long.MIN_VALUE;
