@@ -35,10 +35,15 @@ def cfDefaultModLoaders = [
         'forgegradle': ['Forge'],
         'legacyforge': ['Forge', 'NeoForge'],
         'neoforge'   : ['NeoForge']
-][cfPlatform] ?: ['Forge']
+][cfPlatform]
 
 def cfGameVersions = stringListProperty('curseforge_game_versions', [propertyString('minecraft_version')])
-def cfModLoaders = stringListProperty('curseforge_mod_loaders', cfDefaultModLoaders)
+def cfModLoaders = stringListProperty('curseforge_mod_loaders', cfDefaultModLoaders ?: [])
+if (cfModLoaders.isEmpty()) {
+    // Fail loudly instead of guessing: a new platform needs an explicit loader list.
+    throw new GradleException("curseforge_mod_loaders is not set and platform '${cfPlatform}' has no " +
+            "default. Add curseforge_mod_loaders to versions/${propertyString('minecraft_version')}/gradle.properties.")
+}
 def cfJavaVersions = stringListProperty('curseforge_java_versions', [])
 def cfRequiredRelations = stringListProperty('curseforge_relations_required', [])
 def cfOptionalRelations = stringListProperty('curseforge_relations_optional', [])
