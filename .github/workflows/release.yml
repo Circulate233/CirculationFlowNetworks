@@ -6,6 +6,7 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
 
 permissions:
   contents: write
@@ -15,21 +16,70 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
-      - name: Setup Java 25
+      - name: Setup JDKs
         uses: actions/setup-java@v5
         with:
           distribution: zulu
-          java-version: 25
+          java-version: |
+            8
+            17
+            21
+            25
+
+      - name: Pin JAVA_HOME to Java 25
+        run: |
+          if [ -n "${JAVA_HOME_25_X64}" ]; then
+            echo "JAVA_HOME=${JAVA_HOME_25_X64}" >> "$GITHUB_ENV"
+          fi
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v5
 
+      - name: Resolve release version
+        run: |
+          release_version="${GITHUB_REF_NAME#v}"
+          declared_version=$(grep -E '^mod_version' gradle.properties | cut -d'=' -f2 | tr -d ' ')
+          if [ "${release_version}" != "${declared_version}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match mod_version ${declared_version} in gradle.properties."
+            exit 1
+          fi
+          echo "RELEASE_VERSION=${release_version}" >> "$GITHUB_ENV"
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
       - name: Build
-        run: chmod +x gradlew && ./gradlew build
+        run: ./gradlew build -Dorg.gradle.java.installations.fromEnv=JAVA_HOME_8_X64,JAVA_HOME_17_X64,JAVA_HOME_21_X64,JAVA_HOME_25_X64
+
+      - name: List release jars
+        run: ls -l build/libs
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
-          files: build/libs/*.jar
+          files: |
+            build/libs/circulation_networks-1.12.2-${{ env.RELEASE_VERSION }}.jar
+            build/libs/circulation_networks-1.20.1-${{ env.RELEASE_VERSION }}.jar
+            build/libs/circulation_networks-1.21.1-${{ env.RELEASE_VERSION }}.jar
+
+      - name: Write CurseForge changelog
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release view "${GITHUB_REF_NAME}" --json body --jq .body > "${RUNNER_TEMP}/curseforge-changelog.md"
+
+      - name: Publish to CurseForge
+        if: env.CURSEFORGE_TOKEN != ''
+        run: |
+          for version in 1.12.2 1.20.1 1.21.1; do
+            ./gradlew ":${version}:publishCurseForge" \
+              -Pcurseforge_changelog_file="${RUNNER_TEMP}/curseforge-changelog.md" \
+              -Dorg.gradle.java.installations.fromEnv=JAVA_HOME_8_X64,JAVA_HOME_17_X64,JAVA_HOME_21_X64,JAVA_HOME_25_X64
+          done
+
+      - name: Skip notice
+        if: env.CURSEFORGE_TOKEN == ''
+        run: echo "CURSEFORGE_TOKEN is not configured, skipped the CurseForge upload."

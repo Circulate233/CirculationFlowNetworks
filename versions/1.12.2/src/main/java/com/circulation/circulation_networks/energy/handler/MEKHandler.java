@@ -49,7 +49,8 @@ public class MEKHandler implements IEnergyHandler {
     private static final int MODE_ORDINARY = 3;
     private static final InductionPortAccess INDUCTION_PORT = resolveInductionPortAccess();
     private static final BigInteger MAX_DIRECT_DOUBLE_TRANSFER = BigDecimal.valueOf(Double.MAX_VALUE).toBigInteger();
-    private static final BigInteger MAX_SCALED_DOUBLE_TRANSFER = BigDecimal.valueOf(Double.MAX_VALUE / FE_TO_MEK_RATIO).toBigInteger();
+    private static final double MAX_FE = Double.MAX_VALUE / FE_TO_MEK_RATIO;
+    private static final BigInteger MAX_SCALED_DOUBLE_TRANSFER = BigDecimal.valueOf(MAX_FE).toBigInteger();
 
     private final EnergyAmount maxReceive = EnergyAmount.obtain(MAX_SCALED_DOUBLE_TRANSFER);
     private final EnergyAmount maxExtract = EnergyAmount.obtain(MAX_SCALED_DOUBLE_TRANSFER);

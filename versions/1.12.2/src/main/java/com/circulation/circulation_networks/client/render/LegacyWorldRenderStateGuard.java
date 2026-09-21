@@ -4,7 +4,6 @@ import com.circulation.circulation_networks.CirculationFlowNetworks;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.OpenGlHelper;
-import org.lwjgl.opengl.ARBMultitexture;
 import org.lwjgl.opengl.ARBVertexArrayObject;
 import org.lwjgl.opengl.ContextCapabilities;
 import org.lwjgl.opengl.GL11;
@@ -210,7 +209,8 @@ public final class LegacyWorldRenderStateGuard implements AutoCloseable {
             if (index == 0) {
                 texture0Coordinates.capture(float4);
             } else {
-                lightmapCoordinates.capture(float4);
+                lightmapCoordinates.captureLightmap(
+                    OpenGlHelper.lastBrightnessX, OpenGlHelper.lastBrightnessY);
             }
         }
         OpenGlHelper.setActiveTexture(activeTexture);
@@ -920,19 +920,16 @@ public final class LegacyWorldRenderStateGuard implements AutoCloseable {
     }
 
     private void restoreTextureCoordinates() {
-        restoreTextureCoordinates(OpenGlHelper.defaultTexUnit, texture0Coordinates);
-        restoreTextureCoordinates(OpenGlHelper.lightmapTexUnit, lightmapCoordinates);
+        // Actinium/GLSM redirects these supported entry points; the raw four-component
+        // multitexture entry point remains unavailable in its forward-compatible context.
+        syncActiveTexture(OpenGlHelper.defaultTexUnit);
+        GL11.glTexCoord4f(
+            texture0Coordinates.x, texture0Coordinates.y,
+            texture0Coordinates.z, texture0Coordinates.w);
+        OpenGlHelper.setLightmapTextureCoords(
+            OpenGlHelper.lightmapTexUnit, lightmapCoordinates.x, lightmapCoordinates.y);
         OpenGlHelper.lastBrightnessX = lightmapCoordinates.x;
         OpenGlHelper.lastBrightnessY = lightmapCoordinates.y;
-    }
-
-    private void restoreTextureCoordinates(int textureUnit, TextureCoordinates coordinates) {
-        if (capabilities.OpenGL13) {
-            GL13.glMultiTexCoord4f(textureUnit, coordinates.x, coordinates.y, coordinates.z, coordinates.w);
-        } else {
-            ARBMultitexture.glMultiTexCoord4fARB(
-                textureUnit, coordinates.x, coordinates.y, coordinates.z, coordinates.w);
-        }
     }
 
     private IllegalStateException matrixRecoveryFailure(int stackId, String reason) {
@@ -1270,6 +1267,13 @@ public final class LegacyWorldRenderStateGuard implements AutoCloseable {
             y = buffer.get(1);
             z = buffer.get(2);
             w = buffer.get(3);
+        }
+
+        void captureLightmap(float x, float y) {
+            this.x = x;
+            this.y = y;
+            this.z = 0.0F;
+            this.w = 1.0F;
         }
     }
 

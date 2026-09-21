@@ -22,8 +22,6 @@ plugins {
     id("com.gtnewhorizons.retrofuturagradle") version "2.0.2" apply false
     id("net.neoforged.moddev") version "2.0.141" apply false
     id("net.neoforged.moddev.legacyforge") version "2.0.141" apply false
-    id("com.matthewprenger.cursegradle") version "1.4.0" apply false
-    id("com.modrinth.minotaur") version "2.+" apply false
     id("org.jetbrains.changelog") version "2.5.0"
 }
 
@@ -943,7 +941,6 @@ afterEvaluate {
     }
 }
 
-if (isLegacyRfg) {
-    apply(from = rootProject.file("gradle/scripts/publishing.gradle"))
-}
+apply(from = rootProject.file("gradle/scripts/publishing.gradle"))
+apply(from = rootProject.file("gradle/scripts/curseforge.gradle"))
 apply(from = rootProject.file("gradle/scripts/extra.gradle"))

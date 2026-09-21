@@ -1,0 +1,104 @@
+import net.darkhax.curseforgegradle.TaskPublishCurseForge
+
+// CurseForge publishing for every stonecutter version project.
+// Applied from the central build script, so each :<minecraft_version> project registers its own
+// `publishCurseForge` task and publishes the jar built by its own platform.
+// Usage: ./gradlew :1.20.1:publishCurseForge  (requires the CURSEFORGE_TOKEN environment variable)
+
+apply from: rootProject.file('gradle/scripts/helpers.gradle')
+
+// `helpers.gradle` cannot supply defaults for undefined properties, so resolve them here instead.
+// Lists are comma separated so that entries containing spaces, such as "Java 17", stay intact.
+// Everything below is optional per version and falls back to the platform defaults.
+def stringListProperty = { String key, List<String> fallback ->
+    def raw = project.findProperty(key)
+    if (raw == null || raw.toString().trim().isEmpty()) {
+        fallback
+    } else {
+        raw.toString().split(',').collect { it.trim() }.findAll { !it.isEmpty() }
+    }
+}
+
+def cfProjectId = propertyString('curseforge_project_id')
+def cfPlatform = propertyString('platform')
+def cfModVersion = propertyString('mod_version')
+
+// RetroFuturaGradle and the legacy Forge platform reobfuscate in reobfJar; plain NeoForge publishes
+// the jar task output directly. Hand the task itself to upload() so Gradle records the producer.
+def cfArchiveTask = ['reobfJar', 'jar'].collect { tasks.findByName(it) }.find { it != null }
+if (cfArchiveTask == null) {
+    throw new GradleException("Neither a reobfJar nor a jar task exists in ${project.path}.")
+}
+
+def cfDefaultModLoaders = [
+        'rfg'        : ['Forge'],
+        'forgegradle': ['Forge'],
+        'legacyforge': ['Forge', 'NeoForge'],
+        'neoforge'   : ['NeoForge']
+][cfPlatform] ?: ['Forge']
+
+def cfGameVersions = stringListProperty('curseforge_game_versions', [propertyString('minecraft_version')])
+def cfModLoaders = stringListProperty('curseforge_mod_loaders', cfDefaultModLoaders)
+def cfJavaVersions = stringListProperty('curseforge_java_versions', [])
+def cfRequiredRelations = stringListProperty('curseforge_relations_required', [])
+def cfOptionalRelations = stringListProperty('curseforge_relations_optional', [])
+def cfIncompatibleRelations = stringListProperty('curseforge_relations_incompatible', [])
+def cfDebugMode = project.findProperty('curseforge_debug')?.toString()?.toBoolean() ?: false
+
+def cfReleaseType = project.findProperty('release_type')?.toString()?.trim()?.toLowerCase()
+if (!cfReleaseType) {
+    def version = cfModVersion.toLowerCase()
+    cfReleaseType = version.contains('alpha') ? 'alpha' :
+            (version.contains('beta') || version.contains('pre') || version.contains('rc') ? 'beta' : 'release')
+}
+if (!['alpha', 'beta', 'release'].contains(cfReleaseType)) {
+    throw new GradleException("release_type must be one of alpha, beta, release: ${cfReleaseType}")
+}
+
+def cfChangelogProperty = project.findProperty('curseforge_changelog_file')?.toString()?.trim()
+def cfChangelogFile = cfChangelogProperty ? file(cfChangelogProperty) : null
+if (cfChangelogFile != null && !cfChangelogFile.isFile()) {
+    throw new GradleException("curseforge_changelog_file does not exist: ${cfChangelogFile}")
+}
+
+tasks.register('publishCurseForge', TaskPublishCurseForge) {
+    dependsOn cfArchiveTask
+
+    group = 'publishing'
+    description = "Uploads ${propertyString('mod_name')} ${cfModVersion} for Minecraft " +
+            "${propertyString('minecraft_version')} to CurseForge project ${cfProjectId}."
+
+    apiToken = providers.environmentVariable('CURSEFORGE_TOKEN')
+    debugMode = cfDebugMode
+    // Automatic detection reports a single loader, but the metadata below is explicit.
+    disableVersionDetection()
+
+    def artifact = upload(cfProjectId, cfArchiveTask)
+    artifact.releaseType = cfReleaseType
+    artifact.changelogType = 'markdown'
+    if (cfChangelogFile != null) {
+        artifact.changelog = cfChangelogFile
+    }
+    artifact.addGameVersion(*cfGameVersions)
+    artifact.addModLoader(*cfModLoaders)
+    artifact.addEnvironment('Client', 'Server')
+
+    if (!cfJavaVersions.isEmpty()) {
+        artifact.addJavaVersion(*cfJavaVersions)
+    }
+    if (!cfRequiredRelations.isEmpty()) {
+        artifact.addRequirement(*cfRequiredRelations)
+    }
+    if (!cfOptionalRelations.isEmpty()) {
+        artifact.addOptional(*cfOptionalRelations)
+    }
+    if (!cfIncompatibleRelations.isEmpty()) {
+        artifact.addIncompatibility(*cfIncompatibleRelations)
+    }
+
+    doFirst {
+        if (!providers.environmentVariable('CURSEFORGE_TOKEN').isPresent()) {
+            throw new GradleException('CURSEFORGE_TOKEN is required to publish to CurseForge.')
+        }
+    }
+}

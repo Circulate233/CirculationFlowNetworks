@@ -9,7 +9,6 @@ import java.math.RoundingMode;
 public final class EnergyAmountConversionUtils {
 
     private static final BigDecimal DOUBLE_MAX = BigDecimal.valueOf(Double.MAX_VALUE);
-    private static final BigDecimal NEGATIVE_DOUBLE_MAX = DOUBLE_MAX.negate();
     private static final BigInteger POSITIVE_UNBOUNDED = DOUBLE_MAX.toBigInteger().shiftLeft(8);
     private static final BigInteger NEGATIVE_UNBOUNDED = POSITIVE_UNBOUNDED.negate();
 
@@ -53,13 +52,7 @@ public final class EnergyAmountConversionUtils {
         if (amount.fitsLong()) {
             return amount.asLongExact();
         }
-        BigDecimal value = new BigDecimal(amount.asBigInteger());
-        if (value.compareTo(DOUBLE_MAX) > 0) {
-            return Double.MAX_VALUE;
-        }
-        if (value.compareTo(NEGATIVE_DOUBLE_MAX) < 0) {
-            return -Double.MAX_VALUE;
-        }
-        return value.doubleValue();
+        double d = amount.asBigInteger().doubleValue();
+        return Double.isInfinite(d) ? Math.copySign(Double.MAX_VALUE, d) : d;
     }
 }

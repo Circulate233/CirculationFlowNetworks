@@ -39,9 +39,6 @@ public abstract class MixinBlockEntity implements CFNBlockEntityEx {
     private int cfn$energyPriority;
 
     @Shadow
-    public abstract World getWorld();
-
-    @Shadow
     public abstract BlockPos getPos();
 
     @Shadow
@@ -49,6 +46,8 @@ public abstract class MixinBlockEntity implements CFNBlockEntityEx {
 
     @Shadow
     public abstract void markDirty();
+
+    @Shadow protected World world;
 
     @Inject(
         method = "create(Lnet/minecraft/world/World;Lnet/minecraft/nbt/NBTTagCompound;)Lnet/minecraft/tileentity/TileEntity;",
@@ -67,16 +66,12 @@ public abstract class MixinBlockEntity implements CFNBlockEntityEx {
     @Override
     @Unique
     public World cfn_getWorld() {
-        return getWorld();
+        return world;
     }
 
     @Override
     @Unique
     public int cfn_getDimensionId() {
-        var world = getWorld();
-        if (world == null) {
-            throw new IllegalStateException("Cannot resolve dimension for a block entity without a world");
-        }
         return world.provider.getDimension();
     }
 
