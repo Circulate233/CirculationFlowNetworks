@@ -40,9 +40,6 @@ public abstract class MixinBlockEntity implements CFNBlockEntityEx {
     private int cfn$energyPriority;
 
     @Shadow
-    public abstract Level getLevel();
-
-    @Shadow
     public abstract BlockPos getBlockPos();
 
     @Shadow
@@ -50,6 +47,8 @@ public abstract class MixinBlockEntity implements CFNBlockEntityEx {
 
     @Shadow
     public abstract void setChanged();
+
+    @Shadow @org.jspecify.annotations.Nullable protected Level level;
 
     @Inject(method = "saveAdditional", at = @At("TAIL"), require = 1)
     private void cfn$saveEnergyPriority(ValueOutput output, CallbackInfo callback) {
@@ -66,17 +65,13 @@ public abstract class MixinBlockEntity implements CFNBlockEntityEx {
     @Override
     @Unique
     public Level cfn_getWorld() {
-        return getLevel();
+        return level;
     }
 
     @Override
     @Unique
     public int cfn_getDimensionId() {
-        Level world = getLevel();
-        if (world == null) {
-            throw new IllegalStateException("Cannot resolve dimension for a block entity without a world");
-        }
-        return world.dimension().identifier().hashCode();
+        return level.dimension().identifier().hashCode();
     }
 
     @Override

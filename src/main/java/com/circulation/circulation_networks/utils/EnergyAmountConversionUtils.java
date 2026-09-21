@@ -42,13 +42,7 @@ public final class EnergyAmountConversionUtils {
         if (amount.fitsLong()) {
             return amount.asLongExact();
         }
-        BigDecimal value = new BigDecimal(amount.asBigInteger());
-        if (value.compareTo(DOUBLE_MAX) > 0) {
-            return Double.MAX_VALUE;
-        }
-        if (value.compareTo(NEGATIVE_DOUBLE_MAX) < 0) {
-            return -Double.MAX_VALUE;
-        }
-        return value.doubleValue();
+        double d = amount.asBigInteger().doubleValue();
+        return Double.isInfinite(d) ? Math.copySign(Double.MAX_VALUE, d) : d;
     }
 }

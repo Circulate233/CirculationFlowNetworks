@@ -1,3 +1,4 @@
+import net.darkhax.curseforgegradle.TaskPublishCurseForge
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.jvm.toolchain.JvmVendorSpec
 import java.io.File
@@ -6,6 +7,7 @@ plugins {
     java
     `java-library`
     id("net.neoforged.moddev") version "2.0.141" apply false
+    id("net.darkhax.curseforgegradle") version "1.3.33" apply false
 }
 
 fun requiredString(name: String): String =
@@ -13,6 +15,14 @@ fun requiredString(name: String): String =
 
 fun optionalInt(name: String): Int? =
     findProperty(name)?.toString()?.toInt()
+
+// Comma separated because entries such as "Java 25" contain spaces.
+fun optionalStringList(name: String, fallback: List<String> = emptyList()): List<String> =
+    (findProperty(name)?.toString() ?: "")
+        .split(',')
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .ifEmpty { fallback }
 
 fun File.collectPngResourceNames(): List<String> {
     if (!exists()) {
@@ -253,6 +263,69 @@ if (isVersionProject) {
         exclude("mcmod.info", "META-INF/mods.toml")
         filesMatching(listOf("pack.mcmeta", "META-INF/neoforge.mods.toml", mixinConfigFile)) {
             expand(expansionMap)
+        }
+    }
+
+    // CurseForge publishing. Opt-in: this only reaches the network when invoked as
+    // ./gradlew :<mc version>:publishCurseForge with CURSEFORGE_TOKEN set.
+    // Everything it uploads comes from versions/<mc version>/gradle.properties.
+    tasks.register<TaskPublishCurseForge>("publishCurseForge") {
+        group = "publishing"
+        description = "Uploads $modName $modVersion for Minecraft $minecraftVersion to CurseForge."
+
+        val releaseJar = project.tasks.named<Jar>("jar")
+        val curseforgeProjectId = requiredString("curseforge_project_id")
+        val gameVersions = optionalStringList("curseforge_game_versions", listOf(minecraftVersion))
+        val modLoaders = optionalStringList("curseforge_mod_loaders", listOf("NeoForge"))
+        val javaVersions = optionalStringList("curseforge_java_versions")
+        val requiredRelations = optionalStringList("curseforge_relations_required")
+        val optionalRelations = optionalStringList("curseforge_relations_optional")
+        val incompatibleRelations = optionalStringList("curseforge_relations_incompatible")
+
+        val declaredReleaseType = findProperty("release_type")?.toString()?.trim()?.lowercase().orEmpty()
+        val releaseType = declaredReleaseType.ifEmpty {
+            when {
+                modVersion.contains("alpha", ignoreCase = true) -> "alpha"
+                modVersion.contains("beta", ignoreCase = true) ||
+                    modVersion.contains("pre", ignoreCase = true) ||
+                    modVersion.contains("rc", ignoreCase = true) -> "beta"
+                else -> "release"
+            }
+        }
+        if (releaseType !in listOf("alpha", "beta", "release")) {
+            throw GradleException("release_type must be one of alpha, beta, release: $releaseType")
+        }
+
+        val changelogPath = findProperty("curseforge_changelog_file")?.toString()?.trim()
+        val changelogFile = changelogPath?.takeIf { it.isNotEmpty() }?.let { project.file(it) }
+        if (changelogFile != null && !changelogFile.isFile) {
+            throw GradleException("curseforge_changelog_file does not exist: $changelogFile")
+        }
+
+        dependsOn(releaseJar)
+        apiToken = project.providers.environmentVariable("CURSEFORGE_TOKEN")
+        debugMode = findProperty("curseforge_debug")?.toString()?.toBoolean() ?: false
+        // Every value below is declared here, so the plugin must not guess any of them.
+        disableVersionDetection()
+
+        val artifact = upload(curseforgeProjectId, releaseJar.get())
+        artifact.releaseType = releaseType
+        artifact.changelogType = "markdown"
+        if (changelogFile != null) {
+            artifact.changelog = changelogFile
+        }
+        gameVersions.forEach { artifact.addGameVersion(it) }
+        modLoaders.forEach { artifact.addModLoader(it) }
+        javaVersions.forEach { artifact.addJavaVersion(it) }
+        artifact.addEnvironment("Client", "Server")
+        requiredRelations.forEach { artifact.addRequirement(it) }
+        optionalRelations.forEach { artifact.addOptional(it) }
+        incompatibleRelations.forEach { artifact.addIncompatibility(it) }
+
+        doFirst {
+            if (!project.providers.environmentVariable("CURSEFORGE_TOKEN").isPresent) {
+                throw GradleException("CURSEFORGE_TOKEN is required to publish to CurseForge.")
+            }
         }
     }
 }
