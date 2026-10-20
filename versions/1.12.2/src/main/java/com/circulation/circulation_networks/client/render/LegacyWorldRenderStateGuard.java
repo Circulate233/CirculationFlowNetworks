@@ -24,6 +24,9 @@ import java.nio.IntBuffer;
 public final class LegacyWorldRenderStateGuard implements AutoCloseable {
 
     private static final int GL_CURRENT_PROGRAM = 35725;
+    private static final int GL_CONTEXT_PROFILE_MASK = 37158;
+    private static final int GL_CONTEXT_CORE_PROFILE_BIT = 1;
+    private static final int GL_CONTEXT_COMPATIBILITY_PROFILE_BIT = 2;
     private static final int GL_VERTEX_ARRAY_BINDING = 34229;
     private static final int GL_ARRAY_BUFFER_BINDING = 34964;
     private static final int GL_BLEND_EQUATION_RGB = 32777;
@@ -169,10 +172,10 @@ public final class LegacyWorldRenderStateGuard implements AutoCloseable {
         vaoSupported = capabilities.OpenGL30 || capabilities.GL_ARB_vertex_array_object;
         vboSupported = OpenGlHelper.vboSupported;
         if (profile.strongTextureIsolation) {
-            maxFixedFunctionTextureUnits = GL11.glGetInteger(GL13.GL_MAX_TEXTURE_UNITS);
+            maxFixedFunctionTextureUnits = getFixedFunctionTextureUnitCount(capabilities);
             if (maxFixedFunctionTextureUnits < 2) {
-                throw new IllegalStateException(lifecycle.passName() + " requires at least two fixed-function texture units, found "
-                    + maxFixedFunctionTextureUnits);
+                throw new IllegalStateException(lifecycle.passName()
+                    + " requires at least two texture units, found " + maxFixedFunctionTextureUnits);
             }
             ensureStrongTextureStateCapacity(maxFixedFunctionTextureUnits);
         }
@@ -254,6 +257,18 @@ public final class LegacyWorldRenderStateGuard implements AutoCloseable {
         if (profile.strongTextureIsolation && !profile.strongEntryScanCompleted) {
             detectAndLogUnexpectedTextureState();
         }
+    }
+
+    private static int getFixedFunctionTextureUnitCount(ContextCapabilities capabilities) {
+        if (capabilities.OpenGL32) {
+            int profileMask = GL11.glGetInteger(GL_CONTEXT_PROFILE_MASK);
+            if ((profileMask & GL_CONTEXT_CORE_PROFILE_BIT) != 0
+                && (profileMask & GL_CONTEXT_COMPATIBILITY_PROFILE_BIT) == 0) {
+                int combinedTextureUnits = GL11.glGetInteger(GL20.GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS);
+                return Math.min(combinedTextureUnits, MINECRAFT_TEXTURE_UNIT_COUNT);
+            }
+        }
+        return GL11.glGetInteger(GL13.GL_MAX_TEXTURE_UNITS);
     }
 
     public static LegacyWorldRenderStateGuard openHubPass(String passName) {
