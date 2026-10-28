@@ -4,10 +4,10 @@ import com.circulation.circulation_networks.tooltip.LocalizedComponent;
 import com.mojang.blaze3d.systems.RenderSystem;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.ObjectList;
+import it.unimi.dsi.fastutil.objects.ObjectLists;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -95,7 +95,7 @@ public final class ComponentScreenController {
             }
             return component.collectTooltip(mouseX, mouseY);
         }
-        return Collections.emptyList();
+        return ObjectLists.emptyList();
     }
 
     @Nullable
@@ -130,7 +130,7 @@ public final class ComponentScreenController {
         List<Component> all = new ObjectArrayList<>();
         RenderPhase[] phases = RenderPhase.VALUES;
         for (RenderPhase phase : phases) {
-            List<Component> list = phaseMap.getOrDefault(phase, Collections.emptyList());
+            List<Component> list = phaseMap.getOrDefault(phase, ObjectLists.emptyList());
             if (list.isEmpty()) {
                 phaseComponents[phase.ordinal()] = EMPTY;
             } else {
@@ -239,11 +239,11 @@ public final class ComponentScreenController {
 
     public List<String> collectTooltip(int mouseX, int mouseY) {
         if (allComponentsTopFirst.length == 0) {
-            return Collections.emptyList();
+            return ObjectLists.emptyList();
         }
         var list = collectTopTooltip(allComponentsTopFirst, mouseX, mouseY);
         if (list.isEmpty()) {
-            return Collections.emptyList();
+            return ObjectLists.emptyList();
         }
         var n = new ObjectArrayList<String>();
         for (var s : list) {

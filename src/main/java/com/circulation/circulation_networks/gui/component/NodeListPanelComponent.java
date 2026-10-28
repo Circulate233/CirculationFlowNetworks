@@ -18,6 +18,7 @@ import com.circulation.circulation_networks.utils.FormatNumberUtils;
 import com.circulation.circulation_networks.utils.WorldResolveCompat;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.objects.ObjectLists;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.resources.language.I18n;
@@ -29,7 +30,6 @@ import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.lwjgl.glfw.GLFW;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -134,7 +134,7 @@ public final class NodeListPanelComponent extends DraggableComponent implements 
             protected @NotNull List<LocalizedComponent> getTooltip(int mouseX, int mouseY) {
                 int hitSlot = getIconVisibleSlot(mouseX, mouseY);
                 if (hitSlot >= 0) {
-                    return Collections.singletonList(
+                    return ObjectLists.singleton(
                         () -> I18n.get("tooltip.circulation_networks.double_click_locate")
                     );
                 }
@@ -376,7 +376,7 @@ public final class NodeListPanelComponent extends DraggableComponent implements 
 
     private List<NodeSnapshotEntry> getEntries() {
         NodeSnapshotList list = container.nodes;
-        return list == null ? Collections.emptyList() : list.getEntries();
+        return list == null ? ObjectLists.emptyList() : list.getEntries();
     }
 
     private void syncVisibleNameFields() {

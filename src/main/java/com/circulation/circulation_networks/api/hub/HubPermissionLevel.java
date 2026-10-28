@@ -6,8 +6,10 @@ public enum HubPermissionLevel {
     ADMIN,
     OWNER;
 
+    private static final HubPermissionLevel[] VALUES = values();
+
     public static HubPermissionLevel fromId(int id) {
-        return HubPermissionLevel.values()[Math.floorMod(id, HubPermissionLevel.values().length)];
+        return VALUES[Math.floorMod(id, VALUES.length)];
     }
 
     public int getId() {

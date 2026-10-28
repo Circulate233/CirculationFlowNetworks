@@ -26,6 +26,7 @@ import com.circulation.circulation_networks.utils.HubTeamServices;
 import com.circulation.circulation_networks.utils.Packet;
 import dev.ftb.mods.ftbteams.api.FTBTeamsAPI;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import it.unimi.dsi.fastutil.objects.ObjectLists;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.NameAndId;
 import net.minecraft.world.entity.player.Player;
@@ -53,7 +54,6 @@ import net.neoforged.neoforge.server.ServerLifecycleHooks;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -121,7 +121,7 @@ public final class CirculationFlowNetworks {
             public List<PlayerIdentity> getOnlinePlayers() {
                 var server = ServerLifecycleHooks.getCurrentServer();
                 if (server == null) {
-                    return Collections.emptyList();
+                    return ObjectLists.emptyList();
                 }
                 List<PlayerIdentity> players = new ObjectArrayList<>();
                 for (ServerPlayer player : server.getPlayerList().getPlayers()) {

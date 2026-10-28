@@ -3,6 +3,7 @@ package com.circulation.circulation_networks.api.hub;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import it.unimi.dsi.fastutil.objects.ObjectLists;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -10,13 +11,12 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
 public final class PermissionSnapshotList {
 
-    public static final PermissionSnapshotList EMPTY = new PermissionSnapshotList(Collections.emptyList());
+    public static final PermissionSnapshotList EMPTY = new PermissionSnapshotList(ObjectLists.emptyList());
     private static final Gson GSON = new GsonBuilder().create();
     public static final String EMPTY_JSON = EMPTY.toJson();
 
@@ -26,8 +26,8 @@ public final class PermissionSnapshotList {
 
     public PermissionSnapshotList(List<PermissionSnapshotEntry> entries) {
         this.entries = entries.isEmpty()
-            ? Collections.emptyList()
-            : Collections.unmodifiableList(new ObjectArrayList<>(entries));
+            ? ObjectLists.emptyList()
+            : ObjectLists.unmodifiable(new ObjectArrayList<>(entries));
     }
 
     public static PermissionSnapshotList fromJson(String json) {

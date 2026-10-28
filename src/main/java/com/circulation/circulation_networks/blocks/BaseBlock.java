@@ -5,6 +5,7 @@ import com.circulation.circulation_networks.manager.PocketNodeManager;
 import com.circulation.circulation_networks.registry.CFNItems;
 import com.circulation.circulation_networks.tooltip.LocalizedComponent;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import it.unimi.dsi.fastutil.objects.ObjectLists;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
@@ -24,7 +25,6 @@ import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.Collections;
 import java.util.List;
 
 public abstract class BaseBlock extends Block implements EntityBlock {
@@ -49,7 +49,7 @@ public abstract class BaseBlock extends Block implements EntityBlock {
 
     @Override
     protected @NotNull List<ItemStack> getDrops(@NotNull BlockState state, LootParams.@NotNull Builder builder) {
-        return Collections.singletonList(new ItemStack(this));
+        return ObjectLists.singleton(new ItemStack(this));
     }
 
     @Override

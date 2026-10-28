@@ -7,6 +7,7 @@ import com.circulation.circulation_networks.registry.PocketNodeItems;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import it.unimi.dsi.fastutil.objects.ObjectLists;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
@@ -21,13 +22,12 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
 public final class NodeSnapshotList {
 
-    public static final NodeSnapshotList EMPTY = new NodeSnapshotList(Collections.emptyList());
+    public static final NodeSnapshotList EMPTY = new NodeSnapshotList(ObjectLists.emptyList());
     private static final Gson GSON = new GsonBuilder().create();
     public static final String EMPTY_JSON = EMPTY.toJson();
 
@@ -37,8 +37,8 @@ public final class NodeSnapshotList {
 
     public NodeSnapshotList(List<NodeSnapshotEntry> entries) {
         this.entries = entries.isEmpty()
-            ? Collections.emptyList()
-            : Collections.unmodifiableList(new ObjectArrayList<>(entries));
+            ? ObjectLists.emptyList()
+            : ObjectLists.unmodifiable(new ObjectArrayList<>(entries));
     }
 
     public static NodeSnapshotList fromJson(String json) {

@@ -28,6 +28,8 @@ import java.util.List;
 
 public final class RotatingModelVBORenderer {
 
+    private static final Direction[] DIRECTIONS = Direction.values();
+
     private static final Quaternionf ROTATION = new Quaternionf();
     private static final QuadInstance FULL_BRIGHT_QUAD = new QuadInstance();
     private static final RenderType WORLD_CUTOUT_RENDER_TYPE = Sheets.cutoutBlockSheet();
@@ -285,7 +287,7 @@ public final class RotatingModelVBORenderer {
     private static void renderFullBrightModel(PoseStack.Pose pose, VertexConsumer buffer, List<BlockStateModelPart> parts, boolean translucentPass) {
         for (BlockStateModelPart part : parts) {
             emitFullBrightQuads(pose, buffer, part.getQuads(null), translucentPass);
-            for (Direction direction : Direction.values()) {
+            for (Direction direction : DIRECTIONS) {
                 emitFullBrightQuads(pose, buffer, part.getQuads(direction), translucentPass);
             }
         }
@@ -303,7 +305,7 @@ public final class RotatingModelVBORenderer {
         litQuad.setLightCoords(lightCoords);
         for (BlockStateModelPart part : parts) {
             emitLitQuads(pose, buffer, part.getQuads(null), litQuad, translucentPass);
-            for (Direction direction : Direction.values()) {
+            for (Direction direction : DIRECTIONS) {
                 emitLitQuads(pose, buffer, part.getQuads(direction), litQuad, translucentPass);
             }
         }

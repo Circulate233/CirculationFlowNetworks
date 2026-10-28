@@ -2,9 +2,9 @@ package com.circulation.circulation_networks.gui.component.base;
 
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.ObjectList;
+import it.unimi.dsi.fastutil.objects.ObjectLists;
 import net.neoforged.bus.api.Event;
 
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -35,6 +35,6 @@ public final class RegisterComponentSpritesEvent extends Event {
      * Returns an unmodifiable view of all registered sprite names.
      */
     public List<String> getSprites() {
-        return Collections.unmodifiableList(sprites);
+        return ObjectLists.unmodifiable(sprites);
     }
 }

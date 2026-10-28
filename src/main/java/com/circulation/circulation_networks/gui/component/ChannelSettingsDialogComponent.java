@@ -16,12 +16,12 @@ import com.circulation.circulation_networks.packets.UpdateHubChannelSettings;
 import com.circulation.circulation_networks.tooltip.LocalizedComponent;
 import com.circulation.circulation_networks.utils.CI18n;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import it.unimi.dsi.fastutil.objects.ObjectLists;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import org.jetbrains.annotations.NotNull;
 import org.lwjgl.glfw.GLFW;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -361,17 +361,17 @@ public final class ChannelSettingsDialogComponent extends DraggableComponent {
         @Override
         protected @NotNull List<LocalizedComponent> getTooltip(int mouseX, int mouseY) {
             if (mode == DialogMode.CREATE) {
-                return Collections.singletonList(() -> CI18n.format("gui.channel_settings.tooltip.create"));
+                return ObjectLists.singleton(() -> CI18n.format("gui.channel_settings.tooltip.create"));
             }
 
             HubPermissionLevel permission = getCurrentUserPermission();
             if (!container.hasChannelManagementOverride() && permission != HubPermissionLevel.OWNER) {
-                return Collections.singletonList(() -> CI18n.format("gui.channel_settings.tooltip.delete.owner_only"));
+                return ObjectLists.singleton(() -> CI18n.format("gui.channel_settings.tooltip.delete.owner_only"));
             }
             if (deleteShiftProgress < DELETE_SHIFT_REQUIREMENT) {
-                return Collections.singletonList(() -> CI18n.format("gui.channel_settings.tooltip.delete.shift_required", deleteShiftProgress, DELETE_SHIFT_REQUIREMENT));
+                return ObjectLists.singleton(() -> CI18n.format("gui.channel_settings.tooltip.delete.shift_required", deleteShiftProgress, DELETE_SHIFT_REQUIREMENT));
             }
-            return Collections.singletonList(() -> CI18n.format("gui.channel_settings.tooltip.delete.ready"));
+            return ObjectLists.singleton(() -> CI18n.format("gui.channel_settings.tooltip.delete.ready"));
         }
 
         private String[] resolveSprites(String base) {

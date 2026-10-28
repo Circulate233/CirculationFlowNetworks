@@ -29,6 +29,7 @@ import it.unimi.dsi.fastutil.longs.LongSets;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMaps;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.objects.ObjectArrayFIFOQueue;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.ObjectList;
 import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
@@ -51,10 +52,8 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.List;
-import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -194,11 +193,11 @@ public final class NetworkManager {
         INode candidate,
         ReferenceSet<INode> remaining,
         ReferenceSet<INode> component,
-        Queue<INode> queue
+        ObjectArrayFIFOQueue<INode> queue
     ) {
         if (candidate != null && remaining.remove(candidate)) {
             component.add(candidate);
-            queue.add(candidate);
+            queue.enqueue(candidate);
         }
     }
 
@@ -524,14 +523,14 @@ public final class NetworkManager {
 
             while (!remaining.isEmpty()) {
                 ReferenceSet<INode> component = new ReferenceOpenHashSet<>();
-                Queue<INode> queue = new ArrayDeque<>();
+                ObjectArrayFIFOQueue<INode> queue = new ObjectArrayFIFOQueue<>();
                 INode seed = remaining.iterator().next();
-                queue.add(seed);
+                queue.enqueue(seed);
                 component.add(seed);
                 remaining.remove(seed);
 
                 while (!queue.isEmpty()) {
-                    INode curr = queue.poll();
+                    INode curr = queue.dequeue();
                     for (INode nb : curr.getNeighbors()) {
                         enqueueComponentNeighbor(nb, remaining, component, queue);
                     }

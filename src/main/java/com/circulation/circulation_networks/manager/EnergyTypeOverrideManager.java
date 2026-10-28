@@ -26,6 +26,8 @@ import static com.circulation.circulation_networks.utils.WorldResolveCompat.isCl
 
 public final class EnergyTypeOverrideManager {
 
+    private static final IEnergyHandler.EnergyType[] ENERGY_TYPES = IEnergyHandler.EnergyType.values();
+
     private static volatile EnergyTypeOverrideManager INSTANCE;
 
     private final Object2ObjectMap<String, Long2ObjectMap<IEnergyHandler.EnergyType>> overrides = new Object2ObjectOpenHashMap<>();
@@ -165,9 +167,8 @@ public final class EnergyTypeOverrideManager {
                     CompoundTag entry = NbtCompat.getCompoundOrEmpty(entries, j);
                     long pos = NbtCompat.getLongOr(entry, "pos", 0L);
                     int type = NbtCompat.getIntOr(entry, "type", -1);
-                    var values = IEnergyHandler.EnergyType.values();
-                    if (type >= 0 && type < values.length) {
-                        dimMap.put(pos, values[type]);
+                    if (type >= 0 && type < ENERGY_TYPES.length) {
+                        dimMap.put(pos, ENERGY_TYPES[type]);
                     }
                 }
                 if (!dimMap.isEmpty()) overrides.put(dim, dimMap);

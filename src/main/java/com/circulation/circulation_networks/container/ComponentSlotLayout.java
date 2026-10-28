@@ -2,10 +2,10 @@ package com.circulation.circulation_networks.container;
 
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.ObjectList;
+import it.unimi.dsi.fastutil.objects.ObjectLists;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Inventory;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -84,7 +84,7 @@ public class ComponentSlotLayout {
     }
 
     public List<ComponentSlot> getSlots() {
-        return Collections.unmodifiableList(slots);
+        return ObjectLists.unmodifiable(slots);
     }
 
     @FunctionalInterface

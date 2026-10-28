@@ -1,5 +1,7 @@
 package com.circulation.circulation_networks.utils;
 
+import it.unimi.dsi.fastutil.objects.ObjectLists;
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
@@ -16,7 +18,6 @@ import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Path;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -104,7 +105,7 @@ public final class WorldResolveCompat {
     public static Collection<BlockEntity> getLoadedChunkBlockEntities(Level world, int chunkX, int chunkZ) {
         var chunk = world.getChunkSource().getChunkNow(chunkX, chunkZ);
         if (chunk == null) {
-            return Collections.emptyList();
+            return ObjectLists.emptyList();
         }
         return chunk.getBlockEntities().values();
     }

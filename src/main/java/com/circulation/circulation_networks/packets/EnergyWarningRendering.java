@@ -92,9 +92,10 @@ public final class EnergyWarningRendering implements Packet<EnergyWarningRenderi
         buf.writeBytes(dimensionBytes);
         buf.writeLong(sessionGeneration);
         buf.writeLong(revision);
-        buf.writeInt(positions.size());
-        for (long posLong : positions) {
-            buf.writeLong(posLong);
+        int count = positions.size();
+        buf.writeInt(count);
+        for (int index = 0; index < count; index++) {
+            buf.writeLong(positions.getLong(index));
         }
     }
 

@@ -18,10 +18,12 @@ import com.circulation.circulation_networks.network.hub.HubChannel;
 import com.circulation.circulation_networks.network.nodes.HubNode;
 import com.circulation.circulation_networks.utils.HubPlatformServices;
 import com.circulation.circulation_networks.utils.NbtCompat;
+import it.unimi.dsi.fastutil.objects.Object2ObjectMaps;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2ReferenceMap;
 import it.unimi.dsi.fastutil.objects.Object2ReferenceOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import it.unimi.dsi.fastutil.objects.ObjectLists;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
@@ -33,7 +35,6 @@ import org.jetbrains.annotations.Nullable;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -233,7 +234,7 @@ public final class HubChannelManager {
 
     public List<HubChannel> getChannels() {
         ensureLoaded();
-        return Collections.unmodifiableList(new ObjectArrayList<>(channels.values()));
+        return ObjectLists.unmodifiable(new ObjectArrayList<>(channels.values()));
     }
 
     public ChannelSnapshotList getAccessibleChannelSnapshots(UUID playerId, @Nullable UUID connectedChannelId) {
@@ -344,7 +345,7 @@ public final class HubChannelManager {
             normalizedName,
             playerId,
             permissionMode != null ? permissionMode : PermissionMode.PRIVATE,
-            Collections.emptyMap()
+            Object2ObjectMaps.emptyMap()
         );
         channels.put(channel.getChannelId(), channel);
         applyChannelToHub(hub, channel);
@@ -692,7 +693,7 @@ public final class HubChannelManager {
                     if (channelNbt.contains("ownerUUID")) {
                         owner = UUID.fromString(NbtCompat.getStringOr(channelNbt, "ownerUUID", ""));
                     }
-                    HubChannel channel = new HubChannel(channelId, name, owner, permissionMode, Collections.emptyMap());
+                    HubChannel channel = new HubChannel(channelId, name, owner, permissionMode, Object2ObjectMaps.emptyMap());
                     if (channelNbt.contains("permissions")) {
                         ListTag permissionList = NbtCompat.getListOrEmpty(channelNbt, "permissions");
                         for (int j = 0; j < permissionList.size(); j++) {

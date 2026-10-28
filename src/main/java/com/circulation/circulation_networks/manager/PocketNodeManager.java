@@ -42,6 +42,8 @@ import static com.circulation.circulation_networks.utils.WorldResolveCompat.isCl
 @SuppressWarnings("resource")
 public final class PocketNodeManager {
 
+    private static final Direction[] DIRECTIONS = Direction.values();
+
     public static final PocketNodeManager INSTANCE = new PocketNodeManager();
     private final Object2ObjectMap<String, Long2ObjectMap<PocketNodeHost>> activeHosts = new Object2ObjectOpenHashMap<>();
     private final PocketNodePendingIndex pendingHosts = new PocketNodePendingIndex();
@@ -121,7 +123,7 @@ public final class PocketNodeManager {
         if (world == null || !Functions.isChunkLoaded(world, pos)) {
             return null;
         }
-        for (Direction face : Direction.values()) {
+        for (Direction face : DIRECTIONS) {
             BlockPos adjacentPos = pos.relative(face);
             if (!Functions.isChunkLoaded(world, adjacentPos)) {
                 continue;

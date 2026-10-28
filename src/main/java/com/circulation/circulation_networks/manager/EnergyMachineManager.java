@@ -1,27 +1,28 @@
 package com.circulation.circulation_networks.manager;
 
 import com.circulation.circulation_networks.CirculationFlowNetworks;
+import com.circulation.circulation_networks.api.CFNBlockEntityEx;
 import com.circulation.circulation_networks.api.EnergyAmount;
 import com.circulation.circulation_networks.api.EnergyAmounts;
-import com.circulation.circulation_networks.api.CFNBlockEntityEx;
 import com.circulation.circulation_networks.api.IEnergyHandler;
 import com.circulation.circulation_networks.api.IEnergyHandlerManager;
 import com.circulation.circulation_networks.api.IGrid;
 import com.circulation.circulation_networks.api.IMachineNodeBlockEntity;
 import com.circulation.circulation_networks.api.node.IEnergySupplyNode;
-import com.circulation.circulation_networks.api.node.INode;
 import com.circulation.circulation_networks.api.node.IHubNode;
+import com.circulation.circulation_networks.api.node.INode;
 import com.circulation.circulation_networks.events.BlockEntityLifeCycleEvent;
-import com.circulation.circulation_networks.packets.NodeNetworkRendering;
-import com.circulation.circulation_networks.packets.EnergyWarningRendering;
 import com.circulation.circulation_networks.network.nodes.HubNode;
+import com.circulation.circulation_networks.packets.EnergyWarningRendering;
+import com.circulation.circulation_networks.packets.NodeNetworkRendering;
 import com.circulation.circulation_networks.utils.ChunkCoordUtils;
+import com.circulation.circulation_networks.utils.HubPlatformServices;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
-import it.unimi.dsi.fastutil.longs.LongCollection;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMaps;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongCollection;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import it.unimi.dsi.fastutil.longs.LongSets;
@@ -40,19 +41,21 @@ import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSet;
 import it.unimi.dsi.fastutil.objects.ReferenceSets;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.Level;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
-import net.neoforged.neoforge.server.ServerLifecycleHooks;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.Level;
+import net.neoforged.neoforge.server.ServerLifecycleHooks;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
-import net.minecraft.server.MinecraftServer;
 import static com.circulation.circulation_networks.utils.SideCompat.isClientWorld;
 
 public final class EnergyMachineManager {
@@ -70,7 +73,7 @@ public final class EnergyMachineManager {
     }
 
     private static final long NODE_RESCAN_COOLDOWN_TICKS = 40L;
-    private static final long WARNING_RANGE_SYNC_INTERVAL_TICKS = 20L;
+    private static final long WARNING_RANGE_SYNC_INTERVAL_TICKS = 60L;
     private static final long WARNING_EVALUATION_INTERVAL_TICKS = 20L;
     private static final double WARNING_RENDER_DISTANCE_SQ = 48.0D * 48.0D;
     /**
@@ -105,7 +108,8 @@ public final class EnergyMachineManager {
     private final Int2ObjectMap<Long2ObjectMap<MachineRoute>> machineRoutesByPosition = new Int2ObjectOpenHashMap<>();
     private final Reference2LongMap<IEnergySupplyNode> nodeRescanTicks = new Reference2LongOpenHashMap<>();
     private final Object2ObjectMap<String, LongSet> warningPositionsScratch = new Object2ObjectOpenHashMap<>();
-    private final Object2ObjectMap<String, LongSet> warningObserverChunksScratch = new Object2ObjectOpenHashMap<>();
+    private final WarningObserverIndex warningObservers = new WarningObserverIndex(WARNING_OBSERVER_CHUNK_RADIUS);
+    private final Object2ObjectMap<String, LongSet> warningObserverChunksScratch = warningObservers.chunks();
     private final WarningSnapshotSynchronizer warningSnapshots =
         new WarningSnapshotSynchronizer(WARNING_RANGE_SYNC_INTERVAL_TICKS);
     private final ObjectOpenHashSet<UUID> onlineWarningPlayerIdsScratch = new ObjectOpenHashSet<>();
@@ -119,7 +123,7 @@ public final class EnergyMachineManager {
             @Override
             public void dehydrateUnloaded(int dimensionId,
                                           long chunkCoordinate,
-                                          Collection<MachinePositionRecord> records) {
+                                          List<MachinePositionRecord> records) {
                 dehydrateMachineChunk(dimensionId, records);
             }
 
@@ -134,7 +138,7 @@ public final class EnergyMachineManager {
     private final ObjectArrayList<LifecycleCommand> lifecycleDrain = new ObjectArrayList<>();
     private final ObjectArrayList<ObjectArrayList<CFNBlockEntityEx>> discoveryThrottleWheel =
         new ObjectArrayList<>(DISCOVERY_THROTTLE_WHEEL_SIZE);
-    private final ObjectArrayList<CFNBlockEntityEx> discoveryThrottleDrain = new ObjectArrayList<>();
+    private ObjectArrayList<CFNBlockEntityEx> discoveryThrottleDrain = new ObjectArrayList<>();
     private final Reference2LongMap<CFNBlockEntityEx> discoveryThrottleMembership =
         new Reference2LongOpenHashMap<>();
     private final ObjectArrayList<Runnable> deferredInteractionQueries = new ObjectArrayList<>();
@@ -148,6 +152,8 @@ public final class EnergyMachineManager {
     private final PriorityRoleCursor itemSendCursor = new PriorityRoleCursor();
     private final PriorityRoleCursor warningCursor = new PriorityRoleCursor();
     private long warningTickCounter;
+    private long warningPlayersVersion = Long.MIN_VALUE;
+    private int warningPlayerCount;
     private long warningSessionGeneration = 1L;
     private long interactionEpoch;
     private long transferPassId;
@@ -596,51 +602,38 @@ public final class EnergyMachineManager {
         discoveryThrottleMembership.put(blockEntity, packDiscoveryThrottleMembership(bucketIndex, entryIndex));
     }
 
-    void advanceDiscoveryThrottleWheel() {
-        if (!discoveryThrottleDrain.isEmpty()) {
-            throw new IllegalStateException("Discovery throttle expiry drain was not cleared");
-        }
-        discoveryThrottleWheelCursor++;
-        if (discoveryThrottleWheelCursor == DISCOVERY_THROTTLE_WHEEL_SIZE) {
-            discoveryThrottleWheelCursor = 0;
-        }
-        ObjectArrayList<CFNBlockEntityEx> bucket = discoveryThrottleWheel.get(discoveryThrottleWheelCursor);
-        int count = bucket.size();
-        if (count == 0) {
+    static void transferEnergy(PriorityRoleIndex send,
+                               ObjectArrayList<EnergyTransferParticipant> receive,
+                               Status status,
+                               long epoch) {
+        if (send.isEmpty() || receive.isEmpty()) {
             return;
         }
-        for (int index = 0; index < count; index++) {
-            CFNBlockEntityEx blockEntity = bucket.get(index);
-            if (blockEntity.cfn_getEnergyLastThrottleTimer() != 0) {
-                throw new IllegalStateException("Discovery throttle acquired an energy-budget backoff stage");
-            }
-            int timer = blockEntity.cfn_getEnergyThrottleTimer();
-            if (timer < MIN_DISCOVERY_THROTTLE_TIMER
-                || timer > CFNBlockEntityEx.MAX_STORED_ENERGY_THROTTLE_TIMER) {
-                throw new IllegalStateException("Discovery throttle bucket contains an invalid marker: " + timer);
-            }
-            long expectedMembership = packDiscoveryThrottleMembership(discoveryThrottleWheelCursor, index);
-            if (discoveryThrottleMembership.getLong(blockEntity) != expectedMembership) {
-                throw new IllegalStateException("Discovery throttle bucket membership is inconsistent");
-            }
-        }
-        discoveryThrottleDrain.addAll(bucket);
-        for (int index = 0; index < count; index++) {
-            CFNBlockEntityEx blockEntity = bucket.get(index);
-            long removed = discoveryThrottleMembership.removeLong(blockEntity);
-            long expectedMembership = packDiscoveryThrottleMembership(discoveryThrottleWheelCursor, index);
-            if (removed != expectedMembership) {
-                throw new IllegalStateException("Discovery throttle membership changed during expiry");
-            }
-            blockEntity.cfn_setEnergyThrottleTimer(0);
-        }
-        bucket.clear();
+        PriorityRoleCursor sendTraversal = INSTANCE.itemSendCursor;
+        sendTraversal.prepare(send);
         try {
-            for (int index = 0; index < count; index++) {
-                submitLifecycle(discoveryThrottleDrain.get(index), MachineLifecyclePositionIndex.Action.DISCOVERY_RETRY);
+            for (int index = 0, count = receive.size(); index < count; index++) {
+                EnergyTransferParticipant receiver = receive.get(index);
+                EnergyAmount receivable = receiver.canReceiveValue();
+                try {
+                    if (!receivable.isPositive()) {
+                        continue;
+                    }
+                    sendTraversal.reset();
+                    for (MachineTransferSlot sender = sendTraversal.next(); sender != null; sender = sendTraversal.next()) {
+                        if (!sender.isActive(epoch)
+                            || (sender.requiresPairMatch() || receiver.requiresPairMatch())
+                            && !(sender.canExtract(receiver) && receiver.canReceive(sender))) {
+                            continue;
+                        }
+                        transferToItem(sender, receiver, status, epoch);
+                    }
+                } finally {
+                    receivable.recycle();
+                }
             }
         } finally {
-            discoveryThrottleDrain.clear();
+            sendTraversal.close();
         }
     }
 
@@ -1313,34 +1306,51 @@ public final class EnergyMachineManager {
         machineChunkResidency.tick(machineChunkTransitions);
     }
 
-    private void dehydrateMachineChunk(int dimensionId, Collection<MachinePositionRecord> records) {
-        synchronized (lifecycleLock) {
-            for (MachinePositionRecord record : records) {
-                lifecyclePositions.releasePosition(dimensionId, record.packedPosition());
-                removeLifecycleCommandsAtPosition(lifecycleInbox, dimensionId, record.packedPosition());
-                removeLifecycleCommandsAtPosition(lifecycleDrain, dimensionId, record.packedPosition());
+    void advanceDiscoveryThrottleWheel() {
+        if (!discoveryThrottleDrain.isEmpty()) {
+            throw new IllegalStateException("Discovery throttle expiry drain was not cleared");
+        }
+        discoveryThrottleWheelCursor++;
+        if (discoveryThrottleWheelCursor == DISCOVERY_THROTTLE_WHEEL_SIZE) {
+            discoveryThrottleWheelCursor = 0;
+        }
+        ObjectArrayList<CFNBlockEntityEx> bucket = discoveryThrottleWheel.get(discoveryThrottleWheelCursor);
+        int count = bucket.size();
+        if (count == 0) {
+            return;
+        }
+        for (int index = 0; index < count; index++) {
+            CFNBlockEntityEx blockEntity = bucket.get(index);
+            if (blockEntity.cfn_getEnergyLastThrottleTimer() != 0) {
+                throw new IllegalStateException("Discovery throttle acquired an energy-budget backoff stage");
+            }
+            int timer = blockEntity.cfn_getEnergyThrottleTimer();
+            if (timer < MIN_DISCOVERY_THROTTLE_TIMER
+                || timer > CFNBlockEntityEx.MAX_STORED_ENERGY_THROTTLE_TIMER) {
+                throw new IllegalStateException("Discovery throttle bucket contains an invalid marker: " + timer);
+            }
+            long expectedMembership = packDiscoveryThrottleMembership(discoveryThrottleWheelCursor, index);
+            if (discoveryThrottleMembership.getLong(blockEntity) != expectedMembership) {
+                throw new IllegalStateException("Discovery throttle bucket membership is inconsistent");
             }
         }
-        Throwable failure = null;
-        Long2ObjectMap<MachineRoute> dimensionRoutes = machineRoutesByPosition.get(dimensionId);
-        for (MachinePositionRecord record : records) {
-            MachineRoute route = dimensionRoutes == null ? null : dimensionRoutes.get(record.packedPosition());
-            if (route == null) {
-                continue;
+        discoveryThrottleWheel.set(discoveryThrottleWheelCursor, discoveryThrottleDrain);
+        discoveryThrottleDrain = bucket;
+        for (int index = 0; index < count; index++) {
+            CFNBlockEntityEx blockEntity = bucket.get(index);
+            long removed = discoveryThrottleMembership.removeLong(blockEntity);
+            long expectedMembership = packDiscoveryThrottleMembership(discoveryThrottleWheelCursor, index);
+            if (removed != expectedMembership) {
+                throw new IllegalStateException("Discovery throttle membership changed during expiry");
             }
-            try {
-                removeMachine(route.tileEntity, false);
-            } catch (RuntimeException | Error exception) {
-                failure = aggregateFailure(failure, exception);
-            }
+            blockEntity.cfn_setEnergyThrottleTimer(0);
         }
-        if (failure != null) {
-            CirculationFlowNetworks.LOGGER.error(
-                "Failed to fully dehydrate machines in an unloaded chunk for dimension {}", dimensionId, failure
-            );
-            if (failure instanceof Error error) {
-                throw error;
+        try {
+            for (int index = 0; index < count; index++) {
+                submitLifecycle(discoveryThrottleDrain.get(index), MachineLifecyclePositionIndex.Action.DISCOVERY_RETRY);
             }
+        } finally {
+            discoveryThrottleDrain.clear();
         }
     }
 
@@ -1754,57 +1764,37 @@ public final class EnergyMachineManager {
         throwCleanupFailure(failure);
     }
 
-    public void onServerStop() {
-        EnergyHandlerRuntime.stopBindings();
-        ReferenceSet<CFNBlockEntityEx> runtimeOwners = new ReferenceOpenHashSet<>();
-        for (Long2ObjectMap<MachineRoute> routes : machineRoutesByPosition.values()) {
-            for (MachineRoute route : routes.values()) {
-                runtimeOwners.add(route.tileEntity);
+    private void dehydrateMachineChunk(int dimensionId, List<MachinePositionRecord> records) {
+        synchronized (lifecycleLock) {
+            for (int index = 0, count = records.size(); index < count; index++) {
+                MachinePositionRecord record = records.get(index);
+                lifecyclePositions.releasePosition(dimensionId, record.packedPosition());
+                removeLifecycleCommandsAtPosition(lifecycleInbox, dimensionId, record.packedPosition());
+                removeLifecycleCommandsAtPosition(lifecycleDrain, dimensionId, record.packedPosition());
             }
         }
-        for (CFNBlockEntityEx blockEntity : runtimeOwners) {
-            blockEntity.cfn_removeMachineHandlerRuntime();
+        Throwable failure = null;
+        Long2ObjectMap<MachineRoute> dimensionRoutes = machineRoutesByPosition.get(dimensionId);
+        for (int index = 0, count = records.size(); index < count; index++) {
+            MachinePositionRecord record = records.get(index);
+            MachineRoute route = dimensionRoutes == null ? null : dimensionRoutes.get(record.packedPosition());
+            if (route == null) {
+                continue;
+            }
+            try {
+                removeMachine(route.tileEntity, false);
+            } catch (RuntimeException | Error exception) {
+                failure = aggregateFailure(failure, exception);
+            }
         }
-        scopeNode.clear();
-        nodeScope.clear();
-        gridMachineMap.clear();
-        machineGridMap.clear();
-        machineSupplyNodes.clear();
-        supplyNodeMachines.clear();
-        machineRoutes.clear();
-        machineRoutesByPosition.clear();
-        machineChunkResidency.clear();
-        for (CFNBlockEntityEx blockEntity : discoveryThrottleMembership.keySet()) {
-            blockEntity.cfn_setEnergyThrottleTimer(0);
+        if (failure != null) {
+            CirculationFlowNetworks.LOGGER.error(
+                "Failed to fully dehydrate machines in an unloaded chunk for dimension {}", dimensionId, failure
+            );
+            if (failure instanceof Error error) {
+                throw error;
+            }
         }
-        for (int index = 0; index < discoveryThrottleWheel.size(); index++) {
-            discoveryThrottleWheel.get(index).clear();
-        }
-        discoveryThrottleDrain.clear();
-        discoveryThrottleMembership.clear();
-        discoveryThrottleCursor = 0;
-        discoveryThrottleWheelCursor = 0;
-        deferredInteractionQueries.clear();
-        deferredInteractionQueryDrain.clear();
-        machineInteractionDemandEpoch = Long.MIN_VALUE;
-        nodeRescanTicks.clear();
-        warningPositionsScratch.clear();
-        warningSnapshots.clear();
-        onlineWarningPlayerIdsScratch.clear();
-        warningTickCounter = 0L;
-        if (warningSessionGeneration == Long.MAX_VALUE) {
-            throw new IllegalStateException("Energy warning session generation exhausted");
-        }
-        warningSessionGeneration++;
-        synchronized (lifecycleLock) {
-            lifecyclePositions.clear();
-            lifecycleInbox.clear();
-            lifecycleDrain.clear();
-            positionLifecycleInbox.clear();
-            positionLifecycleDrain.clear();
-            lifecycleDraining = false;
-        }
-        interactionEpoch = 0L;
     }
 
     public @NotNull ReferenceSet<IEnergySupplyNode> getEnergyNodes(Level world, BlockPos pos) {
@@ -1976,31 +1966,60 @@ public final class EnergyMachineManager {
         }
     }
 
-    /**
-     * Rebuilds the chunk window that currently has a warning observer. Sampling a warning costs a real handler
-     * read, so the render-distance test that {@link #sendWarningsToNearbyPlayers} applies to finished snapshots
-     * is hoisted in front of sampling: a machine no player is near is never probed at all.
-     */
-    private void refreshWarningObserverChunks(MinecraftServer server) {
-        for (var chunks : warningObserverChunksScratch.values()) {
-            chunks.clear();
-        }
-        for (var player : server.getPlayerList().getPlayers()) {
-            String dimensionKey = getPlayerDimensionKey(player);
-            LongSet chunks = warningObserverChunksScratch.get(dimensionKey);
-            if (chunks == null) {
-                chunks = new LongOpenHashSet();
-                warningObserverChunksScratch.put(dimensionKey, chunks);
-            }
-            BlockPos position = getPlayerBlockPos(player);
-            int centerChunkX = ChunkCoordUtils.getChunkX(position);
-            int centerChunkZ = ChunkCoordUtils.getChunkZ(position);
-            for (int offsetX = -WARNING_OBSERVER_CHUNK_RADIUS; offsetX <= WARNING_OBSERVER_CHUNK_RADIUS; offsetX++) {
-                for (int offsetZ = -WARNING_OBSERVER_CHUNK_RADIUS; offsetZ <= WARNING_OBSERVER_CHUNK_RADIUS; offsetZ++) {
-                    chunks.add(ChunkCoordUtils.mergeChunkCoords(centerChunkX + offsetX, centerChunkZ + offsetZ));
-                }
+    public void onServerStop() {
+        EnergyHandlerRuntime.stopBindings();
+        ReferenceSet<CFNBlockEntityEx> runtimeOwners = new ReferenceOpenHashSet<>();
+        for (Long2ObjectMap<MachineRoute> routes : machineRoutesByPosition.values()) {
+            for (MachineRoute route : routes.values()) {
+                runtimeOwners.add(route.tileEntity);
             }
         }
+        for (CFNBlockEntityEx blockEntity : runtimeOwners) {
+            blockEntity.cfn_removeMachineHandlerRuntime();
+        }
+        scopeNode.clear();
+        nodeScope.clear();
+        gridMachineMap.clear();
+        machineGridMap.clear();
+        machineSupplyNodes.clear();
+        supplyNodeMachines.clear();
+        machineRoutes.clear();
+        machineRoutesByPosition.clear();
+        machineChunkResidency.clear();
+        for (CFNBlockEntityEx blockEntity : discoveryThrottleMembership.keySet()) {
+            blockEntity.cfn_setEnergyThrottleTimer(0);
+        }
+        for (int index = 0; index < discoveryThrottleWheel.size(); index++) {
+            discoveryThrottleWheel.get(index).clear();
+        }
+        discoveryThrottleDrain.clear();
+        discoveryThrottleMembership.clear();
+        discoveryThrottleCursor = 0;
+        discoveryThrottleWheelCursor = 0;
+        deferredInteractionQueries.clear();
+        deferredInteractionQueryDrain.clear();
+        machineInteractionDemandEpoch = Long.MIN_VALUE;
+        nodeRescanTicks.clear();
+        warningPositionsScratch.clear();
+        warningObservers.clear();
+        warningSnapshots.clear();
+        onlineWarningPlayerIdsScratch.clear();
+        warningPlayersVersion = Long.MIN_VALUE;
+        warningPlayerCount = 0;
+        warningTickCounter = 0L;
+        if (warningSessionGeneration == Long.MAX_VALUE) {
+            throw new IllegalStateException("Energy warning session generation exhausted");
+        }
+        warningSessionGeneration++;
+        synchronized (lifecycleLock) {
+            lifecyclePositions.clear();
+            lifecycleInbox.clear();
+            lifecycleDrain.clear();
+            positionLifecycleInbox.clear();
+            positionLifecycleDrain.clear();
+            lifecycleDraining = false;
+        }
+        interactionEpoch = 0L;
     }
 
     private void settleAccountWarnings() {
@@ -2047,31 +2066,34 @@ public final class EnergyMachineManager {
         }
     }
 
-    private void sendWarningsToNearbyPlayers(MinecraftServer server, Object2ObjectMap<String, LongSet> warningPositions) {
-        onlineWarningPlayerIdsScratch.clear();
-        for (var player : server.getPlayerList().getPlayers()) {
-            UUID playerId = getPlayerId(player);
-            onlineWarningPlayerIdsScratch.add(playerId);
-            String dimensionKey = getPlayerDimensionKey(player);
-            LongSet dimWarnings = warningPositions.get(dimensionKey);
-            if (dimWarnings == null) {
-                dimWarnings = LongSets.EMPTY_SET;
-            }
-            try {
-                warningSnapshots.synchronize(
-                    playerId,
-                    dimensionKey,
-                    warningTickCounter,
-                    dimWarnings,
-                    posLong -> getPlayerDistanceSq(player, blockPosFromLong(posLong)) <= WARNING_RENDER_DISTANCE_SQ,
-                    (snapshotDimensionKey, revision, positions) -> sendWarningSnapshot(
-                        player, snapshotDimensionKey, revision, positions)
-                );
-            } catch (RuntimeException exception) {
-                CirculationFlowNetworks.LOGGER.error("Failed to update energy warnings for player {}", playerId, exception);
-            }
+    /**
+     * Updates the chunk window that currently has a warning observer. Sampling a warning costs a real handler
+     * read, so the render-distance test that {@link #sendWarningsToNearbyPlayers} applies to finished snapshots
+     * is hoisted in front of sampling: a machine no player is near is never probed at all.
+     */
+    private void refreshWarningObserverChunks(MinecraftServer server) {
+        var players = server.getPlayerList().getPlayers();
+        long version = HubPlatformServices.INSTANCE.getOnlinePlayersVersion();
+        boolean rosterChanged = warningPlayersVersion != version || warningPlayerCount != players.size();
+        if (rosterChanged) {
+            onlineWarningPlayerIdsScratch.clear();
         }
-        warningSnapshots.retainPlayers(onlineWarningPlayerIdsScratch);
+        for (int index = 0; index < players.size(); index++) {
+            var player = players.get(index);
+            UUID playerId = getPlayerId(player);
+            if (rosterChanged) {
+                onlineWarningPlayerIdsScratch.add(playerId);
+            }
+            BlockPos position = getPlayerBlockPos(player);
+            warningObservers.update(playerId, getPlayerDimensionKey(player),
+                ChunkCoordUtils.getChunkX(position), ChunkCoordUtils.getChunkZ(position));
+        }
+        if (rosterChanged) {
+            warningObservers.retainPlayers(onlineWarningPlayerIdsScratch);
+            warningSnapshots.retainPlayers(onlineWarningPlayerIdsScratch);
+            warningPlayersVersion = version;
+            warningPlayerCount = players.size();
+        }
     }
 
     private void sendWarningSnapshot(Object player,
@@ -3390,37 +3412,29 @@ public final class EnergyMachineManager {
         }
     }
 
-    static void transferEnergy(PriorityRoleIndex send,
-                               Collection<EnergyTransferParticipant> receive,
-                               Status status,
-                               long epoch) {
-        if (send.isEmpty() || receive.isEmpty()) {
-            return;
-        }
-        PriorityRoleCursor sendTraversal = INSTANCE.itemSendCursor;
-        sendTraversal.prepare(send);
-        try {
-            for (EnergyTransferParticipant receiver : receive) {
-                EnergyAmount receivable = receiver.canReceiveValue();
-                try {
-                    if (!receivable.isPositive()) {
-                        continue;
-                    }
-                    sendTraversal.reset();
-                    for (MachineTransferSlot sender = sendTraversal.next(); sender != null; sender = sendTraversal.next()) {
-                        if (!sender.isActive(epoch)
-                            || (sender.requiresPairMatch() || receiver.requiresPairMatch())
-                            && !(sender.canExtract(receiver) && receiver.canReceive(sender))) {
-                            continue;
-                        }
-                        transferToItem(sender, receiver, status, epoch);
-                    }
-                } finally {
-                    receivable.recycle();
-                }
+    private void sendWarningsToNearbyPlayers(MinecraftServer server, Object2ObjectMap<String, LongSet> warningPositions) {
+        var players = server.getPlayerList().getPlayers();
+        for (int index = 0, count = players.size(); index < count; index++) {
+            var player = players.get(index);
+            UUID playerId = getPlayerId(player);
+            String dimensionKey = getPlayerDimensionKey(player);
+            LongSet dimWarnings = warningPositions.get(dimensionKey);
+            if (dimWarnings == null) {
+                dimWarnings = LongSets.EMPTY_SET;
             }
-        } finally {
-            sendTraversal.close();
+            try {
+                warningSnapshots.synchronize(
+                    playerId,
+                    dimensionKey,
+                    warningTickCounter,
+                    dimWarnings,
+                    posLong -> getPlayerDistanceSq(player, blockPosFromLong(posLong)) <= WARNING_RENDER_DISTANCE_SQ,
+                    (snapshotDimensionKey, revision, positions) -> sendWarningSnapshot(
+                        player, snapshotDimensionKey, revision, positions)
+                );
+            } catch (RuntimeException exception) {
+                CirculationFlowNetworks.LOGGER.error("Failed to update energy warnings for player {}", playerId, exception);
+            }
         }
     }
 
