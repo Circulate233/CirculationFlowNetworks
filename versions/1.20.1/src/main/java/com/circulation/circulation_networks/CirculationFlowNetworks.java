@@ -1,5 +1,7 @@
 package com.circulation.circulation_networks;
 
+import it.unimi.dsi.fastutil.objects.ObjectLists;
+import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import com.circulation.circulation_networks.api.INodeBlockEntity;
 import com.circulation.circulation_networks.energy.manager.AE2HandlerManager;
 import com.circulation.circulation_networks.energy.manager.DEHandlerManager;
@@ -51,8 +53,6 @@ import net.minecraftforge.server.ServerLifecycleHooks;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -131,9 +131,9 @@ public final class CirculationFlowNetworks {
         public List<PlayerIdentity> getOnlinePlayers() {
             var server = ServerLifecycleHooks.getCurrentServer();
             if (server == null) {
-                return Collections.emptyList();
+                return ObjectLists.emptyList();
             }
-            List<PlayerIdentity> players = new ArrayList<>();
+            List<PlayerIdentity> players = new ObjectArrayList<>();
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
                 players.add(new PlayerIdentity(player.getUUID(), player.getGameProfile().getName()));
             }

@@ -1,5 +1,6 @@
 package com.circulation.circulation_networks.gui.component;
 
+import it.unimi.dsi.fastutil.objects.ObjectLists;
 import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.api.hub.ChannelSnapshotEntry;
 import com.circulation.circulation_networks.api.hub.HubPermissionLevel;
@@ -21,7 +22,6 @@ import net.minecraft.client.gui.GuiGraphics;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -103,17 +103,17 @@ public final class PermissionListPanelComponent extends DraggableComponent imple
             protected @NotNull List<LocalizedComponent> getTooltip(int mouseX, int mouseY) {
                 EntryHit hit = getEntryHit(mouseX, mouseY);
                 if (hit == null) {
-                    return Collections.emptyList();
+                    return ObjectLists.emptyList();
                 }
                 if (hit.toggleHit()) {
-                    return Collections.singletonList(() -> hit.expanded()
+                    return ObjectLists.singleton(() -> hit.expanded()
                         ? CI18n.format("gui.permission_list.tooltip.collapse")
                         : CI18n.format("gui.permission_list.tooltip.expand"));
                 }
                 if (hit.buttonTarget() != null) {
-                    return Collections.singletonList(() -> getPermissionTooltip(hit.buttonTarget(), hit.entry().permission()));
+                    return ObjectLists.singleton(() -> getPermissionTooltip(hit.buttonTarget(), hit.entry().permission()));
                 }
-                return Collections.emptyList();
+                return ObjectLists.emptyList();
             }
         });
     }
@@ -293,7 +293,7 @@ public final class PermissionListPanelComponent extends DraggableComponent imple
     private List<PermissionSnapshotEntry> getFilteredEntries() {
         PermissionSnapshotList list = container.onlinePlayers;
         if (list == null) {
-            return Collections.emptyList();
+            return ObjectLists.emptyList();
         }
 
         String search = normalizeSearch(searchField.getText());

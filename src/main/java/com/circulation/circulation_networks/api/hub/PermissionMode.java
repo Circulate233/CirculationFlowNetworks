@@ -5,8 +5,10 @@ public enum PermissionMode {
     TEAM,
     PRIVATE;
 
+    private static final PermissionMode[] VALUES = values();
+
     public static PermissionMode fromId(int id) {
-        return PermissionMode.values()[Math.floorMod(id, PermissionMode.values().length)];
+        return VALUES[Math.floorMod(id, VALUES.length)];
     }
 
     public int getId() {

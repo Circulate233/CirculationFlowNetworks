@@ -1,5 +1,6 @@
 package com.circulation.circulation_networks.gui;
 
+import it.unimi.dsi.fastutil.objects.ObjectLists;
 import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.container.CFNBaseContainer;
 import com.circulation.circulation_networks.gui.component.base.Component;
@@ -51,7 +52,6 @@ import java.util.Optional;
 *///?}
 
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
-
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import java.awt.Rectangle;
@@ -145,7 +145,7 @@ public abstract class CFNBaseGui<T extends CFNBaseContainer> extends GuiContaine
     /*public List<String> getContainerItemTooltipLines(ItemStack stack) {
         List<net.minecraft.network.chat.Component> lines = getTooltipFromContainerItem(stack);
         if (lines.isEmpty()) {
-            return java.util.Collections.emptyList();
+            return ObjectLists.emptyList();
         }
 
         List<String> tooltip = new ObjectArrayList<>(lines.size());

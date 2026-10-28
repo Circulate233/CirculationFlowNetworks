@@ -1,5 +1,6 @@
 package com.circulation.circulation_networks.blocks;
 
+import it.unimi.dsi.fastutil.objects.ObjectLists;
 import com.circulation.circulation_networks.tiles.MultiblockShellBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -32,7 +33,6 @@ import net.minecraftforge.client.extensions.common.IClientBlockExtensions;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -139,7 +139,7 @@ public class MultiblockShellBlock extends Block implements EntityBlock {
     @Override
     @NotNull
     public List<ItemStack> getDrops(@NotNull BlockState state, @NotNull LootParams.Builder builder) {
-        return Collections.emptyList();
+        return ObjectLists.emptyList();
     }
 
     @Override

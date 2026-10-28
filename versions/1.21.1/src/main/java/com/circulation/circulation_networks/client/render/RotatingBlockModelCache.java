@@ -1,5 +1,6 @@
 package com.circulation.circulation_networks.client.render;
 
+import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import com.circulation.circulation_networks.CirculationFlowNetworks;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
@@ -11,13 +12,12 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 import net.neoforged.neoforge.client.event.ModelEvent;
 
-import java.util.ArrayList;
 import java.util.List;
 
 @OnlyIn(Dist.CLIENT)
 public final class RotatingBlockModelCache {
 
-    private static final List<ResourceLocation> REGISTERED_MODELS = new ArrayList<>();
+    private static final List<ResourceLocation> REGISTERED_MODELS = new ObjectArrayList<>();
     // Shared crystal model
     public static final ResourceLocation NODE_CRYSTAL = register("node_crystal");
     // Relay node sub-part models

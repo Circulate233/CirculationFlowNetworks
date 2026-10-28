@@ -1,5 +1,6 @@
 package com.circulation.circulation_networks.container;
 
+import it.unimi.dsi.fastutil.objects.ObjectLists;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.ObjectList;
 //? if <1.20 {
@@ -19,7 +20,6 @@ import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.items.wrapper.InvWrapper;
 *///?}
 
-import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -128,7 +128,7 @@ public class ComponentSlotLayout {
     }
 
     public List<ComponentSlot> getSlots() {
-        return Collections.unmodifiableList(slots);
+        return ObjectLists.unmodifiable(slots);
     }
 
     @FunctionalInterface

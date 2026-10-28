@@ -1,5 +1,7 @@
 package com.circulation.circulation_networks;
 
+import it.unimi.dsi.fastutil.objects.ObjectLists;
+
 import net.minecraftforge.common.ForgeConfigSpec;
 import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.config.ModConfig;
@@ -38,7 +40,7 @@ public final class CFNConfig {
             "Examples:",
             "  - 'com.example.CustomEnergyTile' Exact match",
             "  - 'com.example' Prefix match, includes all classes starting with this"
-        ).defineListAllowEmpty(List.of("classNames"), List.of("sonar.fluxnetworks.common.device.TileFluxDevice"), obj -> obj instanceof String);
+        ).defineListAllowEmpty(ObjectLists.singleton("classNames"), ObjectLists.singleton("sonar.fluxnetworks.common.device.TileFluxDevice"), obj -> obj instanceof String);
 
         SUPPLY_CLASS_NAMES = builder.comment(
             "Energy device blacklist for generic supply nodes (non-specialized).",
@@ -46,7 +48,7 @@ public final class CFNConfig {
             "Examples:",
             "  - 'com.example.AdvancedEnergyTile' Exact match",
             "  - 'com.example.advanced' Prefix match"
-        ).defineListAllowEmpty(List.of("supplyClassNames"), List::of, obj -> obj instanceof String);
+        ).defineListAllowEmpty(ObjectLists.singleton("supplyClassNames"), ObjectLists::emptyList, obj -> obj instanceof String);
 
         DEFAULT_ENERGY_UNIT_DISPLAY = builder.comment(
             "Default energy unit display (exact unit string match)",

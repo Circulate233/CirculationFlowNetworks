@@ -16,6 +16,7 @@ import com.circulation.circulation_networks.packets.NodeNetworkRendering;
 import com.circulation.circulation_networks.packets.EnergyWarningRendering;
 import com.circulation.circulation_networks.network.nodes.HubNode;
 import com.circulation.circulation_networks.utils.ChunkCoordUtils;
+import com.circulation.circulation_networks.utils.HubPlatformServices;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongCollection;
@@ -48,11 +49,12 @@ import net.minecraft.world.World;
 import net.minecraft.entity.player.EntityPlayerMP;
 //?} else {
 /*import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.entity.player.EntityPlayerMP;
  *///?}
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -76,7 +78,7 @@ public final class EnergyMachineManager {
     }
 
     private static final long NODE_RESCAN_COOLDOWN_TICKS = 40L;
-    private static final long WARNING_RANGE_SYNC_INTERVAL_TICKS = 20L;
+    private static final long WARNING_RANGE_SYNC_INTERVAL_TICKS = 60L;
     private static final long WARNING_EVALUATION_INTERVAL_TICKS = 20L;
     private static final double WARNING_RENDER_DISTANCE_SQ = 48.0D * 48.0D;
     /**
@@ -111,7 +113,8 @@ public final class EnergyMachineManager {
     private final Int2ObjectMap<Long2ObjectMap<MachineRoute>> machineRoutesByPosition = new Int2ObjectOpenHashMap<>();
     private final Reference2LongMap<IEnergySupplyNode> nodeRescanTicks = new Reference2LongOpenHashMap<>();
     private final Object2ObjectMap<String, LongSet> warningPositionsScratch = new Object2ObjectOpenHashMap<>();
-    private final Object2ObjectMap<String, LongSet> warningObserverChunksScratch = new Object2ObjectOpenHashMap<>();
+    private final WarningObserverIndex warningObservers = new WarningObserverIndex(WARNING_OBSERVER_CHUNK_RADIUS);
+    private final Object2ObjectMap<String, LongSet> warningObserverChunksScratch = warningObservers.chunks();
     private final WarningSnapshotSynchronizer warningSnapshots =
         new WarningSnapshotSynchronizer(WARNING_RANGE_SYNC_INTERVAL_TICKS);
     private final ObjectOpenHashSet<UUID> onlineWarningPlayerIdsScratch = new ObjectOpenHashSet<>();
@@ -125,7 +128,7 @@ public final class EnergyMachineManager {
             @Override
             public void dehydrateUnloaded(int dimensionId,
                                           long chunkCoordinate,
-                                          Collection<MachinePositionRecord> records) {
+                                          List<MachinePositionRecord> records) {
                 dehydrateMachineChunk(dimensionId, records);
             }
 
@@ -140,7 +143,7 @@ public final class EnergyMachineManager {
     private final ObjectArrayList<LifecycleCommand> lifecycleDrain = new ObjectArrayList<>();
     private final ObjectArrayList<ObjectArrayList<CFNBlockEntityEx>> discoveryThrottleWheel =
         new ObjectArrayList<>(DISCOVERY_THROTTLE_WHEEL_SIZE);
-    private final ObjectArrayList<CFNBlockEntityEx> discoveryThrottleDrain = new ObjectArrayList<>();
+    private ObjectArrayList<CFNBlockEntityEx> discoveryThrottleDrain = new ObjectArrayList<>();
     private final Reference2LongMap<CFNBlockEntityEx> discoveryThrottleMembership =
         new Reference2LongOpenHashMap<>();
     private final ObjectArrayList<Runnable> deferredInteractionQueries = new ObjectArrayList<>();
@@ -154,6 +157,8 @@ public final class EnergyMachineManager {
     private final PriorityRoleCursor itemSendCursor = new PriorityRoleCursor();
     private final PriorityRoleCursor warningCursor = new PriorityRoleCursor();
     private long warningTickCounter;
+    private long warningPlayersVersion = Long.MIN_VALUE;
+    private int warningPlayerCount;
     private long warningSessionGeneration = 1L;
     private long interactionEpoch;
     private long transferPassId;
@@ -712,7 +717,8 @@ public final class EnergyMachineManager {
                 throw new IllegalStateException("Discovery throttle bucket membership is inconsistent");
             }
         }
-        discoveryThrottleDrain.addAll(bucket);
+        discoveryThrottleWheel.set(discoveryThrottleWheelCursor, discoveryThrottleDrain);
+        discoveryThrottleDrain = bucket;
         for (int index = 0; index < count; index++) {
             CFNBlockEntityEx blockEntity = bucket.get(index);
             long removed = discoveryThrottleMembership.removeLong(blockEntity);
@@ -722,7 +728,6 @@ public final class EnergyMachineManager {
             }
             blockEntity.cfn_setEnergyThrottleTimer(0);
         }
-        bucket.clear();
         try {
             for (int index = 0; index < count; index++) {
                 submitLifecycle(discoveryThrottleDrain.get(index), MachineLifecyclePositionIndex.Action.DISCOVERY_RETRY);
@@ -1425,9 +1430,10 @@ public final class EnergyMachineManager {
         machineChunkResidency.tick(machineChunkTransitions);
     }
 
-    private void dehydrateMachineChunk(int dimensionId, Collection<MachinePositionRecord> records) {
+    private void dehydrateMachineChunk(int dimensionId, List<MachinePositionRecord> records) {
         synchronized (lifecycleLock) {
-            for (MachinePositionRecord record : records) {
+            for (int index = 0, count = records.size(); index < count; index++) {
+                MachinePositionRecord record = records.get(index);
                 lifecyclePositions.releasePosition(dimensionId, record.packedPosition());
                 removeLifecycleCommandsAtPosition(lifecycleInbox, dimensionId, record.packedPosition());
                 removeLifecycleCommandsAtPosition(lifecycleDrain, dimensionId, record.packedPosition());
@@ -1435,7 +1441,8 @@ public final class EnergyMachineManager {
         }
         Throwable failure = null;
         Long2ObjectMap<MachineRoute> dimensionRoutes = machineRoutesByPosition.get(dimensionId);
-        for (MachinePositionRecord record : records) {
+        for (int index = 0, count = records.size(); index < count; index++) {
+            MachinePositionRecord record = records.get(index);
             MachineRoute route = dimensionRoutes == null ? null : dimensionRoutes.get(record.packedPosition());
             if (route == null) {
                 continue;
@@ -1909,8 +1916,11 @@ public final class EnergyMachineManager {
         machineInteractionDemandEpoch = Long.MIN_VALUE;
         nodeRescanTicks.clear();
         warningPositionsScratch.clear();
+        warningObservers.clear();
         warningSnapshots.clear();
         onlineWarningPlayerIdsScratch.clear();
+        warningPlayersVersion = Long.MIN_VALUE;
+        warningPlayerCount = 0;
         warningTickCounter = 0L;
         if (warningSessionGeneration == Long.MAX_VALUE) {
             throw new IllegalStateException("Energy warning session generation exhausted");
@@ -2099,29 +2109,32 @@ public final class EnergyMachineManager {
     }
 
     /**
-     * Rebuilds the chunk window that currently has a warning observer. Sampling a warning costs a real handler
+     * Updates the chunk window that currently has a warning observer. Sampling a warning costs a real handler
      * read, so the render-distance test that {@link #sendWarningsToNearbyPlayers} applies to finished snapshots
      * is hoisted in front of sampling: a machine no player is near is never probed at all.
      */
     private void refreshWarningObserverChunks(MinecraftServer server) {
-        for (var chunks : warningObserverChunksScratch.values()) {
-            chunks.clear();
+        var players = server.getPlayerList().getPlayers();
+        long version = HubPlatformServices.INSTANCE.getOnlinePlayersVersion();
+        boolean rosterChanged = warningPlayersVersion != version || warningPlayerCount != players.size();
+        if (rosterChanged) {
+            onlineWarningPlayerIdsScratch.clear();
         }
-        for (var player : server.getPlayerList().getPlayers()) {
-            String dimensionKey = getPlayerDimensionKey(player);
-            LongSet chunks = warningObserverChunksScratch.get(dimensionKey);
-            if (chunks == null) {
-                chunks = new LongOpenHashSet();
-                warningObserverChunksScratch.put(dimensionKey, chunks);
+        for (int index = 0; index < players.size(); index++) {
+            var player = players.get(index);
+            UUID playerId = getPlayerId(player);
+            if (rosterChanged) {
+                onlineWarningPlayerIdsScratch.add(playerId);
             }
             BlockPos position = getPlayerBlockPos(player);
-            int centerChunkX = ChunkCoordUtils.getChunkX(position);
-            int centerChunkZ = ChunkCoordUtils.getChunkZ(position);
-            for (int offsetX = -WARNING_OBSERVER_CHUNK_RADIUS; offsetX <= WARNING_OBSERVER_CHUNK_RADIUS; offsetX++) {
-                for (int offsetZ = -WARNING_OBSERVER_CHUNK_RADIUS; offsetZ <= WARNING_OBSERVER_CHUNK_RADIUS; offsetZ++) {
-                    chunks.add(ChunkCoordUtils.mergeChunkCoords(centerChunkX + offsetX, centerChunkZ + offsetZ));
-                }
-            }
+            warningObservers.update(playerId, getPlayerDimensionKey(player),
+                ChunkCoordUtils.getChunkX(position), ChunkCoordUtils.getChunkZ(position));
+        }
+        if (rosterChanged) {
+            warningObservers.retainPlayers(onlineWarningPlayerIdsScratch);
+            warningSnapshots.retainPlayers(onlineWarningPlayerIdsScratch);
+            warningPlayersVersion = version;
+            warningPlayerCount = players.size();
         }
     }
 
@@ -2170,10 +2183,10 @@ public final class EnergyMachineManager {
     }
 
     private void sendWarningsToNearbyPlayers(MinecraftServer server, Object2ObjectMap<String, LongSet> warningPositions) {
-        onlineWarningPlayerIdsScratch.clear();
-        for (var player : server.getPlayerList().getPlayers()) {
+        var players = server.getPlayerList().getPlayers();
+        for (int index = 0, count = players.size(); index < count; index++) {
+            var player = players.get(index);
             UUID playerId = getPlayerId(player);
-            onlineWarningPlayerIdsScratch.add(playerId);
             String dimensionKey = getPlayerDimensionKey(player);
             LongSet dimWarnings = warningPositions.get(dimensionKey);
             if (dimWarnings == null) {
@@ -2193,7 +2206,6 @@ public final class EnergyMachineManager {
                 CirculationFlowNetworks.LOGGER.error("Failed to update energy warnings for player {}", playerId, exception);
             }
         }
-        warningSnapshots.retainPlayers(onlineWarningPlayerIdsScratch);
     }
 
     private void sendWarningSnapshot(Object player,
@@ -3557,7 +3569,7 @@ public final class EnergyMachineManager {
     }
 
     static void transferEnergy(PriorityRoleIndex send,
-                               Collection<EnergyTransferParticipant> receive,
+                               ObjectArrayList<EnergyTransferParticipant> receive,
                                Status status,
                                long epoch) {
         if (send.isEmpty() || receive.isEmpty()) {
@@ -3566,7 +3578,8 @@ public final class EnergyMachineManager {
         PriorityRoleCursor sendTraversal = INSTANCE.itemSendCursor;
         sendTraversal.prepare(send);
         try {
-            for (EnergyTransferParticipant receiver : receive) {
+            for (int index = 0, count = receive.size(); index < count; index++) {
+                EnergyTransferParticipant receiver = receive.get(index);
                 EnergyAmount receivable = receiver.canReceiveValue();
                 try {
                     if (!receivable.isPositive()) {

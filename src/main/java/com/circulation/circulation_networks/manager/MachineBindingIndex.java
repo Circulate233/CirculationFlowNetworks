@@ -101,10 +101,12 @@ public final class MachineBindingIndex {
     private final ObjectArrayList<Binding> pendingMappings = new ObjectArrayList<>();
     private final ObjectArrayList<Binding> beginBindings = new ObjectArrayList<>();
     private final ObjectArrayList<Binding> endBindings = new ObjectArrayList<>();
+    private final ObjectArrayList<Binding> activeEndBindings = new ObjectArrayList<>();
     private final ObjectArrayList<BackendLease> transferAccounts = new ObjectArrayList<>();
     private final ObjectArrayList<MachineTransferAccount> activeAccounts = new ObjectArrayList<>();
     private final ObjectArrayList<BackendLease> beginBackends = new ObjectArrayList<>();
     private final ObjectArrayList<BackendLease> endBackends = new ObjectArrayList<>();
+    private final ObjectArrayList<BackendLease> activeEndBackends = new ObjectArrayList<>();
     private final ObjectArrayList<BackendLease> pendingQuarantines = new ObjectArrayList<>();
     private final ObjectArrayList<BackendLease> pendingBackendClosures = new ObjectArrayList<>();
     private final ObjectArrayList<CFNBlockEntityEx> throttledBlockEntities = new ObjectArrayList<>();
@@ -227,21 +229,20 @@ public final class MachineBindingIndex {
         }
         RuntimeException failure = null;
         try {
-            for (int index = 0; index < endBindings.size(); ) {
-                Binding binding = endBindings.get(index);
+            for (int index = 0; index < activeEndBindings.size(); index++) {
+                Binding binding = activeEndBindings.get(index);
+                if (binding.endIndex < 0) {
+                    continue;
+                }
                 try {
                     binding.endServerTick(epoch);
                 } catch (RuntimeException exception) {
                     failure = aggregate(failure, exception);
                 }
-                if (binding.endIndex == index) {
-                    index++;
-                }
             }
-            for (int index = 0; index < endBackends.size(); ) {
-                BackendLease lease = endBackends.get(index);
-                if (lease.activeEndEpoch != epoch) {
-                    index++;
+            for (int index = 0; index < activeEndBackends.size(); index++) {
+                BackendLease lease = activeEndBackends.get(index);
+                if (lease.endIndex < 0 || lease.activeEndEpoch != epoch) {
                     continue;
                 }
                 try {
@@ -254,9 +255,6 @@ public final class MachineBindingIndex {
                     } catch (RuntimeException exception) {
                         failure = aggregate(failure, exception);
                     }
-                }
-                if (lease.endIndex == index) {
-                    index++;
                 }
             }
             for (int index = 0; index < activeAccounts.size(); index++) {
@@ -275,6 +273,8 @@ public final class MachineBindingIndex {
             advanceEnergyThrottleTimers();
             backendsBegun = false;
             activeAccounts.clear();
+            activeEndBindings.clear();
+            activeEndBackends.clear();
             tickActive = false;
             releaseDeferredRetries();
         }
@@ -313,9 +313,9 @@ public final class MachineBindingIndex {
                 }
             }
         }
-        for (int index = endBackends.size() - 1; index >= 0; index--) {
-            BackendLease lease = endBackends.get(index);
-            if (lease.activeEndEpoch == epoch) {
+        for (int index = activeEndBackends.size() - 1; index >= 0; index--) {
+            BackendLease lease = activeEndBackends.get(index);
+            if (lease.endIndex >= 0 && lease.activeEndEpoch == epoch) {
                 try {
                     lease.endServerTick(epoch);
                 } catch (RuntimeException exception) {
@@ -323,9 +323,9 @@ public final class MachineBindingIndex {
                 }
             }
         }
-        for (int index = endBindings.size() - 1; index >= 0; index--) {
-            Binding binding = endBindings.get(index);
-            if (binding.activeEndEpoch == epoch) {
+        for (int index = activeEndBindings.size() - 1; index >= 0; index--) {
+            Binding binding = activeEndBindings.get(index);
+            if (binding.endIndex >= 0 && binding.activeEndEpoch == epoch) {
                 try {
                     binding.endServerTick(epoch);
                 } catch (RuntimeException exception) {
@@ -335,6 +335,8 @@ public final class MachineBindingIndex {
         }
         backendsBegun = false;
         activeAccounts.clear();
+        activeEndBindings.clear();
+        activeEndBackends.clear();
         tickActive = false;
         releaseDeferredRetries();
         advanceEnergyThrottleTimers();
@@ -935,6 +937,8 @@ public final class MachineBindingIndex {
             terminalProviderCleanupDebts.clear();
             beginBindings.clear();
             endBindings.clear();
+            activeEndBindings.clear();
+            activeEndBackends.clear();
             pendingMappings.clear();
             if (pendingBackendClosures.isEmpty()) {
                 sharedBackendLeases.clear();
@@ -1983,6 +1987,7 @@ public final class MachineBindingIndex {
             }
             if (endTickLifecycle) {
                 activeEndEpoch = epoch;
+                owner.activeEndBindings.add(this);
             }
         }
 
@@ -2373,6 +2378,7 @@ public final class MachineBindingIndex {
             }
             if (endTickLifecycle) {
                 activeEndEpoch = epoch;
+                owner.activeEndBackends.add(this);
             }
         }
 

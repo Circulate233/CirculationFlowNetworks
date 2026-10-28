@@ -45,11 +45,11 @@ import net.minecraft.util.text.TextFormatting;
 //?} else {
 /*import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResultHolder;
-import net.minecraft.world.entity.player.Player;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.phys.HitResult;
 *///?}

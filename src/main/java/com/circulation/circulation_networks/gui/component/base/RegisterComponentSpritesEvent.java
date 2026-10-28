@@ -1,5 +1,6 @@
 package com.circulation.circulation_networks.gui.component.base;
 
+import it.unimi.dsi.fastutil.objects.ObjectLists;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.ObjectList;
 //? if <1.20 {
@@ -16,7 +17,6 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 *///?}
 
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -50,6 +50,6 @@ public final class RegisterComponentSpritesEvent extends Event {
      * Returns an unmodifiable view of all registered sprite names.
      */
     public List<String> getSprites() {
-        return Collections.unmodifiableList(sprites);
+        return ObjectLists.unmodifiable(sprites);
     }
 }

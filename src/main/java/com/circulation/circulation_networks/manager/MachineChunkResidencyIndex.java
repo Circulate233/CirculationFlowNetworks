@@ -10,8 +10,6 @@ import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 //? if <1.20
 import com.github.bsideup.jabel.Desugar;
 
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Predicate;
@@ -30,11 +28,13 @@ final class MachineChunkResidencyIndex<R extends MachineChunkResidencyIndex.Posi
     private final Int2ObjectMap<Long2ObjectMap<Bucket<R>>> machineBuckets = new Int2ObjectOpenHashMap<>();
     private final ObjectArrayList<Bucket<R>> bucketOrder = new ObjectArrayList<>();
     private final ObjectArrayList<Bucket<R>> residencyCandidates = new ObjectArrayList<>();
+    private volatile boolean residencyWorkPending;
 
     /** Marks one chunk resident without touching machine records or runtime state. */
     public synchronized void markLoaded(int dimensionId, long chunkCoordinate) {
-        loadedChunks.computeIfAbsent(dimensionId, ignored -> new LongOpenHashSet()).add(chunkCoordinate);
-        enqueueResidencyCandidate(dimensionId, chunkCoordinate);
+        if (loadedChunks.computeIfAbsent(dimensionId, ignored -> new LongOpenHashSet()).add(chunkCoordinate)) {
+            enqueueResidencyCandidate(dimensionId, chunkCoordinate);
+        }
     }
 
     /** Marks one chunk non-resident without touching machine records or runtime state. */
@@ -138,6 +138,9 @@ final class MachineChunkResidencyIndex<R extends MachineChunkResidencyIndex.Posi
      */
     public void tick(TransitionSink<R> sink) {
         Objects.requireNonNull(sink, "sink");
+        if (!residencyWorkPending) {
+            return;
+        }
         List<Transition<R>> transitions = null;
         synchronized (this) {
             if (residencyCandidates.isEmpty()) {
@@ -152,21 +155,24 @@ final class MachineChunkResidencyIndex<R extends MachineChunkResidencyIndex.Posi
                     continue;
                 }
                 if (transitions == null) {
-                    transitions = new ArrayList<>();
+                    transitions = new ObjectArrayList<>();
                 }
                 transitions.add(new Transition<>(
-                    bucket.dimensionId, bucket.chunkCoordinate, loaded, new ArrayList<>(bucket.records.values())
+                    bucket.dimensionId, bucket.chunkCoordinate, loaded, new ObjectArrayList<>(bucket.records.values())
                 ));
                 bucket.loaded = loaded;
             }
             residencyCandidates.clear();
+            residencyWorkPending = false;
         }
         if (transitions == null) {
             return;
         }
-        for (Transition<R> transition : transitions) {
+        for (int transitionIndex = 0, transitionCount = transitions.size(); transitionIndex < transitionCount; transitionIndex++) {
+            Transition<R> transition = transitions.get(transitionIndex);
             if (transition.loaded) {
-                for (R record : transition.records) {
+                for (int recordIndex = 0, recordCount = transition.records.size(); recordIndex < recordCount; recordIndex++) {
+                    R record = transition.records.get(recordIndex);
                     if (!sink.reconcileLoaded(transition.dimensionId, transition.chunkCoordinate, record)) {
                         remove(transition.dimensionId, transition.chunkCoordinate, record.packedPosition());
                     }
@@ -189,6 +195,7 @@ final class MachineChunkResidencyIndex<R extends MachineChunkResidencyIndex.Posi
         }
         bucketOrder.clear();
         residencyCandidates.clear();
+        residencyWorkPending = false;
     }
 
     private void enqueueResidencyCandidate(int dimensionId, long chunkCoordinate) {
@@ -205,6 +212,7 @@ final class MachineChunkResidencyIndex<R extends MachineChunkResidencyIndex.Posi
         }
         bucket.candidateIndex = residencyCandidates.size();
         residencyCandidates.add(bucket);
+        residencyWorkPending = true;
     }
 
     private void dropResidencyCandidate(Bucket<R> bucket) {
@@ -220,6 +228,7 @@ final class MachineChunkResidencyIndex<R extends MachineChunkResidencyIndex.Posi
             moved.candidateIndex = candidateIndex;
         }
         residencyCandidates.remove(lastIndex);
+        residencyWorkPending = !residencyCandidates.isEmpty();
     }
 
     private void removeEmptyBucket(int dimensionId,
@@ -263,7 +272,7 @@ final class MachineChunkResidencyIndex<R extends MachineChunkResidencyIndex.Posi
     interface TransitionSink<R> {
 
         /** Deactivates every runtime in a bucket that has just become non-resident. */
-        void dehydrateUnloaded(int dimensionId, long chunkCoordinate, Collection<R> records);
+        void dehydrateUnloaded(int dimensionId, long chunkCoordinate, List<R> records);
 
         /**
          * Resolves one saved position in a bucket that has just become resident.
@@ -293,7 +302,7 @@ final class MachineChunkResidencyIndex<R extends MachineChunkResidencyIndex.Posi
         int dimensionId,
         long chunkCoordinate,
         boolean loaded,
-        Collection<R> records
+        List<R> records
     ) {
     }
 }

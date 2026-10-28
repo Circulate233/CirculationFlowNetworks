@@ -8,6 +8,7 @@ public final class DatPersistenceScheduler {
     private static final long SAVE_DELAY_TICKS = 20L;
     private static final long FORCE_SAVE_TICKS = 200L;
     private static final long RETRY_DELAY_TICKS = 20L;
+    private static final Target[] TARGETS = Target.values();
 
     public static final DatPersistenceScheduler INSTANCE = new DatPersistenceScheduler();
 
@@ -31,7 +32,7 @@ public final class DatPersistenceScheduler {
     }
 
     public void onServerTick() {
-        for (Target target : Target.values()) {
+        for (Target target : TARGETS) {
             tryPersistTarget(target);
         }
         currentTick++;
@@ -40,7 +41,7 @@ public final class DatPersistenceScheduler {
     public void reset() {
         currentTick = 0L;
         targets.clear();
-        for (Target target : Target.values()) {
+        for (Target target : TARGETS) {
             targets.put(target, new TargetState());
         }
     }

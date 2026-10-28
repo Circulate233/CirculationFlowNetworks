@@ -14,6 +14,7 @@ import ic2.api.energy.tile.IEnergySource;
 import ic2.api.energy.tile.IEnergyTile;
 import ic2.api.item.ElectricItem;
 import ic2.core.WorldData;
+import ic2.core.block.wiring.TileEntityCable;
 import ic2.core.energy.grid.EnergyNetLocal;
 import ic2.core.energy.grid.Tile;
 import net.minecraft.item.ItemStack;
@@ -175,7 +176,7 @@ public class EUHandler implements IEnergyHandler {
      * qualify because connecting them would create a second energy network path.
      */
     public static boolean supportsEnergyTile(@Nullable IEnergyTile tile) {
-        if (tile instanceof ic2.core.block.wiring.TileEntityCable) {
+        if (tile instanceof TileEntityCable) {
             return false;
         }
         if (tile instanceof IEnergySource) {
@@ -203,7 +204,7 @@ public class EUHandler implements IEnergyHandler {
         }
         if (input) {
             IEnergySink sink = (IEnergySink) tile;
-            for (var value : EnumFacing.values()) {
+            for (var value : EnumFacing.VALUES) {
                 if (sink.acceptsEnergyFrom(null, value)) {
                     receiveFacing = value;
                     receive = sink;

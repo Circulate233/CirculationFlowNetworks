@@ -1,8 +1,10 @@
 package com.circulation.circulation_networks.client.render;
 
+import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import com.github.bsideup.jabel.Desugar;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
 import mcp.MethodsReturnNonnullByDefault;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
@@ -34,8 +36,6 @@ import org.jetbrains.annotations.Nullable;
 import org.lwjgl.opengl.GL11;
 
 import javax.annotation.ParametersAreNonnullByDefault;
-import java.util.ArrayList;
-import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -47,13 +47,13 @@ public final class RotatingModelRenderHelper {
     private static final float FULL_BRIGHT_LIGHT = 240.0F;
     private static final int DESTROY_STAGE_COUNT = 10;
     private static final int TESR_DEPTH_FUNC = GL11.GL_LEQUAL;
-    private static final Map<IBakedModel, IBakedModel> FULL_BRIGHT_MODELS = new IdentityHashMap<>();
-    private static final Map<List<BakedQuad>, List<BakedQuad>> FULL_BRIGHT_QUAD_LISTS = new IdentityHashMap<>();
-    private static final Map<BakedQuad, BakedQuad> FULL_BRIGHT_QUADS = new IdentityHashMap<>();
-    private static final Map<ResourceLocation, Integer> FULL_BRIGHT_DISPLAY_LISTS = new IdentityHashMap<>();
-    private static final Map<IBakedModel, IBakedModel> NO_DIFFUSE_MODELS = new IdentityHashMap<>();
-    private static final Map<List<BakedQuad>, List<BakedQuad>> NO_DIFFUSE_QUAD_LISTS = new IdentityHashMap<>();
-    private static final Map<BakedQuad, BakedQuad> NO_DIFFUSE_QUADS = new IdentityHashMap<>();
+    private static final Map<IBakedModel, IBakedModel> FULL_BRIGHT_MODELS = new Reference2ObjectOpenHashMap<>();
+    private static final Map<List<BakedQuad>, List<BakedQuad>> FULL_BRIGHT_QUAD_LISTS = new Reference2ObjectOpenHashMap<>();
+    private static final Map<BakedQuad, BakedQuad> FULL_BRIGHT_QUADS = new Reference2ObjectOpenHashMap<>();
+    private static final Map<ResourceLocation, Integer> FULL_BRIGHT_DISPLAY_LISTS = new Reference2ObjectOpenHashMap<>();
+    private static final Map<IBakedModel, IBakedModel> NO_DIFFUSE_MODELS = new Reference2ObjectOpenHashMap<>();
+    private static final Map<List<BakedQuad>, List<BakedQuad>> NO_DIFFUSE_QUAD_LISTS = new Reference2ObjectOpenHashMap<>();
+    private static final Map<BakedQuad, BakedQuad> NO_DIFFUSE_QUADS = new Reference2ObjectOpenHashMap<>();
     private static final Object2ObjectMap<NoDiffuseDisplayListKey, CachedDisplayList> NO_DIFFUSE_DISPLAY_LISTS = new Object2ObjectOpenHashMap<>();
     private static final Object2ObjectMap<NoDiffuseDisplayListKey, CachedDisplayList> NORMAL_DISPLAY_LISTS = new Object2ObjectOpenHashMap<>();
     private static final Object2ObjectMap<LightSignatureKey, CachedLightSignature> LIGHT_SIGNATURES = new Object2ObjectOpenHashMap<>();
@@ -257,7 +257,7 @@ public final class RotatingModelRenderHelper {
     private static int computeNoDiffuseLightSignature(@NotNull TileEntity tileEntity, @NotNull IBlockState state, @NotNull BlockPos pos) {
         int signature = state.hashCode();
         signature = 31 * signature + tileEntity.getWorld().getCombinedLight(pos, state.getLightValue(tileEntity.getWorld(), pos));
-        for (EnumFacing facing : EnumFacing.values()) {
+        for (EnumFacing facing : EnumFacing.VALUES) {
             BlockPos sidePos = pos.offset(facing);
             IBlockState sideState = tileEntity.getWorld().getBlockState(sidePos);
             signature = 31 * signature + tileEntity.getWorld().getCombinedLight(sidePos, sideState.getLightValue(tileEntity.getWorld(), sidePos));
@@ -620,7 +620,7 @@ public final class RotatingModelRenderHelper {
         }
 
         private static List<BakedQuad> wrapQuads(@NotNull List<BakedQuad> quads) {
-            List<BakedQuad> wrapped = new ArrayList<>(quads.size());
+            List<BakedQuad> wrapped = new ObjectArrayList<>(quads.size());
             for (BakedQuad quad : quads) {
                 wrapped.add(FULL_BRIGHT_QUADS.computeIfAbsent(quad, FullBrightBakedModel::wrapQuad));
             }
@@ -648,7 +648,7 @@ public final class RotatingModelRenderHelper {
         }
 
         private static List<BakedQuad> wrapQuads(@NotNull List<BakedQuad> quads) {
-            List<BakedQuad> wrapped = new ArrayList<>(quads.size());
+            List<BakedQuad> wrapped = new ObjectArrayList<>(quads.size());
             for (BakedQuad quad : quads) {
                 wrapped.add(NO_DIFFUSE_QUADS.computeIfAbsent(quad, NoDiffuseBakedModel::wrapQuad));
             }

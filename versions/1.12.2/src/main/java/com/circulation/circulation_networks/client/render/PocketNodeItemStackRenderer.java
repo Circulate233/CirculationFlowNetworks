@@ -1,5 +1,7 @@
 package com.circulation.circulation_networks.client.render;
 
+import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
+import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import com.circulation.circulation_networks.registry.CFNItems;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GlStateManager;
@@ -19,8 +21,6 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.opengl.GL11;
 
-import java.util.ArrayList;
-import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -28,7 +28,7 @@ import java.util.Map;
 public final class PocketNodeItemStackRenderer extends TileEntityItemStackRenderer {
 
     private static final float CUTOUT_ALPHA_THRESHOLD = 0.1F;
-    private static final Map<IBakedModel, IBakedModel> BRIGHT_ITEM_MODELS = new IdentityHashMap<>();
+    private static final Map<IBakedModel, IBakedModel> BRIGHT_ITEM_MODELS = new Reference2ReferenceOpenHashMap<>();
 
     public static void bindItemRenderers() {
         PocketNodeItemStackRenderer renderer = new PocketNodeItemStackRenderer();
@@ -119,15 +119,15 @@ public final class PocketNodeItemStackRenderer extends TileEntityItemStackRender
 
     private static final class BrightItemBakedModel extends BakedModelWrapper<IBakedModel> {
 
-        private static final Map<BakedQuad, BakedQuad> NO_DIFFUSE_QUADS = new IdentityHashMap<>();
-        private static final Map<List<BakedQuad>, List<BakedQuad>> NO_DIFFUSE_QUAD_LISTS = new IdentityHashMap<>();
+        private static final Map<BakedQuad, BakedQuad> NO_DIFFUSE_QUADS = new Reference2ReferenceOpenHashMap<>();
+        private static final Map<List<BakedQuad>, List<BakedQuad>> NO_DIFFUSE_QUAD_LISTS = new Reference2ReferenceOpenHashMap<>();
 
         private BrightItemBakedModel(IBakedModel originalModel) {
             super(originalModel);
         }
 
         private static List<BakedQuad> wrapQuads(List<BakedQuad> quads) {
-            List<BakedQuad> wrapped = new ArrayList<>(quads.size());
+            List<BakedQuad> wrapped = new ObjectArrayList<>(quads.size());
             for (BakedQuad quad : quads) {
                 wrapped.add(NO_DIFFUSE_QUADS.computeIfAbsent(quad, BrightItemBakedModel::wrapQuad));
             }

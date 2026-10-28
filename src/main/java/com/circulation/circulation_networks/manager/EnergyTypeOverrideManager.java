@@ -15,6 +15,7 @@ import net.minecraft.nbt.CompressedStreamTools;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
 import net.minecraftforge.common.util.Constants;
 //?} else {
 /*import net.minecraft.core.BlockPos;
@@ -30,6 +31,8 @@ import java.io.File;
 import java.io.IOException;
 
 public final class EnergyTypeOverrideManager {
+
+    private static final IEnergyHandler.EnergyType[] ENERGY_TYPES = IEnergyHandler.EnergyType.values();
 
     private static volatile EnergyTypeOverrideManager INSTANCE;
 
@@ -88,9 +91,9 @@ public final class EnergyTypeOverrideManager {
     }
     *///?}
 
-    //~ if >=1.20 'net.minecraft.world.World' -> 'net.minecraft.world.level.Level' {
+    //~ if >=1.20 'World ' -> 'net.minecraft.world.level.Level ' {
     //~ if >=1.20 '.provider.getDimension()' -> '.dimension().location().hashCode()' {
-    private static int getDimensionId(net.minecraft.world.World world) {
+    private static int getDimensionId(World world) {
         return world.provider.getDimension();
     }
 
@@ -195,9 +198,8 @@ public final class EnergyTypeOverrideManager {
                     NBTTagCompound entry = entries.getCompoundTagAt(j);
                     long pos = entry.getLong("pos");
                     int type = entry.getInteger("type");
-                    var values = IEnergyHandler.EnergyType.values();
-                    if (type >= 0 && type < values.length) {
-                        dimMap.put(pos, values[type]);
+                    if (type >= 0 && type < ENERGY_TYPES.length) {
+                        dimMap.put(pos, ENERGY_TYPES[type]);
                     }
                 }
                 if (!dimMap.isEmpty()) overrides.put(dim, dimMap);
@@ -265,9 +267,8 @@ public final class EnergyTypeOverrideManager {
                     CompoundTag entry = entries.getCompound(j);
                     long pos = entry.getLong("pos");
                     int type = entry.getInt("type");
-                    var values = IEnergyHandler.EnergyType.values();
-                    if (type >= 0 && type < values.length) {
-                        dimMap.put(pos, values[type]);
+                    if (type >= 0 && type < ENERGY_TYPES.length) {
+                        dimMap.put(pos, ENERGY_TYPES[type]);
                     }
                 }
                 if (!dimMap.isEmpty()) overrides.put(dim, dimMap);
