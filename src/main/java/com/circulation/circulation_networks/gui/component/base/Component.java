@@ -1,5 +1,6 @@
 package com.circulation.circulation_networks.gui.component.base;
 
+import it.unimi.dsi.fastutil.objects.ObjectLists;
 import com.circulation.circulation_networks.container.ComponentSlotLayout;
 import com.circulation.circulation_networks.gui.CFNBaseGui;
 import com.circulation.circulation_networks.tooltip.Composite;
@@ -465,7 +466,7 @@ public class Component extends Rectangle {
     //? if <1.20 {
     @NotNull
     protected List<LocalizedComponent> collectSlotTooltip(int mouseX, int mouseY) {
-        if (boundLayouts.isEmpty()) return Collections.emptyList();
+        if (boundLayouts.isEmpty()) return ObjectLists.emptyList();
 
         int localMouseX = mouseX - gui.getGuiLeft();
         int localMouseY = mouseY - gui.getGuiTop();
@@ -483,7 +484,7 @@ public class Component extends Rectangle {
 
                 ItemStack stack = slot.getStack();
                 if (stack.isEmpty()) {
-                    return Collections.emptyList();
+                    return ObjectLists.emptyList();
                 }
 
                 List<String> lines = stack.getTooltip(mc.player,
@@ -491,7 +492,7 @@ public class Component extends Rectangle {
                         ? ITooltipFlag.TooltipFlags.ADVANCED
                         : ITooltipFlag.TooltipFlags.NORMAL);
                 if (lines.isEmpty()) {
-                    return Collections.emptyList();
+                    return ObjectLists.emptyList();
                 }
                 List<LocalizedComponent> tips = new ObjectArrayList<>(lines.size());
                 for (String line : lines) {
@@ -501,11 +502,11 @@ public class Component extends Rectangle {
             }
         }
 
-        return Collections.emptyList();
+        return ObjectLists.emptyList();
     }
     //?} else {
     /*protected List<LocalizedComponent> collectSlotTooltip(int mouseX, int mouseY) {
-        if (boundLayouts.isEmpty()) return Collections.emptyList();
+        if (boundLayouts.isEmpty()) return ObjectLists.emptyList();
 
         int localMouseX = mouseX - gui.getGuiLeft();
         int localMouseY = mouseY - gui.getGuiTop();
@@ -519,12 +520,12 @@ public class Component extends Rectangle {
 
                 ItemStack stack = slot.getItem();
                 if (stack.isEmpty()) {
-                    return Collections.emptyList();
+                    return ObjectLists.emptyList();
                 }
 
                 List<String> lines = gui.getContainerItemTooltipLines(stack);
                 if (lines.isEmpty()) {
-                    return Collections.emptyList();
+                    return ObjectLists.emptyList();
                 }
                 List<LocalizedComponent> tips = new ObjectArrayList<>(lines.size());
                 for (String line : lines) {
@@ -534,7 +535,7 @@ public class Component extends Rectangle {
             }
         }
 
-        return Collections.emptyList();
+        return ObjectLists.emptyList();
     }
     *///?}
 
@@ -616,7 +617,7 @@ public class Component extends Rectangle {
 
     @NotNull
     public final List<LocalizedComponent> collectTooltip(int mouseX, int mouseY) {
-        if (!isVisible() || !contains(mouseX, mouseY)) return Collections.emptyList();
+        if (!isVisible() || !contains(mouseX, mouseY)) return ObjectLists.emptyList();
         if (children.isEmpty()) {
             return getTooltip(mouseX, mouseY);
         }

@@ -27,6 +27,9 @@ import it.unimi.dsi.fastutil.objects.ObjectList;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import net.minecraft.item.ItemStack;
+//~ if >=1.20 'net.minecraft.util.EnumFacing' -> 'net.minecraft.core.Direction' {
+import net.minecraft.util.EnumFacing;
+//~}
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraft.util.ResourceLocation;
@@ -37,7 +40,7 @@ import net.minecraftforge.common.util.Constants;
 import net.minecraft.entity.player.EntityPlayerMP;
 //?} else {
 /*import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.world.World;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.nbt.Tag;
@@ -49,6 +52,10 @@ import java.io.File;
 import java.util.Objects;
 
 public final class PocketNodeManager {
+
+    //? if >=1.20 {
+    /*private static final net.minecraft.core.Direction[] DIRECTIONS = net.minecraft.core.Direction.values();
+    *///?}
 
     public static final PocketNodeManager INSTANCE = new PocketNodeManager();
     private final Int2ObjectMap<Long2ObjectMap<PocketNodeHost>> activeHosts = new Int2ObjectOpenHashMap<>();
@@ -129,11 +136,11 @@ public final class PocketNodeManager {
 
     //? if <1.20 {
     @Nullable
-    private static net.minecraft.util.EnumFacing inferAttachmentFace(World world, BlockPos pos) {
+    private static EnumFacing inferAttachmentFace(World world, BlockPos pos) {
         if (world == null || !ChunkCoordUtils.isChunkLoaded(world, pos)) {
             return null;
         }
-        for (net.minecraft.util.EnumFacing face : net.minecraft.util.EnumFacing.VALUES) {
+        for (EnumFacing face : EnumFacing.VALUES) {
             BlockPos adjacentPos = pos.offset(face);
             if (!ChunkCoordUtils.isChunkLoaded(world, adjacentPos)) {
                 continue;
@@ -143,7 +150,7 @@ public final class PocketNodeManager {
                 return face;
             }
         }
-        return net.minecraft.util.EnumFacing.UP;
+        return EnumFacing.UP;
     }
     //?} else {
     /*@Nullable
@@ -151,7 +158,7 @@ public final class PocketNodeManager {
         if (world == null || !ChunkCoordUtils.isChunkLoaded(world, pos)) {
             return null;
         }
-        for (net.minecraft.core.Direction face : net.minecraft.core.Direction.values()) {
+        for (net.minecraft.core.Direction face : DIRECTIONS) {
             BlockPos adjacentPos = pos.relative(face);
             if (!ChunkCoordUtils.isChunkLoaded(world, adjacentPos)) {
                 continue;
@@ -426,10 +433,10 @@ public final class PocketNodeManager {
         return world != null && isHostChunkLoaded(world, record.pos());
     }
 
-    //~ if >=1.20 'net.minecraft.util.EnumFacing' -> 'net.minecraft.core.Direction' {
+    //~ if >=1.20 'EnumFacing ' -> 'net.minecraft.core.Direction ' {
     //~ if >=1.20 'World ' -> 'Level ' {
     //~ if >=1.20 '.toLong()' -> '.asLong()' {
-    public RegisterPocketNodeResult registerPocketNodeDetailed(World world, BlockPos pos, NodeType<?> nodeType, @Nullable net.minecraft.util.EnumFacing attachmentFace, @Nullable String customName) {
+    public RegisterPocketNodeResult registerPocketNodeDetailed(World world, BlockPos pos, NodeType<?> nodeType, @Nullable EnumFacing attachmentFace, @Nullable String customName) {
         if (isClientWorld(world) || nodeType == null || !nodeType.allowsPocketNode() || NodeTypes.getById(nodeType.id()) != nodeType) {
             return RegisterPocketNodeResult.FAILED;
         }
@@ -675,7 +682,7 @@ public final class PocketNodeManager {
         indexChunkPosition(getChunkIndex(activeChunkIndex, dimId), chunkCoord, posLong);
     }
 
-    private @org.jetbrains.annotations.Nullable PocketNodeHost removeActiveHost(int dimId, long posLong) {
+    private @Nullable PocketNodeHost removeActiveHost(int dimId, long posLong) {
         Long2ObjectMap<PocketNodeHost> dimMap = activeHosts.get(dimId);
         if (dimMap == null) {
             return null;
@@ -697,7 +704,7 @@ public final class PocketNodeManager {
         pendingHosts.put(record);
     }
 
-    private @org.jetbrains.annotations.Nullable PocketNodeRecord removePending(int dimId, long posLong) {
+    private @Nullable PocketNodeRecord removePending(int dimId, long posLong) {
         return pendingHosts.remove(dimId, posLong);
     }
 

@@ -12,6 +12,8 @@ import net.minecraftforge.fml.common.network.simpleimpl.MessageContext;
 
 public final class UpdatePlayerChargingMode implements Packet<UpdatePlayerChargingMode> {
 
+    private static final ChargingDefinition[] CHARGING_DEFINITIONS = ChargingDefinition.values();
+
     private byte bytes;
     private byte mode;
 
@@ -43,7 +45,7 @@ public final class UpdatePlayerChargingMode implements Packet<UpdatePlayerChargi
         if (ctx.getServerHandler().player.openContainer instanceof ContainerHub containerHub) {
             switch (message.mode) {
                 case 0 -> {
-                    var cd = ChargingDefinition.values()[message.bytes & 0x7F];
+                    var cd = CHARGING_DEFINITIONS[message.bytes & 0x7F];
                     containerHub.chargingMode.setPreference(cd, !containerHub.chargingMode.getPreference(cd));
                 }
                 case 1 -> containerHub.chargingMode.setPrefs((byte) 0b00111111);

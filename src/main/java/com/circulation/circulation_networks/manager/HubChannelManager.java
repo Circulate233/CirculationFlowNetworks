@@ -1,5 +1,7 @@
 package com.circulation.circulation_networks.manager;
 
+import it.unimi.dsi.fastutil.objects.ObjectLists;
+import it.unimi.dsi.fastutil.objects.Object2ObjectMaps;
 import com.circulation.circulation_networks.api.IGrid;
 import com.circulation.circulation_networks.api.INodeBlockEntity;
 import com.circulation.circulation_networks.api.hub.ChannelSnapshotEntry;
@@ -41,8 +43,6 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -174,7 +174,7 @@ public final class HubChannelManager {
 
     public List<HubChannel> getChannels() {
         ensureLoaded();
-        return Collections.unmodifiableList(new ObjectArrayList<>(channels.values()));
+        return ObjectLists.unmodifiable(new ObjectArrayList<>(channels.values()));
     }
 
     public ChannelSnapshotList getAccessibleChannelSnapshots(UUID playerId) {
@@ -292,7 +292,7 @@ public final class HubChannelManager {
             normalizedName,
             playerId,
             permissionMode != null ? permissionMode : PermissionMode.PRIVATE,
-            Collections.emptyMap()
+            Object2ObjectMaps.emptyMap()
         );
         channels.put(channel.getChannelId(), channel);
         applyChannelToHub(hub, channel);
@@ -550,7 +550,7 @@ public final class HubChannelManager {
     }
 
     private List<IHubNode> getBoundHubs(UUID channelId) {
-        List<IHubNode> boundHubs = new ArrayList<>();
+        List<IHubNode> boundHubs = new ObjectArrayList<>();
         for (var entry : hubChannels.reference2ObjectEntrySet()) {
             if (channelId.equals(entry.getValue())) {
                 boundHubs.add(entry.getKey());
@@ -711,7 +711,7 @@ public final class HubChannelManager {
                     if (channelNbt.hasKey("ownerUUID")) {
                         owner = UUID.fromString(channelNbt.getString("ownerUUID"));
                     }
-                    HubChannel channel = new HubChannel(channelId, name, owner, permissionMode, Collections.emptyMap());
+                    HubChannel channel = new HubChannel(channelId, name, owner, permissionMode, Object2ObjectMaps.emptyMap());
                     if (channelNbt.hasKey("permissions", Constants.NBT.TAG_LIST)) {
                         NBTTagList permissionList = channelNbt.getTagList("permissions", Constants.NBT.TAG_COMPOUND);
                         for (int j = 0; j < permissionList.tagCount(); j++) {
@@ -793,7 +793,7 @@ public final class HubChannelManager {
                     if (channelNbt.contains("ownerUUID")) {
                         owner = UUID.fromString(channelNbt.getString("ownerUUID"));
                     }
-                    HubChannel channel = new HubChannel(channelId, name, owner, permissionMode, Collections.emptyMap());
+                    HubChannel channel = new HubChannel(channelId, name, owner, permissionMode, Object2ObjectMaps.emptyMap());
                     if (channelNbt.contains("permissions", Tag.TAG_LIST)) {
                         ListTag permissionList = channelNbt.getList("permissions", Tag.TAG_COMPOUND);
                         for (int j = 0; j < permissionList.size(); j++) {

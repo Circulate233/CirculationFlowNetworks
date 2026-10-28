@@ -19,7 +19,7 @@ public final class CirculationConfiguratorModeModel {
     }
 
     public static int nextFunctionId(int currentFunctionId) {
-        return Math.floorMod(currentFunctionId + 1, ToolFunction.values().length);
+        return Math.floorMod(currentFunctionId + 1, ToolFunction.VALUES.length);
     }
 
     public static int wrapSubMode(int rawMode, ToolFunction function) {
@@ -27,10 +27,12 @@ public final class CirculationConfiguratorModeModel {
     }
 
     public enum ToolFunction {
-        INSPECTION(InspectionMode.values().length, true),
-        CONFIGURATION(ConfigurationMode.values().length, true),
+        INSPECTION(InspectionMode.VALUES.length, true),
+        CONFIGURATION(ConfigurationMode.VALUES.length, true),
         PRIORITY(1, false),
         INTERACTION(1, false);
+
+        private static final ToolFunction[] VALUES = values();
 
         private final int subModeCount;
         private final boolean hasSubModes;
@@ -41,7 +43,7 @@ public final class CirculationConfiguratorModeModel {
         }
 
         public static ToolFunction fromID(int id) {
-            return values()[Math.floorMod(id, values().length)];
+            return VALUES[Math.floorMod(id, VALUES.length)];
         }
 
         public int getSubModeCount() {
@@ -75,8 +77,10 @@ public final class CirculationConfiguratorModeModel {
         LINK,
         MACHINE_LINK;
 
+        private static final InspectionMode[] VALUES = values();
+
         public static InspectionMode fromID(int id) {
-            return values()[Math.floorMod(id, values().length)];
+            return VALUES[Math.floorMod(id, VALUES.length)];
         }
 
         public boolean isMode(InspectionMode mode) {
@@ -107,6 +111,8 @@ public final class CirculationConfiguratorModeModel {
         INVALID(IEnergyHandler.EnergyType.INVALID),
         CLEAR(null);
 
+        private static final ConfigurationMode[] VALUES = values();
+
         private final IEnergyHandler.EnergyType energyType;
 
         ConfigurationMode(IEnergyHandler.EnergyType energyType) {
@@ -114,7 +120,7 @@ public final class CirculationConfiguratorModeModel {
         }
 
         public static ConfigurationMode fromID(int id) {
-            return values()[Math.floorMod(id, values().length)];
+            return VALUES[Math.floorMod(id, VALUES.length)];
         }
 
         public IEnergyHandler.EnergyType getEnergyType() {

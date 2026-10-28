@@ -1,5 +1,6 @@
 package com.circulation.circulation_networks.blocks.nodes;
 
+import it.unimi.dsi.fastutil.objects.ObjectLists;
 import com.circulation.circulation_networks.api.node.IHubNode;
 import com.circulation.circulation_networks.blocks.MultiblockShellBlock;
 import com.circulation.circulation_networks.client.render.HubRenderLayout;
@@ -24,7 +25,6 @@ import net.minecraft.world.World;
 import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.ParametersAreNonnullByDefault;
-import java.util.Collections;
 import java.util.List;
 
 @SuppressWarnings("deprecation")
@@ -73,7 +73,7 @@ public final class BlockHub extends BaseNodeBlock {
                 BaseItemTooltipModel.resolveTooltipKeys(getTranslationKey(), CI18n::hasKey)
             );
             if (tooltipKeys.length == 0) {
-                cachedHubTooltips = Collections.emptyList();
+                cachedHubTooltips = ObjectLists.emptyList();
             } else {
                 List<LocalizedComponent> result = new ObjectArrayList<>(tooltipKeys.length);
                 for (String key : tooltipKeys) {

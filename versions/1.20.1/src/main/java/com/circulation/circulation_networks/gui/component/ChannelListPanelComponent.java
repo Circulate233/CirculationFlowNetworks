@@ -1,5 +1,6 @@
 package com.circulation.circulation_networks.gui.component;
 
+import it.unimi.dsi.fastutil.objects.ObjectLists;
 import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.api.hub.ChannelSnapshotEntry;
 import com.circulation.circulation_networks.api.hub.ChannelSnapshotList;
@@ -18,7 +19,6 @@ import net.minecraft.client.gui.GuiGraphics;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
@@ -94,9 +94,9 @@ public final class ChannelListPanelComponent extends DraggableComponent implemen
             protected @NotNull List<LocalizedComponent> getTooltip(int mouseX, int mouseY) {
                 ChannelSnapshotEntry entry = getEntryAt(mouseX, mouseY);
                 if (entry == null) {
-                    return Collections.emptyList();
+                    return ObjectLists.emptyList();
                 }
-                return Collections.singletonList(() -> entry.connected()
+                return ObjectLists.singleton(() -> entry.connected()
                     ? CI18n.format("gui.channel_list.tooltip.connected")
                     : CI18n.format("gui.channel_list.tooltip.switch"));
             }
@@ -248,7 +248,7 @@ public final class ChannelListPanelComponent extends DraggableComponent implemen
     private List<ChannelSnapshotEntry> getFilteredEntries() {
         ChannelSnapshotList list = container.availableChannels;
         if (list == null) {
-            return Collections.emptyList();
+            return ObjectLists.emptyList();
         }
 
         List<ChannelSnapshotEntry> filtered = new ObjectArrayList<>();
@@ -327,7 +327,7 @@ public final class ChannelListPanelComponent extends DraggableComponent implemen
 
         @Override
         protected @NotNull List<LocalizedComponent> getTooltip(int mouseX, int mouseY) {
-            return Collections.singletonList(() -> switch (permissionMode) {
+            return ObjectLists.singleton(() -> switch (permissionMode) {
                 case PUBLIC ->
                     active ? CI18n.format("gui.channel_list.tooltip.filter.public.hide") : CI18n.format("gui.channel_list.tooltip.filter.public.show");
                 case TEAM ->

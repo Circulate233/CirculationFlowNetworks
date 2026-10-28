@@ -13,6 +13,8 @@ import com.circulation.circulation_networks.packets.RenderingClear;
 import com.circulation.circulation_networks.packets.SpoceRendering;
 
 import java.util.List;
+import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import it.unimi.dsi.fastutil.objects.ObjectLists;
 
 final class CFNNetworkPackets {
 
@@ -20,7 +22,7 @@ final class CFNNetworkPackets {
     }
 
     static List<Object> playToClientPacketEntries() {
-        return List.of(
+        return ObjectLists.unmodifiable(ObjectArrayList.wrap(new Object[]{
             SpoceRendering.class,
             NodeNetworkRendering.class,
             EnergyWarningRendering.class,
@@ -32,6 +34,6 @@ final class CFNNetworkPackets {
             RenderingClear.INSTANCE,
             NodeHudData.class,
             HubPluginSyncData.class
-        );
+        }));
     }
 }

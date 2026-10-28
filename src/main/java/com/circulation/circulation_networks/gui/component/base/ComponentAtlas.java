@@ -1,5 +1,6 @@
 package com.circulation.circulation_networks.gui.component.base;
 
+import it.unimi.dsi.fastutil.objects.ObjectLists;
 import com.circulation.circulation_networks.CirculationFlowNetworks;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.minecraft.client.Minecraft;
@@ -45,7 +46,6 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -594,6 +594,6 @@ public final class ComponentAtlas extends ComponentAtlasRegistry {
     @Desugar
         //?}
     record StitchResult(BufferedImage image, List<AtlasRegion> regions) {
-        static final StitchResult EMPTY = new StitchResult(null, Collections.emptyList());
+        static final StitchResult EMPTY = new StitchResult(null, ObjectLists.emptyList());
     }
 }

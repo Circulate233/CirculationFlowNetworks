@@ -1,10 +1,10 @@
 package com.circulation.circulation_networks.mixins;
 
+import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.Object2ObjectLinkedOpenHashMap;
 import net.minecraftforge.fml.common.Loader;
 import zone.rong.mixinbooter.ILateMixinLoader;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -42,7 +42,7 @@ public class LateMixinLoader implements ILateMixinLoader {
 
     @Override
     public List<String> getMixinConfigs() {
-        return new ArrayList<>(MIXIN_CONFIGS.keySet());
+        return new ObjectArrayList<>(MIXIN_CONFIGS.keySet());
     }
 
     @Override

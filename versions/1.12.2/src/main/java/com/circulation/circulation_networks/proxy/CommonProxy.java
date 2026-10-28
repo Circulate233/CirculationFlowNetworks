@@ -1,5 +1,6 @@
 package com.circulation.circulation_networks.proxy;
 
+import it.unimi.dsi.fastutil.objects.ObjectLists;
 import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.api.INodeBlockEntity;
 import com.circulation.circulation_networks.container.ContainerMachinePriority;
@@ -80,8 +81,6 @@ import net.minecraftforge.fml.common.network.NetworkRegistry;
 import net.minecraftforge.fml.relauncher.Side;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -244,7 +243,7 @@ public class CommonProxy implements IGuiHandler {
         if (world == null || world.isRemote) {
             return;
         }
-        List<TileEntity> loadedTileEntities = new ArrayList<>(world.loadedTileEntityList);
+        List<TileEntity> loadedTileEntities = new ObjectArrayList<>(world.loadedTileEntityList);
         for (TileEntity blockEntity : loadedTileEntities) {
             if (!(blockEntity instanceof BaseNodeTileEntity<?> nodeBlockEntity)) {
                 continue;
@@ -328,7 +327,7 @@ public class CommonProxy implements IGuiHandler {
         @Override
         public List<PlayerIdentity> getOnlinePlayers() {
             if (CirculationFlowNetworks.server == null) {
-                return Collections.emptyList();
+                return ObjectLists.emptyList();
             }
             List<PlayerIdentity> players = new ObjectArrayList<>();
             for (EntityPlayerMP player : CirculationFlowNetworks.server.getPlayerList().getPlayers()) {

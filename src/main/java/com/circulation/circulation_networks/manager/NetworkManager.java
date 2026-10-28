@@ -14,7 +14,6 @@ import com.circulation.circulation_networks.utils.NodeEventHooks;
 import static com.circulation.circulation_networks.utils.SideCompat.isClientWorld;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
-
 import java.util.UUID;
 import java.nio.file.Path;
 
@@ -41,6 +40,7 @@ import it.unimi.dsi.fastutil.objects.Reference2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
 import com.circulation.circulation_networks.packets.NodeNetworkRendering;
 //~ mc_imports
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
@@ -52,7 +52,7 @@ import net.minecraftforge.common.DimensionManager;
 //?} else {
 /*import net.minecraft.nbt.NbtIo;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.entity.player.Player;
+import net.minecraft.entity.player.EntityPlayer;
 *///?}
 
 import org.jetbrains.annotations.NotNull;
@@ -60,10 +60,9 @@ import org.jetbrains.annotations.Nullable;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.util.ArrayDeque;
+import it.unimi.dsi.fastutil.objects.ObjectArrayFIFOQueue;
 import java.util.Collection;
 import java.util.List;
-import java.util.Queue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -256,7 +255,7 @@ public final class NetworkManager {
         return DimensionManager.getWorld(dimId);
     }
 
-    private static List<net.minecraft.entity.player.EntityPlayer> getPlayers(World world) {
+    private static List<EntityPlayer> getPlayers(World world) {
         return world.playerEntities;
     }
 
@@ -680,14 +679,14 @@ public final class NetworkManager {
 
             while (!remaining.isEmpty()) {
                 ReferenceSet<INode> component = new ReferenceOpenHashSet<>();
-                Queue<INode> queue = new ArrayDeque<>();
+                ObjectArrayFIFOQueue<INode> queue = new ObjectArrayFIFOQueue<>();
                 INode seed = remaining.iterator().next();
-                queue.add(seed);
+                queue.enqueue(seed);
                 component.add(seed);
                 remaining.remove(seed);
 
                 while (!queue.isEmpty()) {
-                    INode curr = queue.poll();
+                    INode curr = queue.dequeue();
                     for (INode nb : curr.getNeighbors()) {
                         enqueueComponentNeighbor(nb, remaining, component, queue);
                     }
@@ -746,11 +745,11 @@ public final class NetworkManager {
         INode candidate,
         ReferenceSet<INode> remaining,
         ReferenceSet<INode> component,
-        Queue<INode> queue
+        ObjectArrayFIFOQueue<INode> queue
     ) {
         if (candidate != null && remaining.remove(candidate)) {
             component.add(candidate);
-            queue.add(candidate);
+            queue.enqueue(candidate);
         }
     }
 

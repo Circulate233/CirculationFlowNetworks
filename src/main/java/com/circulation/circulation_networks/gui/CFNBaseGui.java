@@ -8,14 +8,19 @@ import com.circulation.circulation_networks.gui.component.base.ComponentScreenCo
 import com.circulation.circulation_networks.gui.component.base.RenderPhase;
 import net.minecraft.client.Minecraft;
 //? if <1.20 {
+import net.minecraftforge.client.event.GuiContainerEvent;
+import net.minecraftforge.client.event.GuiScreenEvent;
+import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 //?} else if <1.21 {
 /*import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
+import it.unimi.dsi.fastutil.objects.ObjectLists;
 *///?} else {
 /*import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
+import it.unimi.dsi.fastutil.objects.ObjectLists;
 *///?}
 //? if <1.20 {
 import com.circulation.circulation_networks.packets.ContainerProgressBar;
@@ -51,7 +56,6 @@ import java.util.Optional;
 *///?}
 
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
-
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import java.awt.Rectangle;
@@ -145,7 +149,7 @@ public abstract class CFNBaseGui<T extends CFNBaseContainer> extends GuiContaine
     /*public List<String> getContainerItemTooltipLines(ItemStack stack) {
         List<net.minecraft.network.chat.Component> lines = getTooltipFromContainerItem(stack);
         if (lines.isEmpty()) {
-            return java.util.Collections.emptyList();
+            return ObjectLists.emptyList();
         }
 
         List<String> tooltip = new ObjectArrayList<>(lines.size());
@@ -376,7 +380,7 @@ public abstract class CFNBaseGui<T extends CFNBaseContainer> extends GuiContaine
         resetColor();
         this.drawFG(this.guiLeft, this.guiTop, mouseX, mouseY);
         RenderHelper.enableGUIStandardItemLighting();
-        net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.GuiContainerEvent.DrawForeground(this, mouseX, mouseY));
+        MinecraftForge.EVENT_BUS.post(new GuiContainerEvent.DrawForeground(this, mouseX, mouseY));
 
         resetGuiRenderState();
         resetColor();
@@ -550,12 +554,12 @@ public abstract class CFNBaseGui<T extends CFNBaseContainer> extends GuiContaine
                 if (handleComponentMouseScroll()) {
                     continue;
                 }
-                if (net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.GuiScreenEvent.MouseInputEvent.Pre(this))) {
+                if (MinecraftForge.EVENT_BUS.post(new GuiScreenEvent.MouseInputEvent.Pre(this))) {
                     continue;
                 }
                 super.handleMouseInput();
                 if (this.equals(this.mc.currentScreen) && !this.mouseHandled) {
-                    net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.GuiScreenEvent.MouseInputEvent.Post(this));
+                    MinecraftForge.EVENT_BUS.post(new GuiScreenEvent.MouseInputEvent.Post(this));
                 }
             }
         }
@@ -563,12 +567,12 @@ public abstract class CFNBaseGui<T extends CFNBaseContainer> extends GuiContaine
         if (Keyboard.isCreated()) {
             while (Keyboard.next()) {
                 this.keyHandled = false;
-                if (net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.GuiScreenEvent.KeyboardInputEvent.Pre(this))) {
+                if (MinecraftForge.EVENT_BUS.post(new GuiScreenEvent.KeyboardInputEvent.Pre(this))) {
                     continue;
                 }
                 this.handleKeyboardInput();
                 if (this.equals(this.mc.currentScreen) && !this.keyHandled) {
-                    net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.GuiScreenEvent.KeyboardInputEvent.Post(this));
+                    MinecraftForge.EVENT_BUS.post(new GuiScreenEvent.KeyboardInputEvent.Post(this));
                 }
             }
         }

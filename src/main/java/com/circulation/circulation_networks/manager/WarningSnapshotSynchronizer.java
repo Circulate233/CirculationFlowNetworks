@@ -10,23 +10,30 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.LongPredicate;
+import java.util.function.LongSupplier;
 
 /**
- * Maintains the authoritative per-player warning snapshot schedule. Global
- * changes and dimension changes are sent immediately, while unchanged visible
- * ranges are sent again on the configured periodic synchronization boundary.
+ * Maintains authoritative per-player warning snapshots. Visible changes and
+ * dimension changes are sent on evaluation; unchanged non-empty snapshots are
+ * refreshed periodically before the client expires them.
  */
 final class WarningSnapshotSynchronizer {
 
     private final long rangeSyncIntervalTicks;
+    private final LongSupplier nanoTime;
     private final Object2ObjectMap<UUID, PlayerState> players = new Object2ObjectOpenHashMap<>();
     private final LongOpenHashSet desiredVisible = new LongOpenHashSet();
 
     WarningSnapshotSynchronizer(long rangeSyncIntervalTicks) {
+        this(rangeSyncIntervalTicks, System::nanoTime);
+    }
+
+    WarningSnapshotSynchronizer(long rangeSyncIntervalTicks, LongSupplier nanoTime) {
         if (rangeSyncIntervalTicks <= 0L) {
             throw new IllegalArgumentException("Warning range synchronization interval must be positive");
         }
         this.rangeSyncIntervalTicks = rangeSyncIntervalTicks;
+        this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
     }
 
     /**
@@ -57,34 +64,37 @@ final class WarningSnapshotSynchronizer {
         boolean dimensionChanged = !dimensionKey.equals(player.currentDimension);
         player.currentDimension = dimensionKey;
         DimensionState dimension = player.dimensions.computeIfAbsent(dimensionKey, ignored -> new DimensionState());
-
-        boolean globalChanged = !dimension.globalPositions.equals(globalPositions);
-        if (globalChanged) {
-            dimension.globalPositions.clear();
-            dimension.globalPositions.addAll(globalPositions);
-        }
-        if (globalChanged || dimensionChanged || tick % rangeSyncIntervalTicks == 0L) {
+        if (dimensionChanged) {
             dimension.syncPending = true;
-        }
-        if (!dimension.syncPending) {
-            return;
         }
 
         desiredVisible.clear();
-        for (long position : dimension.globalPositions) {
+        for (long position : globalPositions) {
             if (isVisible.test(position)) {
                 desiredVisible.add(position);
             }
         }
+        boolean visibleChanged = !dimension.visiblePositions.equals(desiredVisible);
+        long now = desiredVisible.isEmpty() ? 0L : nanoTime.getAsLong();
+        // Client expiry follows client ticks, independently of a slow server's tick rate.
+        boolean refreshDue = !desiredVisible.isEmpty()
+            && (tick - dimension.lastSentTick >= rangeSyncIntervalTicks
+                || now - dimension.lastSentNanos >= 3_000_000_000L);
+        if (!dimension.syncPending && !visibleChanged && !refreshDue) {
+            return;
+        }
+        dimension.syncPending = true;
         if (dimension.revision == Long.MAX_VALUE) {
             throw new IllegalStateException("Energy warning revision exhausted");
         }
         long revision = ++dimension.revision;
         sink.send(dimensionKey, revision, desiredVisible);
-        if (!dimension.visiblePositions.equals(desiredVisible)) {
+        if (visibleChanged) {
             dimension.visiblePositions.clear();
             dimension.visiblePositions.addAll(desiredVisible);
         }
+        dimension.lastSentTick = tick;
+        dimension.lastSentNanos = now;
         dimension.syncPending = false;
     }
 
@@ -126,9 +136,10 @@ final class WarningSnapshotSynchronizer {
     }
 
     private static final class DimensionState {
-        private final LongSet globalPositions = new LongOpenHashSet();
         private final LongSet visiblePositions = new LongOpenHashSet();
         private long revision;
+        private long lastSentTick;
+        private long lastSentNanos;
         private boolean syncPending = true;
     }
 }

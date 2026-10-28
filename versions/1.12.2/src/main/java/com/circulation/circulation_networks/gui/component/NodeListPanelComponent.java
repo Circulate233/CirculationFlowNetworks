@@ -1,5 +1,6 @@
 package com.circulation.circulation_networks.gui.component;
 
+import it.unimi.dsi.fastutil.objects.ObjectLists;
 import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.api.hub.NodeSnapshotEntry;
 import com.circulation.circulation_networks.api.hub.NodeSnapshotList;
@@ -32,7 +33,6 @@ import net.minecraft.util.text.TextComponentString;
 import org.jetbrains.annotations.NotNull;
 import org.lwjgl.opengl.GL11;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -137,7 +137,7 @@ public final class NodeListPanelComponent extends DraggableComponent implements 
             protected @NotNull List<LocalizedComponent> getTooltip(int mouseX, int mouseY) {
                 int hitSlot = getIconVisibleSlot(mouseX, mouseY);
                 if (hitSlot >= 0) {
-                    return Collections.singletonList(
+                    return ObjectLists.singleton(
                         () -> I18n.format("tooltip.circulation_networks.double_click_locate")
                     );
                 }
@@ -378,7 +378,7 @@ public final class NodeListPanelComponent extends DraggableComponent implements 
 
     private List<NodeSnapshotEntry> getEntries() {
         NodeSnapshotList list = container.nodes;
-        return list == null ? Collections.emptyList() : list.getEntries();
+        return list == null ? ObjectLists.emptyList() : list.getEntries();
     }
 
     private void syncVisibleNameFields() {
@@ -432,7 +432,7 @@ public final class NodeListPanelComponent extends DraggableComponent implements 
     }
 
     private boolean renderSpriteIfPresent(int x, int y) {
-        if (com.circulation.circulation_networks.gui.component.base.ComponentAtlas.INSTANCE.getRegion(NodeListPanelComponent.ENTRY_SPRITE) == null) {
+        if (ComponentAtlas.INSTANCE.getRegion(NodeListPanelComponent.ENTRY_SPRITE) == null) {
             return false;
         }
         renderAtlasSprite(NodeListPanelComponent.ENTRY_SPRITE, x, y, NodeListPanelComponent.ENTRY_WIDTH, NodeListPanelComponent.ENTRY_HEIGHT);

@@ -1,5 +1,6 @@
 package com.circulation.circulation_networks;
 
+import it.unimi.dsi.fastutil.objects.ObjectLists;
 import com.circulation.circulation_networks.api.INodeBlockEntity;
 import com.circulation.circulation_networks.energy.manager.AE2HandlerManager;
 import com.circulation.circulation_networks.energy.manager.DEHandlerManager;
@@ -34,6 +35,7 @@ import dev.ftb.mods.ftbteams.api.FTBTeamsAPI;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import mekanism.common.tile.TileEntityBoundingBlock;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.neoforged.bus.api.IEventBus;
@@ -58,7 +60,6 @@ import net.neoforged.neoforge.server.ServerLifecycleHooks;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -137,7 +138,7 @@ public final class CirculationFlowNetworks {
             public List<PlayerIdentity> getOnlinePlayers() {
                 var server = ServerLifecycleHooks.getCurrentServer();
                 if (server == null) {
-                    return Collections.emptyList();
+                    return ObjectLists.emptyList();
                 }
                 List<PlayerIdentity> players = new ObjectArrayList<>();
                 for (ServerPlayer player : server.getPlayerList().getPlayers()) {
@@ -147,7 +148,7 @@ public final class CirculationFlowNetworks {
             }
 
             @Override
-            public boolean hasChannelManagementOverride(net.minecraft.world.entity.player.Player player) {
+            public boolean hasChannelManagementOverride(Player player) {
                 if (!(player instanceof ServerPlayer serverPlayer)) {
                     return false;
                 }

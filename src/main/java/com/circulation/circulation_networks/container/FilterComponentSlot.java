@@ -7,7 +7,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.IInventory;
 //?} else {
-/*import net.minecraft.world.entity.player.Player;
+/*import net.minecraft.entity.player.EntityPlayer;
  *///?}
 //? if <1.21 {
 import net.minecraftforge.items.IItemHandler;

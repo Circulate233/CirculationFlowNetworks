@@ -20,6 +20,7 @@ public final class ConfigOverrideRendering implements Packet<ConfigOverrideRende
     public static final int REMOVE = 2;
     private static final long[] EL = new long[0];
     private static final int[] EI = new int[0];
+    private static final IEnergyHandler.EnergyType[] ENERGY_TYPES = IEnergyHandler.EnergyType.values();
 
     private int mode;
     private long pos;
@@ -124,18 +125,16 @@ public final class ConfigOverrideRendering implements Packet<ConfigOverrideRende
                 case SET -> {
                     handler.clear();
                     if (message.positions != null) {
-                        var values = IEnergyHandler.EnergyType.values();
                         for (int i = 0; i < message.positions.length; i++) {
-                            if (message.types[i] >= 0 && message.types[i] < values.length) {
-                                handler.addOverride(message.positions[i], values[message.types[i]]);
+                            if (message.types[i] >= 0 && message.types[i] < ENERGY_TYPES.length) {
+                                handler.addOverride(message.positions[i], ENERGY_TYPES[message.types[i]]);
                             }
                         }
                     }
                 }
                 case ADD -> {
-                    var values = IEnergyHandler.EnergyType.values();
-                    if (message.energyTypeOrdinal >= 0 && message.energyTypeOrdinal < values.length) {
-                        handler.addOverride(message.pos, values[message.energyTypeOrdinal]);
+                    if (message.energyTypeOrdinal >= 0 && message.energyTypeOrdinal < ENERGY_TYPES.length) {
+                        handler.addOverride(message.pos, ENERGY_TYPES[message.energyTypeOrdinal]);
                     }
                 }
                 case REMOVE -> handler.removeOverride(message.pos);

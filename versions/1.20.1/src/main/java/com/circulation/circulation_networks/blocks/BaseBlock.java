@@ -1,5 +1,6 @@
 package com.circulation.circulation_networks.blocks;
 
+import it.unimi.dsi.fastutil.objects.ObjectLists;
 import com.circulation.circulation_networks.api.API;
 import com.circulation.circulation_networks.items.BaseItemTooltipModel;
 import com.circulation.circulation_networks.manager.PocketNodeManager;
@@ -30,7 +31,6 @@ import net.minecraftforge.network.NetworkHooks;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.Collections;
 import java.util.List;
 
 @SuppressWarnings("deprecation")
@@ -73,7 +73,7 @@ public abstract class BaseBlock extends Block implements EntityBlock {
     @Override
     @SuppressWarnings("deprecation")
     public @NotNull List<ItemStack> getDrops(@NotNull BlockState state, LootParams.@NotNull Builder builder) {
-        return Collections.singletonList(new ItemStack(this));
+        return ObjectLists.singleton(new ItemStack(this));
     }
 
     @Override

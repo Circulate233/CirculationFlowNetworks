@@ -1,5 +1,6 @@
 package com.circulation.circulation_networks.jei;
 
+import it.unimi.dsi.fastutil.objects.ObjectLists;
 import com.circulation.circulation_networks.gui.CFNBaseGui;
 import mezz.jei.api.gui.handlers.IGhostIngredientHandler;
 import mezz.jei.api.gui.handlers.IGuiContainerHandler;
@@ -7,7 +8,6 @@ import mezz.jei.api.ingredients.ITypedIngredient;
 import net.minecraft.client.renderer.Rect2i;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.Collections;
 import java.util.List;
 
 public class CFNGuiHandler<T extends CFNBaseGui<?>> implements IGuiContainerHandler<T>, IGhostIngredientHandler<T> {
@@ -19,7 +19,7 @@ public class CFNGuiHandler<T extends CFNBaseGui<?>> implements IGuiContainerHand
 
     @Override
     public <I> @NotNull List<Target<I>> getTargetsTyped(@NotNull T gui, @NotNull ITypedIngredient<I> ingredient, boolean doStart) {
-        return Collections.emptyList();
+        return ObjectLists.emptyList();
     }
 
     @Override

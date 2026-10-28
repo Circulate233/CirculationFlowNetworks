@@ -1,6 +1,8 @@
 package com.circulation.circulation_networks.blocks;
 
+import it.unimi.dsi.fastutil.objects.ObjectLists;
 import com.circulation.circulation_networks.tiles.MultiblockShellBlockEntity;
+import net.minecraft.client.particle.ParticleEngine;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
@@ -27,6 +29,7 @@ import net.minecraft.world.level.material.PushReaction;
 import net.minecraft.world.level.pathfinder.PathComputationType;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
@@ -35,7 +38,6 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import javax.annotation.ParametersAreNonnullByDefault;
-import java.util.Collections;
 import java.util.List;
 import java.util.function.BiConsumer;
 
@@ -45,14 +47,14 @@ public class MultiblockShellBlock extends Block implements EntityBlock {
 
     public static final IClientBlockExtensions PARTICLE_CLIENT_EXTENSIONS = new IClientBlockExtensions() {
         @Override
-        public boolean addHitEffects(BlockState state, Level level, net.minecraft.world.phys.HitResult target,
-                                     net.minecraft.client.particle.ParticleEngine manager) {
+        public boolean addHitEffects(BlockState state, Level level, HitResult target,
+                                     ParticleEngine manager) {
             return true;
         }
 
         @Override
         public boolean addDestroyEffects(BlockState state, Level level, BlockPos pos,
-                                         net.minecraft.client.particle.ParticleEngine manager) {
+                                         ParticleEngine manager) {
             return true;
         }
     };
@@ -139,7 +141,7 @@ public class MultiblockShellBlock extends Block implements EntityBlock {
     @Override
     @NotNull
     public List<ItemStack> getDrops(BlockState state, LootParams.Builder builder) {
-        return Collections.emptyList();
+        return ObjectLists.emptyList();
     }
 
     @Override

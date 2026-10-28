@@ -1,5 +1,6 @@
 package com.circulation.circulation_networks.client.render;
 
+import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.ByteBufferBuilder;
@@ -36,14 +37,15 @@ import net.neoforged.neoforge.client.model.data.ModelData;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 
-import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.SortedSet;
 
 @OnlyIn(Dist.CLIENT)
 public final class RotatingModelVBORenderer {
 
-    private static final Map<ResourceLocation, VertexBuffer> FULL_BRIGHT_VBOS = new IdentityHashMap<>();
+    private static final Direction[] DIRECTIONS = Direction.values();
+
+    private static final Map<ResourceLocation, VertexBuffer> FULL_BRIGHT_VBOS = new Reference2ReferenceOpenHashMap<>();
     private static final Object2ObjectMap<AmbientVBOKey, CachedVBO> AMBIENT_VBOS = new Object2ObjectOpenHashMap<>();
     private static final Object2ObjectMap<AmbientLightKey, CachedLightSignature> AMBIENT_LIGHT_SIGNATURES = new Object2ObjectOpenHashMap<>();
     private static final Quaternionf ROTATION = new Quaternionf();
@@ -273,7 +275,7 @@ public final class RotatingModelVBORenderer {
     private static int computeLightSignature(BlockAndTintGetter level, BlockPos pos, BlockState state) {
         int signature = state.hashCode();
         signature = 31 * signature + level.getRawBrightness(pos, 0);
-        for (Direction dir : Direction.values()) {
+        for (Direction dir : DIRECTIONS) {
             BlockPos sidePos = pos.relative(dir);
             BlockState sideState = level.getBlockState(sidePos);
             signature = 31 * signature + level.getRawBrightness(sidePos, 0);
