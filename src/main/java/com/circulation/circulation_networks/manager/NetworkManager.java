@@ -2,6 +2,7 @@ package com.circulation.circulation_networks.manager;
 
 import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.network.nodes.LongDistanceRelayNode;
+import com.circulation.circulation_networks.handlers.LongDistanceRelayInteraction;
 import com.circulation.circulation_networks.api.CFNBlockEntityEx;
 import com.circulation.circulation_networks.api.IGrid;
 import com.circulation.circulation_networks.api.INodeBlockEntity;
@@ -54,6 +55,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -528,8 +530,10 @@ public final class NetworkManager {
 
         if (oldGrid.getNodes().isEmpty()) {
             destroyGrid(oldGrid);
-        } else {
-            splitDisconnectedGrid(oldGrid);
+        } else if (splitDisconnectedGrid(oldGrid) && players != null) {
+            for (var player : players) {
+                CirculationFlowNetworks.sendToPlayer(new NodeNetworkRendering(player, oldGrid), player);
+            }
         }
 
         EnergyMachineManager.INSTANCE.removeNode(removedNode);
@@ -686,7 +690,7 @@ public final class NetworkManager {
         CONNECTED, ALREADY_CONNECTED, FULL, HUB_CONFLICT, UNAVAILABLE, DIFFERENT_DIMENSION
     }
 
-    private void splitDisconnectedGrid(IGrid oldGrid) {
+    private boolean splitDisconnectedGrid(IGrid oldGrid) {
         ReferenceSet<INode> remaining = new ReferenceOpenHashSet<>(oldGrid.getNodes());
         Object2ObjectMap<INode, ReferenceSet<INode>> incomingNeighbors = buildIncomingNeighborMap(oldGrid.getNodes());
         List<ReferenceSet<INode>> components = new ObjectArrayList<>();
@@ -720,7 +724,7 @@ public final class NetworkManager {
 
             oldGrid.getNodes().clear();
             oldGrid.setHubNode(null);
-            for (INode n : components.get(0)) {
+            for (INode n : components.getFirst()) {
                 oldGrid.getNodes().add(n);
                 n.setGrid(oldGrid);
                 if (n instanceof IHubNode h) {
@@ -730,7 +734,6 @@ public final class NetworkManager {
             oldGrid.markSnapshotDirty();
             markGridDirty(oldGrid);
 
-            var watchingPlayers = NodeNetworkRendering.getPlayers(oldGrid);
             for (int i = 1; i < components.size(); i++) {
                 IGrid splitGrid = allocGrid();
                 for (INode n : components.get(i)) {
@@ -739,14 +742,10 @@ public final class NetworkManager {
                         splitGrid.setHubNode(h);
                     }
                 }
-                if (watchingPlayers != null) {
-                    for (var player : watchingPlayers) {
-                        CirculationFlowNetworks.sendToPlayer(
-                            new NodeNetworkRendering(player, splitGrid), player);
-                    }
-                }
             }
+            return true;
         }
+        return false;
     }
 
     private void mergeNodeGrids(INode newNode, INode existing) {
@@ -799,7 +798,7 @@ public final class NetworkManager {
         try {
             var firstWatchers = NodeNetworkRendering.getPlayers(first.getGrid());
             var secondWatchers = NodeNetworkRendering.getPlayers(second.getGrid());
-            var watchers = new ReferenceOpenHashSet<>(firstWatchers == null ? java.util.Collections.emptySet() : firstWatchers);
+            var watchers = new ReferenceOpenHashSet<>(firstWatchers == null ? Collections.emptySet() : firstWatchers);
             if (secondWatchers != null) watchers.addAll(secondWatchers);
             first.rememberPeer(second);
             second.rememberPeer(first);
@@ -822,12 +821,13 @@ public final class NetworkManager {
         if (relay == null || !activeNodes.contains(relay) || !relay.isActive() || relay.getGrid() == null) {
             return -1;
         }
+        if (relay.getPeerPositions().isEmpty()) return 0;
         MachineBindingIndex.INSTANCE.beginTopologyTransaction();
         try {
             IGrid oldGrid = relay.getGrid();
             var watchingPlayers = NodeNetworkRendering.getPlayers(oldGrid);
             var watchers = new ReferenceOpenHashSet<>(watchingPlayers == null
-                ? java.util.Collections.emptySet() : watchingPlayers);
+                ? Collections.emptySet() : watchingPlayers);
             int removed = relay.getPeerPositions().size();
             for (long peerPos : relay.getPeerPositions().toLongArray()) {
                 INode peer = getIndexedNode(relay.getDimensionId(), BlockPosCompat.fromLong(peerPos));
@@ -944,6 +944,8 @@ public final class NetworkManager {
     }
 
     public void onServerStop() {
+        LongDistanceRelayInteraction.reset();
+        dirtyGrids.clear();
         scopeNode.clear();
         nodeScope.clear();
         nodeLocation.clear();

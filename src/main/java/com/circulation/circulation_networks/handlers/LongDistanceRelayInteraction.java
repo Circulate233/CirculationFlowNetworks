@@ -14,8 +14,8 @@ public final class LongDistanceRelayInteraction {
     }
 
     public static String select(Object player, LongDistanceRelayNode target) {
-        if (target == null || !target.isActive()) return key("unavailable");
         LongDistanceRelayNode source = selections.remove(player);
+        if (target == null || !target.isActive()) return key("unavailable");
         if (source == null || !source.isActive()) {
             selections.put(player, target);
             return key("start");
@@ -29,6 +29,10 @@ public final class LongDistanceRelayInteraction {
 
     private static String key(String suffix) {
         return "message.circulation_networks.long_distance_relay." + suffix;
+    }
+
+    public static void reset() {
+        selections.clear();
     }
 
     public static String clear(Object player, LongDistanceRelayNode target) {
