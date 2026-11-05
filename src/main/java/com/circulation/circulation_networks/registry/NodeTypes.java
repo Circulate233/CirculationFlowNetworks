@@ -8,6 +8,7 @@ import com.circulation.circulation_networks.api.node.NodeType;
 import com.circulation.circulation_networks.network.nodes.ChargingNode;
 import com.circulation.circulation_networks.network.nodes.HubNode;
 import com.circulation.circulation_networks.network.nodes.Node;
+import com.circulation.circulation_networks.network.nodes.LongDistanceRelayNode;
 import com.circulation.circulation_networks.network.nodes.PortNode;
 import com.circulation.circulation_networks.network.nodes.machine_node.ConsumerNode;
 import com.circulation.circulation_networks.network.nodes.machine_node.GeneratorNode;
@@ -34,6 +35,10 @@ public final class NodeTypes {
         register(nodeType, deserializer, creator);
         return nodeType;
     }
+
+    public static final NodeType<LongDistanceRelayNode> LONG_DISTANCE_RELAY_NODE = type(
+        "long_distance_relay_node", LongDistanceRelayNode.class, false,
+        LongDistanceRelayNode::new, LongDistanceRelayNode::new);
 
     public static @Nullable NodeType<?> getById(@Nullable String id) {
         return id == null ? null : TYPES_BY_ID.get(id);

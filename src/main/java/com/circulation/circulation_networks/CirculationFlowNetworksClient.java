@@ -1,5 +1,6 @@
 package com.circulation.circulation_networks;
 
+import com.circulation.circulation_networks.client.render.LongDistanceRelayNodeRenderer;
 import com.circulation.circulation_networks.blocks.MultiblockShellBlock;
 import com.circulation.circulation_networks.client.render.AnimatedNodeSpecialRenderer;
 import com.circulation.circulation_networks.client.render.AnimatedSpecialItemModel;
@@ -101,6 +102,7 @@ final class CirculationFlowNetworksClient {
         });
         modEventBus.addListener((EntityRenderersEvent.RegisterRenderers event) -> {
             event.registerBlockEntityRenderer(CFNBlockEntityTypes.RELAY_NODE, RelayNodeRenderer::new);
+            event.registerBlockEntityRenderer(CFNBlockEntityTypes.LONG_DISTANCE_RELAY_NODE, LongDistanceRelayNodeRenderer::new);
             event.registerBlockEntityRenderer(CFNBlockEntityTypes.CHARGING_NODE, ChargingNodeRenderer::new);
             event.registerBlockEntityRenderer(CFNBlockEntityTypes.PORT_NODE, PortNodeRenderer::new);
             event.registerBlockEntityRenderer(CFNBlockEntityTypes.HUB, HubRenderer::new);

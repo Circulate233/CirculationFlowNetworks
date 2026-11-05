@@ -128,9 +128,6 @@ if (isVersionProject) {
     the<JavaPluginExtension>().sourceSets.named("test") {
         java.setSrcDirs(listOf(rootProject.file("src/test/java"), file("src/test/java")))
         resources.setSrcDirs(listOf(rootProject.file("src/test/resources"), file("src/test/resources")))
-        val mainClasspath = project.the<JavaPluginExtension>().sourceSets.getByName("main").compileClasspath
-        compileClasspath += mainClasspath
-        runtimeClasspath += mainClasspath
     }
 
     repositories {
@@ -173,6 +170,9 @@ if (isVersionProject) {
         compileOnly("org.spongepowered:mixin:0.8.5")
         annotationProcessor("org.spongepowered:mixin:0.8.5:processor")
         testImplementation("org.junit.jupiter:junit-jupiter:5.7.1")
+        testImplementation("org.mockito:mockito-core:4.11.0")
+        testImplementation("net.bytebuddy:byte-buddy:1.17.8")
+        testImplementation("net.bytebuddy:byte-buddy-agent:1.17.8")
         testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     }
 

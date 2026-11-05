@@ -1,5 +1,6 @@
 package com.circulation.circulation_networks.registry;
 
+import com.circulation.circulation_networks.blocks.nodes.BlockLongDistanceRelayNode;
 import com.circulation.circulation_networks.blocks.BlockCirculationShielder;
 import com.circulation.circulation_networks.blocks.BlockNodePedestal;
 import com.circulation.circulation_networks.blocks.MultiblockShellBlock;
@@ -13,6 +14,7 @@ public final class CFNBlocks {
     public static BlockPortNode blockPortNode;
     public static BlockChargingNode blockChargingNode;
     public static BlockRelayNode blockRelayNode;
+    public static BlockLongDistanceRelayNode blockLongDistanceRelayNode;
     public static BlockCirculationShielder blockCirculationShielder;
     public static BlockHub blockHub;
     public static BlockNodePedestal blockNodePedestal;

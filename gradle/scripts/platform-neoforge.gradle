@@ -26,4 +26,9 @@ neoForge {
             sourceSet sourceSets.main
         }
     }
+
+    unitTest {
+        enable()
+        testedMod = mods.getByName(mod_id.toString())
+    }
 }

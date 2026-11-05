@@ -265,9 +265,8 @@ public class Node implements INode {
 
     @Override
     public final LinkType linkScopeCheck(INode node) {
-        var dist = this.distanceSq(node);
-        boolean canConnectAtoB = dist <= this.getLinkScopeSq();
-        boolean canConnectBtoA = dist <= node.getLinkScopeSq();
+        boolean canConnectAtoB = this.canLinkTo(node);
+        boolean canConnectBtoA = node.canLinkTo(this);
 
         if (canConnectAtoB && canConnectBtoA) {
             return LinkType.DOUBLY;

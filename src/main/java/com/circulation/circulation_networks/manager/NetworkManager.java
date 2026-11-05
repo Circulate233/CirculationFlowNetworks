@@ -1,6 +1,7 @@
 package com.circulation.circulation_networks.manager;
 
 import com.circulation.circulation_networks.CirculationFlowNetworks;
+import com.circulation.circulation_networks.network.nodes.LongDistanceRelayNode;
 import com.circulation.circulation_networks.api.CFNBlockEntityEx;
 import com.circulation.circulation_networks.api.IGrid;
 import com.circulation.circulation_networks.api.INodeBlockEntity;
@@ -475,6 +476,17 @@ public final class NetworkManager {
     private void removeNodeInternal(INode removedNode) {
         if (!activeNodes.remove(removedNode)) return;
 
+        if (removedNode instanceof LongDistanceRelayNode relay) {
+            for (long peerPos : relay.getPeerPositions().toLongArray()) {
+                INode peer = getIndexedNode(relay.getDimensionId(), BlockPosCompat.fromLong(peerPos));
+                if (peer instanceof LongDistanceRelayNode other && relay.canLinkTo(other)) {
+                    other.forgetPeer(relay);
+                    relay.forgetPeer(other);
+                    persistRelay(other);
+                }
+            }
+        }
+
         NodeEventHooks.postRemoveNodePre(removedNode);
         String dimId = getDimensionId(removedNode);
         validationTracker.removePending(dimId, removedNode.getPos());
@@ -517,66 +529,7 @@ public final class NetworkManager {
         if (oldGrid.getNodes().isEmpty()) {
             destroyGrid(oldGrid);
         } else {
-            ReferenceSet<INode> remaining = new ReferenceOpenHashSet<>(oldGrid.getNodes());
-            Object2ObjectMap<INode, ReferenceSet<INode>> incomingNeighbors = buildIncomingNeighborMap(oldGrid.getNodes());
-            List<ReferenceSet<INode>> components = new ObjectArrayList<>();
-
-            while (!remaining.isEmpty()) {
-                ReferenceSet<INode> component = new ReferenceOpenHashSet<>();
-                ObjectArrayFIFOQueue<INode> queue = new ObjectArrayFIFOQueue<>();
-                INode seed = remaining.iterator().next();
-                queue.enqueue(seed);
-                component.add(seed);
-                remaining.remove(seed);
-
-                while (!queue.isEmpty()) {
-                    INode curr = queue.dequeue();
-                    for (INode nb : curr.getNeighbors()) {
-                        enqueueComponentNeighbor(nb, remaining, component, queue);
-                    }
-
-                    ReferenceSet<INode> incoming = incomingNeighbors.get(curr);
-                    if (incoming != null) {
-                        for (INode nb : incoming) {
-                            enqueueComponentNeighbor(nb, remaining, component, queue);
-                        }
-                    }
-                }
-                components.add(component);
-            }
-
-            if (components.size() > 1) {
-                components.sort((a, b) -> Integer.compare(b.size(), a.size()));
-
-                oldGrid.getNodes().clear();
-                oldGrid.setHubNode(null);
-                for (INode n : components.getFirst()) {
-                    oldGrid.getNodes().add(n);
-                    n.setGrid(oldGrid);
-                    if (n instanceof IHubNode h) {
-                        oldGrid.setHubNode(h);
-                    }
-                }
-                oldGrid.markSnapshotDirty();
-                markGridDirty(oldGrid);
-
-                var watchingPlayers = NodeNetworkRendering.getPlayers(oldGrid);
-                for (int i = 1; i < components.size(); i++) {
-                    IGrid splitGrid = allocGrid();
-                    for (INode n : components.get(i)) {
-                        assignNodeToGrid(n, splitGrid);
-                        if (n instanceof IHubNode h) {
-                            splitGrid.setHubNode(h);
-                        }
-                    }
-                    if (watchingPlayers != null) {
-                        for (var player : watchingPlayers) {
-                            CirculationFlowNetworks.sendToPlayer(
-                                new NodeNetworkRendering(player, splitGrid), player);
-                        }
-                    }
-                }
-            }
+            splitDisconnectedGrid(oldGrid);
         }
 
         EnergyMachineManager.INSTANCE.removeNode(removedNode);
@@ -659,6 +612,7 @@ public final class NetworkManager {
         for (long chunkCoord : nodeScope.get(dimId).get(newNode)) {
             candidates.addAll(scopeMap.get(chunkCoord));
         }
+        addExplicitRelayCandidates(newNode, candidates);
         candidates.remove(newNode);
 
         Reference2ObjectMap<INode, INode.LinkType> linkCache = new Reference2ObjectOpenHashMap<>();
@@ -680,26 +634,7 @@ public final class NetworkManager {
                 case A_TO_B -> newNode.addNeighbor(existing);
                 case B_TO_A -> existing.addNeighbor(newNode);
             }
-            IGrid existingGrid = existing.getGrid();
-            IGrid currentGrid = newNode.getGrid();
-            if (currentGrid == null) {
-                assignNodeToGrid(newNode, existingGrid);
-            } else if (existingGrid != null && existingGrid != currentGrid) {
-                IGrid dst = currentGrid.getNodes().size() > existingGrid.getNodes().size() ? currentGrid : existingGrid;
-                IGrid src = dst == currentGrid ? existingGrid : currentGrid;
-                if (src.getHubNode() != null) {
-                    dst.setHubNode(src.getHubNode());
-                }
-                for (INode n : src.getNodes()) {
-                    dst.getNodes().add(n);
-                    n.setGrid(dst);
-                }
-                src.getNodes().clear();
-                src.setHubNode(null);
-                dst.markSnapshotDirty();
-                destroyGrid(src);
-                markGridDirty(dst);
-            }
+            mergeNodeGrids(newNode, existing);
         }
 
         if (newNode.getGrid() == null) {
@@ -747,6 +682,199 @@ public final class NetworkManager {
         return false;
     }
 
+    public enum RelayLinkResult {
+        CONNECTED, ALREADY_CONNECTED, FULL, HUB_CONFLICT, UNAVAILABLE, DIFFERENT_DIMENSION
+    }
+
+    private void splitDisconnectedGrid(IGrid oldGrid) {
+        ReferenceSet<INode> remaining = new ReferenceOpenHashSet<>(oldGrid.getNodes());
+        Object2ObjectMap<INode, ReferenceSet<INode>> incomingNeighbors = buildIncomingNeighborMap(oldGrid.getNodes());
+        List<ReferenceSet<INode>> components = new ObjectArrayList<>();
+
+        while (!remaining.isEmpty()) {
+            ReferenceSet<INode> component = new ReferenceOpenHashSet<>();
+            ObjectArrayFIFOQueue<INode> queue = new ObjectArrayFIFOQueue<>();
+            INode seed = remaining.iterator().next();
+            queue.enqueue(seed);
+            component.add(seed);
+            remaining.remove(seed);
+
+            while (!queue.isEmpty()) {
+                INode curr = queue.dequeue();
+                for (INode nb : curr.getNeighbors()) {
+                    enqueueComponentNeighbor(nb, remaining, component, queue);
+                }
+
+                ReferenceSet<INode> incoming = incomingNeighbors.get(curr);
+                if (incoming != null) {
+                    for (INode nb : incoming) {
+                        enqueueComponentNeighbor(nb, remaining, component, queue);
+                    }
+                }
+            }
+            components.add(component);
+        }
+
+        if (components.size() > 1) {
+            components.sort((a, b) -> Integer.compare(b.size(), a.size()));
+
+            oldGrid.getNodes().clear();
+            oldGrid.setHubNode(null);
+            for (INode n : components.get(0)) {
+                oldGrid.getNodes().add(n);
+                n.setGrid(oldGrid);
+                if (n instanceof IHubNode h) {
+                    oldGrid.setHubNode(h);
+                }
+            }
+            oldGrid.markSnapshotDirty();
+            markGridDirty(oldGrid);
+
+            var watchingPlayers = NodeNetworkRendering.getPlayers(oldGrid);
+            for (int i = 1; i < components.size(); i++) {
+                IGrid splitGrid = allocGrid();
+                for (INode n : components.get(i)) {
+                    assignNodeToGrid(n, splitGrid);
+                    if (n instanceof IHubNode h) {
+                        splitGrid.setHubNode(h);
+                    }
+                }
+                if (watchingPlayers != null) {
+                    for (var player : watchingPlayers) {
+                        CirculationFlowNetworks.sendToPlayer(
+                            new NodeNetworkRendering(player, splitGrid), player);
+                    }
+                }
+            }
+        }
+    }
+
+    private void mergeNodeGrids(INode newNode, INode existing) {
+        IGrid existingGrid = existing.getGrid();
+        IGrid currentGrid = newNode.getGrid();
+        if (currentGrid == null) {
+            assignNodeToGrid(newNode, existingGrid);
+        } else if (existingGrid != null && existingGrid != currentGrid) {
+            IGrid dst = currentGrid.getNodes().size() > existingGrid.getNodes().size() ? currentGrid : existingGrid;
+            IGrid src = dst == currentGrid ? existingGrid : currentGrid;
+            if (src.getHubNode() != null) {
+                dst.setHubNode(src.getHubNode());
+            }
+            for (INode n : src.getNodes()) {
+                dst.getNodes().add(n);
+                n.setGrid(dst);
+            }
+            src.getNodes().clear();
+            src.setHubNode(null);
+            dst.markSnapshotDirty();
+            destroyGrid(src);
+            markGridDirty(dst);
+        }
+    }
+
+    public static RelayLinkResult checkRelayConnection(LongDistanceRelayNode first, LongDistanceRelayNode second) {
+        if (first == null || second == null || first == second) return RelayLinkResult.UNAVAILABLE;
+        if (!first.getDimensionId().equals(second.getDimensionId())) {
+            return RelayLinkResult.DIFFERENT_DIMENSION;
+        }
+        if (first.canLinkTo(second)) return RelayLinkResult.ALREADY_CONNECTED;
+        if (!first.hasFreeConnection() || !second.hasFreeConnection()) return RelayLinkResult.FULL;
+        IGrid firstGrid = first.getGrid();
+        IGrid secondGrid = second.getGrid();
+        if (firstGrid != null && secondGrid != null && firstGrid != secondGrid
+            && firstGrid.getHubNode() != null && secondGrid.getHubNode() != null) {
+            return RelayLinkResult.HUB_CONFLICT;
+        }
+        return RelayLinkResult.CONNECTED;
+    }
+
+    public synchronized RelayLinkResult connectLongDistanceRelays(LongDistanceRelayNode first, LongDistanceRelayNode second) {
+        if (!activeNodes.contains(first) || !activeNodes.contains(second)
+            || !first.isActive() || !second.isActive() || first.getGrid() == null || second.getGrid() == null) {
+            return RelayLinkResult.UNAVAILABLE;
+        }
+        RelayLinkResult result = checkRelayConnection(first, second);
+        if (result != RelayLinkResult.CONNECTED) return result;
+        MachineBindingIndex.INSTANCE.beginTopologyTransaction();
+        try {
+            var firstWatchers = NodeNetworkRendering.getPlayers(first.getGrid());
+            var secondWatchers = NodeNetworkRendering.getPlayers(second.getGrid());
+            var watchers = new ReferenceOpenHashSet<>(firstWatchers == null ? java.util.Collections.emptySet() : firstWatchers);
+            if (secondWatchers != null) watchers.addAll(secondWatchers);
+            first.rememberPeer(second);
+            second.rememberPeer(first);
+            first.addNeighbor(second);
+            second.addNeighbor(first);
+            mergeNodeGrids(first, second);
+            persistRelay(first);
+            persistRelay(second);
+            for (var player : watchers) {
+                NodeNetworkRendering.addPlayer(first.getGrid(), player);
+                CirculationFlowNetworks.sendToPlayer(new NodeNetworkRendering(player, first.getGrid()), player);
+            }
+            return RelayLinkResult.CONNECTED;
+        } finally {
+            MachineBindingIndex.INSTANCE.endTopologyTransaction();
+        }
+    }
+
+    public synchronized int clearLongDistanceRelayLinks(LongDistanceRelayNode relay) {
+        if (relay == null || !activeNodes.contains(relay) || !relay.isActive() || relay.getGrid() == null) {
+            return -1;
+        }
+        MachineBindingIndex.INSTANCE.beginTopologyTransaction();
+        try {
+            IGrid oldGrid = relay.getGrid();
+            var watchingPlayers = NodeNetworkRendering.getPlayers(oldGrid);
+            var watchers = new ReferenceOpenHashSet<>(watchingPlayers == null
+                ? java.util.Collections.emptySet() : watchingPlayers);
+            int removed = relay.getPeerPositions().size();
+            for (long peerPos : relay.getPeerPositions().toLongArray()) {
+                INode peer = getIndexedNode(relay.getDimensionId(), BlockPosCompat.fromLong(peerPos));
+                if (peer instanceof LongDistanceRelayNode other
+                    && relay.getDimensionId().equals(other.getDimensionId())) {
+                    other.forgetPeer(relay);
+                    other.removeNeighbor(relay);
+                    relay.removeNeighbor(other);
+                    persistRelay(other);
+                }
+            }
+            relay.clearPeers();
+            persistRelay(relay);
+            splitDisconnectedGrid(oldGrid);
+            for (var player : watchers) {
+                NodeNetworkRendering.addPlayer(relay.getGrid(), player);
+                CirculationFlowNetworks.sendToPlayer(new NodeNetworkRendering(player, relay.getGrid()), player);
+            }
+            return removed;
+        } finally {
+            MachineBindingIndex.INSTANCE.endTopologyTransaction();
+        }
+    }
+
+    private void persistRelay(LongDistanceRelayNode relay) {
+        if (relay.getGrid() != null) {
+            relay.getGrid().markSnapshotDirty();
+            markGridDirty(relay.getGrid());
+        }
+        var world = relay.getWorld();
+        if (Functions.isChunkLoaded(world, relay.getPos())) {
+            var blockEntity = world.getBlockEntity(relay.getPos());
+            if (blockEntity != null) {
+                blockEntity.setChanged();
+            }
+        }
+    }
+
+    private void addExplicitRelayCandidates(INode node, ReferenceSet<INode> candidates) {
+        if (node instanceof LongDistanceRelayNode relay) {
+            for (long peerPos : relay.getPeerPositions()) {
+                INode peer = getIndexedNode(relay.getDimensionId(), BlockPosCompat.fromLong(peerPos));
+                if (peer != null && peer.isActive() && relay.canLinkTo(peer)) candidates.add(peer);
+            }
+        }
+    }
+
     @Nullable
     private INode getIndexedNode(String dimId, BlockPos pos) {
         var pMap = posNodes.get(dimId);
@@ -763,6 +891,7 @@ public final class NetworkManager {
     private @NotNull ReferenceSet<INode> getLinkedNodesForNode(INode newNode) {
         String dimId = getDimensionId(newNode);
         ReferenceSet<INode> linkedNodes = new ReferenceOpenHashSet<>();
+        addExplicitRelayCandidates(newNode, linkedNodes);
         var scopeMap = scopeNode.get(dimId);
         if (scopeMap == scopeNode.defaultReturnValue()) {
             return linkedNodes;

@@ -1,5 +1,6 @@
 package com.circulation.circulation_networks;
 
+import com.circulation.circulation_networks.handlers.LongDistanceRelayInteractionHandler;
 import com.circulation.circulation_networks.energy.manager.FEHandlerManager;
 import com.circulation.circulation_networks.handlers.NodePlacementValidationHandler;
 import com.circulation.circulation_networks.handlers.NodeRescanHandler;
@@ -91,6 +92,7 @@ public final class CirculationFlowNetworks {
         NeoForge.EVENT_BUS.addListener(this::onServerTickPost);
         NeoForge.EVENT_BUS.register(NodePlacementValidationHandler.INSTANCE);
         NeoForge.EVENT_BUS.register(NodeRescanHandler.INSTANCE);
+        NeoForge.EVENT_BUS.register(LongDistanceRelayInteractionHandler.INSTANCE);
     }
 
     public static <T extends Packet<T>> void sendToPlayer(T packet, ServerPlayer player) {

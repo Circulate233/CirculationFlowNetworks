@@ -5,9 +5,8 @@ import com.circulation.circulation_networks.api.node.IHubNode;
 import com.circulation.circulation_networks.blocks.MultiblockShellBlock;
 import com.circulation.circulation_networks.client.render.HubRenderLayout;
 import com.circulation.circulation_networks.registry.CFNBlockEntityTypes;
-import com.circulation.circulation_networks.registry.CFNBlocks;
-import com.circulation.circulation_networks.tiles.BlockEntityMultiblockShell;
 import com.circulation.circulation_networks.tiles.nodes.BlockEntityHub;
+import com.circulation.circulation_networks.utils.MultiblockStructure;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import net.minecraft.core.BlockPos;
@@ -104,16 +103,7 @@ public final class BlockHub extends BaseNodeBlock {
                 }
             }
         }
-        if (!level.isClientSide()) {
-            var shellState = CFNBlocks.blockMultiblockShell.defaultBlockState();
-            for (BlockPos shellPos : shellPositions(pos)) {
-                level.setBlock(shellPos, shellState, 3);
-                var shellBE = level.getBlockEntity(shellPos);
-                if (shellBE instanceof BlockEntityMultiblockShell shell) {
-                    shell.setOriginPos(pos);
-                }
-            }
-        }
+        MultiblockStructure.place(level, pos, shellPositions(pos));
     }
 
     @Override
@@ -131,11 +121,7 @@ public final class BlockHub extends BaseNodeBlock {
                     }
                 }
             }
-            for (BlockPos shellPos : shellPositions(pos)) {
-                if (level.getBlockState(shellPos).getBlock() instanceof MultiblockShellBlock) {
-                    level.removeBlock(shellPos, false);
-                }
-            }
+            MultiblockStructure.remove(level, pos, shellPositions(pos));
         }
         positions.remove(pos.asLong());
         return super.playerWillDestroy(level, pos, state, player);
@@ -144,11 +130,7 @@ public final class BlockHub extends BaseNodeBlock {
     @Override
     protected void affectNeighborsAfterRemoval(@NotNull BlockState state, @NotNull ServerLevel level,
                                                @NotNull BlockPos pos, boolean movedByPiston) {
-        for (BlockPos shellPos : shellPositions(pos)) {
-            if (level.getBlockState(shellPos).getBlock() instanceof MultiblockShellBlock) {
-                level.removeBlock(shellPos, false);
-            }
-        }
+        MultiblockStructure.remove(level, pos, shellPositions(pos));
         positions.remove(pos.asLong());
         super.affectNeighborsAfterRemoval(state, level, pos, movedByPiston);
     }

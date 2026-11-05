@@ -40,6 +40,7 @@ public final class CFNCreativeTabs {
         consumer.accept(CFNBlocks.blockHub);
         consumer.accept(CFNBlocks.blockChargingNode);
         consumer.accept(CFNBlocks.blockRelayNode);
+        consumer.accept(CFNBlocks.blockLongDistanceRelayNode);
         consumer.accept(CFNBlocks.blockPortNode);
         consumer.accept(CFNBlocks.blockCirculationShielder);
         consumer.accept(CFNBlocks.blockNodePedestal);

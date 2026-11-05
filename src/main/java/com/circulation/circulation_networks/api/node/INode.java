@@ -42,6 +42,11 @@ public interface INode {
 
     double getLinkScopeSq();
 
+    /** Whether this node initiates a link to the other node. */
+    default boolean canLinkTo(INode other) {
+        return getDimensionId().equals(other.getDimensionId()) && distanceSq(other) <= getLinkScopeSq();
+    }
+
     ReferenceSet<INode> getNeighbors();
 
     void addNeighbor(INode neighbor);

@@ -1,4 +1,4 @@
-﻿{
+{
   "block.circulation_networks.charging_node": "环流充能节点",
   "block.circulation_networks.circulation_shielder": "环流屏蔽仪",
   "block.circulation_networks.hub": "环流中枢",
@@ -168,5 +168,17 @@
   "tooltip.circulation_networks.node_rescan": "§e空手潜行右键可重扫描附近能量设备",
   "hud.node.network_data": "网络数据",
   "hud.node.unnamed": "未命名节点",
-  "message.circulation_networks.node_rescan_success": "§a已重扫描附近能量设备"
+  "message.circulation_networks.node_rescan_success": "§a已重扫描附近能量设备",
+  "block.circulation_networks.long_distance_relay_node": "长距离中继节点",
+  "block.circulation_networks.long_distance_relay_node.tooltip.0": "§7同维度内不限连接距离，最多连接 3 个同类节点",
+  "block.circulation_networks.long_distance_relay_node.tooltip.1": "§7右键连接；空手潜行右键清除全部绑定",
+  "message.circulation_networks.long_distance_relay.start": "开始连接：请右键另一个长距离中继节点。",
+  "message.circulation_networks.long_distance_relay.connected": "长距离中继节点连接成功。",
+  "message.circulation_networks.long_distance_relay.cancelled": "已取消本次连接。",
+  "message.circulation_networks.long_distance_relay.already_connected": "这两个长距离中继节点已经连接。",
+  "message.circulation_networks.long_distance_relay.full": "连接失败：其中一个节点已绑定 3 个长距离中继节点。",
+  "message.circulation_networks.long_distance_relay.hub_conflict": "连接失败：合并后的网络不能包含多个中枢。",
+  "message.circulation_networks.long_distance_relay.unavailable": "连接失败：节点已失效，请重新选择。",
+  "message.circulation_networks.long_distance_relay.different_dimension": "连接失败：两个节点必须位于同一维度。",
+  "message.circulation_networks.long_distance_relay.cleared": "已清除该节点的全部绑定。"
 }
