@@ -161,7 +161,18 @@
   "tooltip.circulation_networks.pocket_node_detach_with_configurator": "§eRight-click with a Circulation Configurator to detach",
   "tooltip.circulation_networks.node_rescan": "§eSneak-right-click with empty hand to rescan nearby energy devices",
   "hud.node.network_data": "Network Data",
-  "hud.node.unnamed": "Unnamed Node"
-,
-  "message.circulation_networks.node_rescan_success": "§aRescanned nearby energy devices"
+  "hud.node.unnamed": "Unnamed Node",
+  "message.circulation_networks.node_rescan_success": "§aRescanned nearby energy devices",
+  "block.circulation_networks.long_distance_relay_node": "Long-Distance Relay Node",
+  "block.circulation_networks.long_distance_relay_node.tooltip.0": "§7Connect up to 3 nodes of the same type at any distance within one dimension",
+  "block.circulation_networks.long_distance_relay_node.tooltip.1": "§7Right-click to link; sneak-right-click empty-handed to clear all links",
+  "message.circulation_networks.long_distance_relay.start": "Connection started: right-click another long-distance relay node.",
+  "message.circulation_networks.long_distance_relay.connected": "Long-distance relay nodes connected.",
+  "message.circulation_networks.long_distance_relay.cancelled": "Connection cancelled.",
+  "message.circulation_networks.long_distance_relay.already_connected": "These long-distance relay nodes are already connected.",
+  "message.circulation_networks.long_distance_relay.full": "Connection failed: one of the nodes already has 3 long-distance relay peers.",
+  "message.circulation_networks.long_distance_relay.hub_conflict": "Connection failed: a network cannot contain more than one hub.",
+  "message.circulation_networks.long_distance_relay.unavailable": "Connection failed: a node is unavailable. Select it again.",
+  "message.circulation_networks.long_distance_relay.different_dimension": "Connection failed: both nodes must be in the same dimension.",
+  "message.circulation_networks.long_distance_relay.cleared": "All links on this node have been cleared."
 }

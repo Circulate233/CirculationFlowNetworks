@@ -7,12 +7,14 @@ import com.circulation.circulation_networks.blocks.nodes.BlockChargingNode;
 import com.circulation.circulation_networks.blocks.nodes.BlockHub;
 import com.circulation.circulation_networks.blocks.nodes.BlockPortNode;
 import com.circulation.circulation_networks.blocks.nodes.BlockRelayNode;
+import com.circulation.circulation_networks.blocks.nodes.BlockLongDistanceRelayNode;
 
 public final class CFNBlocks {
 
     public static BlockPortNode blockPortNode;
     public static BlockChargingNode blockChargingNode;
     public static BlockRelayNode blockRelayNode;
+    public static BlockLongDistanceRelayNode blockLongDistanceRelayNode;
     public static BlockCirculationShielder blockCirculationShielder;
     public static BlockHub blockHub;
     public static BlockNodePedestal blockNodePedestal;

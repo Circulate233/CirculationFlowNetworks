@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "circulation_networks:block/hub/hub_crystal"
+    }
+  }
+}

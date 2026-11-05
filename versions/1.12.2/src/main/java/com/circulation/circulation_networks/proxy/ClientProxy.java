@@ -126,6 +126,8 @@ public final class ClientProxy extends CommonProxy {
         File modConfigDir = new File(Loader.instance().getConfigDir(), CirculationFlowNetworks.MOD_ID);
         ComponentAtlas.INSTANCE.startAsync(modConfigDir);
         ClientRegistry.bindTileEntitySpecialRenderer(TileEntityRelayNode.class, new RelayNodeRotatingRenderer());
+        ClientRegistry.bindTileEntitySpecialRenderer(com.circulation.circulation_networks.tiles.nodes.TileEntityLongDistanceRelayNode.class,
+            new com.circulation.circulation_networks.client.render.LongDistanceRelayNodeRenderer());
         ClientRegistry.bindTileEntitySpecialRenderer(TileEntityChargingNode.class, new ChargingNodeRotatingRenderer());
         ClientRegistry.bindTileEntitySpecialRenderer(TileEntityPortNode.class, new PortNodeRotatingRenderer());
         ClientRegistry.bindTileEntitySpecialRenderer(TileEntityHub.class, new HubRotatingRenderer());

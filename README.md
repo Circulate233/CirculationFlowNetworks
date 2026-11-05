@@ -70,6 +70,13 @@ Does not detect energy machines — used solely to extend network coverage. When
 
 - Link range: 30 blocks
 
+### Long-Distance Relay Node
+
+Manually connects distant parts of a network within the same dimension. Right-click two relays to bind them; sneak-right-click with an empty hand to clear bindings.
+
+- Manual link distance: unlimited within one dimension
+- Maximum connections: 3 other Long-Distance Relay Nodes
+
 ### Hub
 
 An optional management center for the network. Provides a GUI with plugin, channel, and permission systems. Only one Hub is allowed per network. The Hub can also detect energy machines and charge nearby players.

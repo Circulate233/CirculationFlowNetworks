@@ -13,6 +13,7 @@ import com.circulation.circulation_networks.energy.manager.MMCEHandlerManager;
 import com.circulation.circulation_networks.events.BlockEntityLifeCycleEvent;
 import com.circulation.circulation_networks.handlers.NodePlacementValidationHandler;
 import com.circulation.circulation_networks.handlers.NodeRescanHandler;
+import com.circulation.circulation_networks.handlers.LongDistanceRelayInteractionHandler;
 import com.circulation.circulation_networks.manager.DatPersistenceScheduler;
 import com.circulation.circulation_networks.manager.EnergyMachineManager;
 import com.circulation.circulation_networks.manager.EnergyTypeOverrideManager;
@@ -125,6 +126,7 @@ public class CommonProxy implements IGuiHandler {
         }
         MinecraftForge.EVENT_BUS.register(NodePlacementValidationHandler.INSTANCE);
         MinecraftForge.EVENT_BUS.register(NodeRescanHandler.INSTANCE);
+        MinecraftForge.EVENT_BUS.register(LongDistanceRelayInteractionHandler.INSTANCE);
     }
 
     public void postInit() {

@@ -17,15 +17,15 @@ import net.minecraftforge.common.MinecraftForge;
  *///?}
 //? if <1.20 {
 import net.minecraftforge.fml.common.eventhandler.EventBus;
-
-import java.util.Collections;
-import java.util.IdentityHashMap;
-import java.util.Set;
 //?} else if < 1.21 {
 /*import net.minecraftforge.eventbus.api.IEventBus;
  *///?} else {
 /*import net.neoforged.bus.api.IEventBus;
  *///?}
+
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.Set;
 
 public final class BlockEntityLifecycleHooks {
 

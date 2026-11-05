@@ -81,6 +81,8 @@ final class CirculationFlowNetworksClient {
         });
         modEventBus.addListener((EntityRenderersEvent.RegisterRenderers event) -> {
             event.registerBlockEntityRenderer(CFNBlockEntityTypes.RELAY_NODE, RelayNodeRenderer::new);
+            event.registerBlockEntityRenderer(CFNBlockEntityTypes.LONG_DISTANCE_RELAY_NODE,
+                com.circulation.circulation_networks.client.render.LongDistanceRelayNodeRenderer::new);
             event.registerBlockEntityRenderer(CFNBlockEntityTypes.CHARGING_NODE, ChargingNodeRenderer::new);
             event.registerBlockEntityRenderer(CFNBlockEntityTypes.PORT_NODE, PortNodeRenderer::new);
             event.registerBlockEntityRenderer(CFNBlockEntityTypes.HUB, HubRenderer::new);

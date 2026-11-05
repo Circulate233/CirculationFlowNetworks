@@ -1,0 +1,26 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "SPS",
+    "ERE",
+    "SPS"
+  ],
+  "key": {
+    "S": {
+      "item": "circulation_networks:sourceflow_crystal"
+    },
+    "P": {
+      "item": "minecraft:ender_pearl"
+    },
+    "E": {
+      "item": "minecraft:ender_eye"
+    },
+    "R": {
+      "item": "circulation_networks:relay_node"
+    }
+  },
+  "result": {
+    "id": "circulation_networks:long_distance_relay_node",
+    "count": 1
+  }
+}

@@ -8,6 +8,7 @@ import com.circulation.circulation_networks.CFNConfig;
 import com.circulation.circulation_networks.network.nodes.ChargingNode;
 import com.circulation.circulation_networks.network.nodes.HubNode;
 import com.circulation.circulation_networks.network.nodes.Node;
+import com.circulation.circulation_networks.network.nodes.LongDistanceRelayNode;
 import com.circulation.circulation_networks.network.nodes.PortNode;
 import com.circulation.circulation_networks.network.nodes.machine_node.ConsumerNode;
 import com.circulation.circulation_networks.network.nodes.machine_node.GeneratorNode;
@@ -49,6 +50,10 @@ public final class NodeTypes {
 
     public static final NodeType<Node> RELAY_NODE = type("relay_node", Node.class, true, Node::new,
         ctx -> new Node(NodeTypes.RELAY_NODE, ctx, CFNConfig.NODE.relayNode.linkScope));
+
+    public static final NodeType<LongDistanceRelayNode> LONG_DISTANCE_RELAY_NODE = type(
+        "long_distance_relay_node", LongDistanceRelayNode.class, false,
+        LongDistanceRelayNode::new, LongDistanceRelayNode::new);
 
     public static @Nullable NodeType<?> getById(@Nullable String id) {
         return id == null ? null : TYPES_BY_ID.get(id);

@@ -8,6 +8,7 @@ import com.circulation.circulation_networks.blocks.nodes.BlockChargingNode;
 import com.circulation.circulation_networks.blocks.nodes.BlockHub;
 import com.circulation.circulation_networks.blocks.nodes.BlockPortNode;
 import com.circulation.circulation_networks.blocks.nodes.BlockRelayNode;
+import com.circulation.circulation_networks.blocks.nodes.BlockLongDistanceRelayNode;
 import com.circulation.circulation_networks.container.ContainerCirculationShielder;
 import com.circulation.circulation_networks.container.ContainerHub;
 import com.circulation.circulation_networks.container.ContainerMachinePriority;
@@ -18,6 +19,7 @@ import com.circulation.circulation_networks.tiles.nodes.ChargingNodeBlockEntity;
 import com.circulation.circulation_networks.tiles.nodes.HubBlockEntity;
 import com.circulation.circulation_networks.tiles.nodes.PortNodeBlockEntity;
 import com.circulation.circulation_networks.tiles.nodes.RelayNodeBlockEntity;
+import com.circulation.circulation_networks.tiles.nodes.LongDistanceRelayNodeBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
@@ -46,6 +48,7 @@ public final class RegistryBlocks {
             CFNBlocks.blockHub = registerBlock(helper, "hub", new BlockHub());
             CFNBlocks.blockChargingNode = registerBlock(helper, "charging_node", new BlockChargingNode());
             CFNBlocks.blockRelayNode = registerBlock(helper, "relay_node", new BlockRelayNode());
+            CFNBlocks.blockLongDistanceRelayNode = registerBlock(helper, "long_distance_relay_node", new BlockLongDistanceRelayNode());
             CFNBlocks.blockPortNode = registerBlock(helper, "port_node", new BlockPortNode());
             CFNBlocks.blockCirculationShielder = registerBlock(helper, "circulation_shielder", new BlockCirculationShielder());
             CFNBlocks.blockNodePedestal = registerBlock(helper, "node_pedestal", new BlockNodePedestal());
@@ -54,6 +57,7 @@ public final class RegistryBlocks {
 
         event.register(Registries.ITEM, helper -> {
             registerBlockItem(helper, "hub", CFNBlocks.blockHub);
+            registerBlockItem(helper, "long_distance_relay_node", CFNBlocks.blockLongDistanceRelayNode);
             registerBlockItem(helper, "charging_node", CFNBlocks.blockChargingNode);
             registerBlockItem(helper, "relay_node", CFNBlocks.blockRelayNode);
             registerBlockItem(helper, "port_node", CFNBlocks.blockPortNode);
@@ -68,6 +72,8 @@ public final class RegistryBlocks {
                 BlockEntityType.Builder.of(ChargingNodeBlockEntity::new, CFNBlocks.blockChargingNode).build(null));
             CFNBlockEntityTypes.RELAY_NODE = registerBlockEntityType(helper, "relay_node",
                 BlockEntityType.Builder.of(RelayNodeBlockEntity::new, CFNBlocks.blockRelayNode).build(null));
+            CFNBlockEntityTypes.LONG_DISTANCE_RELAY_NODE = registerBlockEntityType(helper, "long_distance_relay_node",
+                BlockEntityType.Builder.of(LongDistanceRelayNodeBlockEntity::new, CFNBlocks.blockLongDistanceRelayNode).build(null));
             CFNBlockEntityTypes.PORT_NODE = registerBlockEntityType(helper, "port_node",
                 BlockEntityType.Builder.of(PortNodeBlockEntity::new, CFNBlocks.blockPortNode).build(null));
             CFNBlockEntityTypes.CIRCULATION_SHIELDER = registerBlockEntityType(helper, "circulation_shielder",

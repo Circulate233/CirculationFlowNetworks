@@ -7,6 +7,7 @@ import com.circulation.circulation_networks.blocks.nodes.BlockChargingNode;
 import com.circulation.circulation_networks.blocks.nodes.BlockHub;
 import com.circulation.circulation_networks.blocks.nodes.BlockPortNode;
 import com.circulation.circulation_networks.blocks.nodes.BlockRelayNode;
+import com.circulation.circulation_networks.blocks.nodes.BlockLongDistanceRelayNode;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.ObjectList;
 import net.minecraft.block.Block;
@@ -30,6 +31,7 @@ public final class RegistryBlocks {
     public static BlockPortNode blockPortNode;
     public static BlockChargingNode blockChargingNode;
     public static BlockRelayNode blockRelayNode;
+    public static BlockLongDistanceRelayNode blockLongDistanceRelayNode;
     public static BlockCirculationShielder blockCirculationShielder;
     public static BlockHub blockHub;
     public static BlockNodePedestal blockNodePedestal;
@@ -38,6 +40,7 @@ public final class RegistryBlocks {
         prepareItemBlockRegister(blockPortNode = registerBlock(new BlockPortNode()));
         prepareItemBlockRegister(blockChargingNode = registerBlock(new BlockChargingNode()));
         prepareItemBlockRegister(blockRelayNode = registerBlock(new BlockRelayNode()));
+        prepareItemBlockRegister(blockLongDistanceRelayNode = registerBlock(new BlockLongDistanceRelayNode()));
         prepareItemBlockRegister(blockCirculationShielder = registerBlock(new BlockCirculationShielder()));
         prepareItemBlockRegister(blockHub = registerBlock(new BlockHub()));
         prepareItemBlockRegister(blockNodePedestal = registerBlock(new BlockNodePedestal()));
@@ -47,6 +50,7 @@ public final class RegistryBlocks {
         CFNBlocks.blockPortNode = blockPortNode;
         CFNBlocks.blockChargingNode = blockChargingNode;
         CFNBlocks.blockRelayNode = blockRelayNode;
+        CFNBlocks.blockLongDistanceRelayNode = blockLongDistanceRelayNode;
         CFNBlocks.blockCirculationShielder = blockCirculationShielder;
         CFNBlocks.blockHub = blockHub;
         CFNBlocks.blockNodePedestal = blockNodePedestal;

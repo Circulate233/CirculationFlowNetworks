@@ -9,6 +9,7 @@ import com.circulation.circulation_networks.energy.manager.MEKHandlerManager;
 import com.circulation.circulation_networks.events.BlockEntityLifeCycleEvent;
 import com.circulation.circulation_networks.handlers.NodePlacementValidationHandler;
 import com.circulation.circulation_networks.handlers.NodeRescanHandler;
+import com.circulation.circulation_networks.handlers.LongDistanceRelayInteractionHandler;
 import com.circulation.circulation_networks.manager.ChargingManager;
 import com.circulation.circulation_networks.manager.DatPersistenceScheduler;
 import com.circulation.circulation_networks.manager.EnergyMachineManager;
@@ -98,6 +99,7 @@ public final class CirculationFlowNetworks {
         NeoForge.EVENT_BUS.addListener(this::onServerTickPost);
         NeoForge.EVENT_BUS.register(NodePlacementValidationHandler.INSTANCE);
         NeoForge.EVENT_BUS.register(NodeRescanHandler.INSTANCE);
+        NeoForge.EVENT_BUS.register(LongDistanceRelayInteractionHandler.INSTANCE);
     }
 
     public static <T extends Packet<T>> void sendToPlayer(T packet, ServerPlayer player) {

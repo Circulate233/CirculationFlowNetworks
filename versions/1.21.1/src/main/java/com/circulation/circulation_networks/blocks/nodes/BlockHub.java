@@ -4,10 +4,9 @@ import it.unimi.dsi.fastutil.objects.ObjectLists;
 import com.circulation.circulation_networks.api.node.IHubNode;
 import com.circulation.circulation_networks.blocks.MultiblockShellBlock;
 import com.circulation.circulation_networks.client.render.HubRenderLayout;
+import com.circulation.circulation_networks.utils.MultiblockStructure;
 import com.circulation.circulation_networks.items.BaseItemTooltipModel;
 import com.circulation.circulation_networks.registry.CFNBlockEntityTypes;
-import com.circulation.circulation_networks.registry.CFNBlocks;
-import com.circulation.circulation_networks.tiles.MultiblockShellBlockEntity;
 import com.circulation.circulation_networks.tiles.nodes.HubBlockEntity;
 import com.circulation.circulation_networks.tooltip.LocalizedComponent;
 import com.circulation.circulation_networks.utils.CI18n;
@@ -125,16 +124,7 @@ public final class BlockHub extends BaseNodeBlock {
                 }
             }
         }
-        if (!level.isClientSide()) {
-            var shellState = CFNBlocks.blockMultiblockShell.defaultBlockState();
-            for (BlockPos shellPos : shellPositions(pos)) {
-                level.setBlock(shellPos, shellState, 3);
-                var shellBE = level.getBlockEntity(shellPos);
-                if (shellBE instanceof MultiblockShellBlockEntity shell) {
-                    shell.setOriginPos(pos);
-                }
-            }
-        }
+        MultiblockStructure.place(level, pos, shellPositions(pos));
     }
 
     @Override
@@ -153,11 +143,7 @@ public final class BlockHub extends BaseNodeBlock {
                     }
                 }
             }
-            for (BlockPos shellPos : shellPositions(pos)) {
-                if (level.getBlockState(shellPos).getBlock() instanceof MultiblockShellBlock) {
-                    level.removeBlock(shellPos, false);
-                }
-            }
+            MultiblockStructure.remove(level, pos, shellPositions(pos));
             positions.remove(pos.asLong());
         }
         super.onRemove(state, level, pos, newState, isMoving);

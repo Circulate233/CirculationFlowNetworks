@@ -392,6 +392,12 @@ val localTestResourcesDir = file("src/test/resources")
 
 // Keep test sources explicit so version-specific regression tests can live in the repo.
 the<JavaPluginExtension>().sourceSets.matching { it.name == "test" }.all {
+    if (!isLegacyRfg) {
+        // Modern moddev attaches Minecraft to main only; shared node tests also use NBT and positions.
+        val mainClasspath = project.the<JavaPluginExtension>().sourceSets.getByName("main").compileClasspath
+        compileClasspath += mainClasspath
+        runtimeClasspath += mainClasspath
+    }
     java.setSrcDirs(
         listOf(localTestJavaDir, sharedTestJavaDir)
             .distinctBy { it.absolutePath }
@@ -559,8 +565,15 @@ dependencies {
 
     if (propertyBool("enable_junit_testing")) {
         testImplementation("org.junit.jupiter:junit-jupiter:5.7.1")
+        testImplementation("org.mockito:mockito-core:4.11.0")
+        // Mockito 4 keeps Java 8 support; this Byte Buddy version also supports the Java 21 test runtime.
+        testImplementation("net.bytebuddy:byte-buddy:1.14.12")
         testRuntimeOnly("org.junit.platform:junit-platform-launcher")
         testImplementation("it.unimi.dsi:fastutil:8.5.9")
+        if (propertyString("minecraft_version") == "1.20.1") {
+            // Minecraft's Log4j SLF4J provider uses the 2.x API, unlike some Forge dependencies.
+            testRuntimeOnly("org.slf4j:slf4j-api:2.0.9")
+        }
     }
 
     compileOnlyApi("org.jetbrains:annotations:24.1.0")
@@ -707,6 +720,8 @@ tasks.withType<JavaExec>().configureEach {
 
 tasks.named<Test>("test") {
     useJUnitPlatform()
+    workingDir = layout.buildDirectory.dir("test-work").get().asFile
+    doFirst { workingDir.mkdirs() }
     javaLauncher.set(javaToolchains.launcherFor {
         languageVersion.set(JavaLanguageVersion.of(if (isLegacyRfg) 8 else configuredJavaVersion))
     })

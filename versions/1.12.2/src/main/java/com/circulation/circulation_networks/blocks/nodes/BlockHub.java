@@ -4,9 +4,8 @@ import it.unimi.dsi.fastutil.objects.ObjectLists;
 import com.circulation.circulation_networks.api.node.IHubNode;
 import com.circulation.circulation_networks.blocks.MultiblockShellBlock;
 import com.circulation.circulation_networks.client.render.HubRenderLayout;
+import com.circulation.circulation_networks.utils.MultiblockStructure;
 import com.circulation.circulation_networks.items.BaseItemTooltipModel;
-import com.circulation.circulation_networks.registry.CFNBlocks;
-import com.circulation.circulation_networks.tiles.TileEntityMultiblockShell;
 import com.circulation.circulation_networks.tiles.nodes.TileEntityHub;
 import com.circulation.circulation_networks.tooltip.LocalizedComponent;
 import com.circulation.circulation_networks.utils.CI18n;
@@ -122,16 +121,7 @@ public final class BlockHub extends BaseNodeBlock {
                 }
             }
         }
-        if (!worldIn.isRemote) {
-            var shellState = CFNBlocks.blockMultiblockShell.getDefaultState();
-            for (BlockPos shellPos : shellPositions(pos)) {
-                worldIn.setBlockState(shellPos, shellState, 3);
-                var shellTE = worldIn.getTileEntity(shellPos);
-                if (shellTE instanceof TileEntityMultiblockShell shell) {
-                    shell.setOriginPos(pos);
-                }
-            }
-        }
+        MultiblockStructure.place(worldIn, pos, shellPositions(pos));
     }
 
     @Override
@@ -148,11 +138,7 @@ public final class BlockHub extends BaseNodeBlock {
                 }
             }
         }
-        for (BlockPos shellPos : shellPositions(pos)) {
-            if (worldIn.getBlockState(shellPos).getBlock() instanceof MultiblockShellBlock) {
-                worldIn.setBlockToAir(shellPos);
-            }
-        }
+        MultiblockStructure.remove(worldIn, pos, shellPositions(pos));
         positions.remove(pos.toLong());
         super.breakBlock(worldIn, pos, state);
     }
