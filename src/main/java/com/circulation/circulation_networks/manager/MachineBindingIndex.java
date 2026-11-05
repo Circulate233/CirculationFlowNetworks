@@ -15,6 +15,7 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 import net.minecraft.core.BlockPos;
@@ -103,6 +104,8 @@ public final class MachineBindingIndex {
     private final ObjectArrayList<BackendLease> pendingQuarantines = new ObjectArrayList<>();
     private final ObjectArrayList<BackendLease> pendingBackendClosures = new ObjectArrayList<>();
     private final ObjectArrayList<CFNBlockEntityEx> throttledBlockEntities = new ObjectArrayList<>();
+    private final Reference2IntOpenHashMap<CFNBlockEntityEx> throttleIndices =
+        new Reference2IntOpenHashMap<>();
     private final ObjectArrayList<ProviderCleanupDebt> terminalProviderCleanupDebts = new ObjectArrayList<>();
     private final LongOpenHashSet shielderChunkScratch = new LongOpenHashSet();
     private int topologyTransactionDepth;
@@ -401,6 +404,7 @@ public final class MachineBindingIndex {
     private void markEnergyThrottleFailure(CFNBlockEntityEx blockEntity, int nextTimer, int nextStage) {
         int currentTimer = blockEntity.cfn_getEnergyThrottleTimer();
         if (currentTimer == 0) {
+            throttleIndices.put(blockEntity, throttledBlockEntities.size());
             throttledBlockEntities.add(blockEntity);
         }
         blockEntity.cfn_setEnergyLastThrottleTimer(nextStage);
@@ -408,21 +412,19 @@ public final class MachineBindingIndex {
     }
 
     private void clearEnergyThrottle(CFNBlockEntityEx blockEntity) {
-        int foundIndex = -1;
-        for (int index = 0; index < throttledBlockEntities.size(); index++) {
-            if (throttledBlockEntities.get(index) != blockEntity) {
-                continue;
-            }
-            if (foundIndex >= 0) {
-                throw new IllegalStateException("Energy throttle list contains a duplicate block entity");
-            }
-            foundIndex = index;
-        }
+        int foundIndex = throttleIndices.getOrDefault(blockEntity, -1);
         if (foundIndex >= 0) {
-            swapRemove(throttledBlockEntities, foundIndex);
+            removeThrottleAt(foundIndex);
         }
         blockEntity.cfn_setEnergyThrottleTimer(0);
         blockEntity.cfn_setEnergyLastThrottleTimer(0);
+    }
+
+    private void removeThrottleAt(int index) {
+        CFNBlockEntityEx removed = throttledBlockEntities.get(index);
+        throttleIndices.removeInt(removed);
+        CFNBlockEntityEx moved = swapRemove(throttledBlockEntities, index);
+        if (moved != null) throttleIndices.put(moved, index);
     }
 
     private void advanceEnergyThrottleTimers() {
@@ -440,7 +442,7 @@ public final class MachineBindingIndex {
             timer--;
             blockEntity.cfn_setEnergyThrottleTimer(timer);
             if (timer == 0) {
-                swapRemove(throttledBlockEntities, index);
+                removeThrottleAt(index);
                 Binding binding = handlerBindings.get(blockEntity);
                 if (binding != null && binding.routeRetryPending) {
                     binding.enqueueBlockEntityRouteRefresh();
@@ -782,6 +784,10 @@ public final class MachineBindingIndex {
         }
     }
 
+    public void onMachineShielderChunksChanged(int dimensionId, LongSet chunks) {
+        for (long chunk : chunks) enqueueMachineRoutesForChunk(dimensionId, chunk);
+    }
+
     public void onShielderCoverageChanged(int dimensionId, LongSet added, LongSet removed) {
         Objects.requireNonNull(added, "added");
         Objects.requireNonNull(removed, "removed");
@@ -851,6 +857,7 @@ public final class MachineBindingIndex {
         pendingChannelBindings.clear();
         pendingRebinds.clear();
         throttledBlockEntities.clear();
+        throttleIndices.clear();
         for (int index = 0; index < pendingQuarantines.size(); index++) {
             pendingQuarantines.get(index).quarantineIndex = -1;
         }
@@ -1189,10 +1196,33 @@ public final class MachineBindingIndex {
     }
 
     private void rebindPendingBindings() {
-        while (!pendingRebinds.isEmpty()) {
-            Binding binding = pendingRebinds.removeLast();
+        // Only inspect the current batch. A failed attempt must not retry in this tick.
+        for (int index = pendingRebinds.size() - 1; index >= 0; index--) {
+            Binding binding = pendingRebinds.get(index);
+            if (!binding.rebindQueued || handlerBindings.get(binding.blockEntity) != binding) {
+                swapRemove(pendingRebinds, index);
+                continue;
+            }
+            if (lastBeginEpoch < binding.nextRebindEpoch) continue;
+            swapRemove(pendingRebinds, index);
             binding.rebindQueued = false;
-            binding.rebindBeforeTick();
+            try {
+                binding.rebindBeforeTick();
+            } catch (RuntimeException exception) {
+                try {
+                    binding.unbind();
+                } catch (RuntimeException cleanup) {
+                    exception.addSuppressed(cleanup);
+                }
+                binding.queueRebind();
+                if (binding.rebindAttempts == 4) {
+                    EnergyMachineManager.INSTANCE.onRepeatedBindingFailure(binding.blockEntity);
+                }
+                if (binding.rebindAttempts <= 2 || binding.rebindAttempts == 8) {
+                    CirculationFlowNetworks.LOGGER.warn("Energy handler {} could not rebind; will retry",
+                        binding.handler.getClass().getName(), exception);
+                }
+            }
         }
     }
 
@@ -1889,6 +1919,8 @@ public final class MachineBindingIndex {
         private long generation;
         private boolean bound;
         private boolean rebindQueued;
+        private long nextRebindEpoch;
+        private int rebindAttempts;
         private boolean mappingDirty;
         private boolean routeRetryPending;
         private int beginIndex = -1;
@@ -1945,6 +1977,7 @@ public final class MachineBindingIndex {
                 resolveActiveHandler(Long.MIN_VALUE);
                 mappingDirty = false;
             }
+            enqueueBlockEntityRouteRefresh();
         }
 
         private void beginServerTick(long epoch) {
@@ -1973,9 +2006,9 @@ public final class MachineBindingIndex {
                 handleBeginFailure(epoch, new NullPointerException("handler.beginServerTick()"));
                 return false;
             }
-            if (result == HandlerTickResult.SUSPEND_UNTIL_REBIND) {
+            if (result == HandlerTickResult.SUSPEND_UNTIL_REBIND || result == HandlerTickResult.RETRY_BINDING) {
                 owner.markEnergyBudgetFailure(blockEntity);
-                suspend(false);
+                suspend(result == HandlerTickResult.RETRY_BINDING);
                 return false;
             }
             if (policy().mappingScope() != HandlerBindingPolicy.MappingScope.NONE) {
@@ -1990,7 +2023,7 @@ public final class MachineBindingIndex {
             CirculationFlowNetworks.LOGGER.error("Energy handler {} failed to begin epoch {}",
                 handler.getClass().getName(), epoch, exception);
             owner.markEnergyBudgetFailure(blockEntity);
-            suspend(false);
+            suspend(true);
         }
 
         private void refreshMapping(long epoch) {
@@ -2173,8 +2206,7 @@ public final class MachineBindingIndex {
         private void suspend(boolean queueRebind) {
             owner.unclassify(this);
             bound = false;
-            rebindQueued = queueRebind;
-            if (queueRebind) owner.pendingRebinds.add(this);
+            if (queueRebind) queueRebind();
             RuntimeException failure = null;
             try {
                 handler.unbindBlockEntity();
@@ -2192,6 +2224,15 @@ public final class MachineBindingIndex {
             if (failure != null) {
                 throw failure;
             }
+        }
+
+        private void queueRebind() {
+            if (rebindQueued || owner.handlerBindings.get(blockEntity) != this) return;
+            rebindQueued = true;
+            if (owner.lastBeginEpoch - nextRebindEpoch > 200L) rebindAttempts = 0;
+            nextRebindEpoch = owner.lastBeginEpoch + Math.min(200, 1 << Math.min(rebindAttempts, 8));
+            rebindAttempts = Math.min(9, rebindAttempts + 1);
+            owner.pendingRebinds.add(this);
         }
 
         private void releaseBackendIfPresent() {

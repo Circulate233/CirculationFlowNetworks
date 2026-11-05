@@ -7,6 +7,7 @@ import it.unimi.dsi.fastutil.objects.ReferenceSet;
 import com.circulation.circulation_networks.api.IEnergyHandlerManager;
 import com.circulation.circulation_networks.api.IMachineNodeBlockEntity;
 import com.circulation.circulation_networks.CFNConfig;
+import com.circulation.circulation_networks.CirculationFlowNetworks;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import org.jetbrains.annotations.Nullable;
@@ -115,11 +116,11 @@ public final class RegistryEnergyHandler {
     public static boolean isEnergyTileEntity(BlockEntity tile) {
         if (locked) {
             for (IEnergyHandlerManager manager : managerArray) {
-                if (manager.isAvailable(tile)) return true;
+                if (isAvailable(manager, tile)) return true;
             }
         } else {
             for (IEnergyHandlerManager manager : list) {
-                if (manager.isAvailable(tile)) return true;
+                if (isAvailable(manager, tile)) return true;
             }
         }
         return false;
@@ -146,11 +147,21 @@ public final class RegistryEnergyHandler {
         IEnergyHandlerManager[] managers,
         @Nullable IEnergyHandlerManager excluded) {
         for (IEnergyHandlerManager manager : managers) {
-            if (manager != excluded && manager.isAvailable(tile)) {
+            if (manager != excluded && isAvailable(manager, tile)) {
                 return manager;
             }
         }
         return null;
+    }
+
+    private static boolean isAvailable(IEnergyHandlerManager manager, BlockEntity tile) {
+        try {
+            return manager.isAvailable(tile);
+        } catch (RuntimeException exception) {
+            CirculationFlowNetworks.LOGGER.warn("Energy manager {} could not probe {}; trying other integrations",
+                manager.getClass().getName(), tile.getClass().getName(), exception);
+            return false;
+        }
     }
 
     public static @Nullable IEnergyHandlerManager getEnergyManager(ItemStack stack) {

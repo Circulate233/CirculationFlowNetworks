@@ -157,9 +157,8 @@ public final class HandlerBindingPolicy {
 
         /**
          * Normal role-compatible transfer is sufficient. A zero actual receive
-         * rejects the shared physical account for only the current transfer
-         * invocation; it neither consumes receive budget nor prevents a later
-         * invocation from retrying the account.
+         * rejects only that source's packet; later sources may offer a usable
+         * amount without consuming or resetting the receiver's budget.
          */
         NONE,
         /** Both participants must accept the pair before transferring energy. */

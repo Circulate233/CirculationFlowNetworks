@@ -108,6 +108,18 @@ final class MachineChunkResidencyIndex<R extends MachineChunkResidencyIndex.Posi
         return true;
     }
 
+    /** Prunes only buckets affected by a scope change, retaining unrelated dimensions and chunks. */
+    public synchronized void removeIf(int dimensionId, LongSet chunks, Predicate<R> predicate) {
+        Long2ObjectMap<Bucket<R>> dimensionBuckets = machineBuckets.get(dimensionId);
+        if (dimensionBuckets == null) return;
+        for (long chunk : chunks) {
+            Bucket<R> bucket = dimensionBuckets.get(chunk);
+            if (bucket == null) continue;
+            bucket.records.values().removeIf(predicate);
+            removeEmptyBucket(dimensionId, chunk, dimensionBuckets, bucket);
+        }
+    }
+
     /** Removes records that no longer have a retention reason, such as removed node scope. */
     public synchronized void removeIf(Predicate<R> predicate) {
         Objects.requireNonNull(predicate, "predicate");

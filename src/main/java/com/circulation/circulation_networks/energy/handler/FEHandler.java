@@ -91,9 +91,6 @@ public class FEHandler implements IEnergyHandler {
     }
 
     private boolean probeDirection(Level level, BlockPos position, @Nullable Direction direction) {
-        if (direction == null) {
-            return false;
-        }
         EnergyHandler handler = level.getCapability(Capabilities.Energy.BLOCK, position, direction);
         if (handler == null) {
             return false;
@@ -145,7 +142,7 @@ public class FEHandler implements IEnergyHandler {
         EnergyType previousType = energyType;
         if (!refreshHandlers(target)) {
             energyType = EnergyType.INVALID;
-            return HandlerTickResult.SUSPEND_UNTIL_REBIND;
+            return HandlerTickResult.RETRY_BINDING;
         }
         energyType = roleOf(extractBudget, receiveBudget);
         return energyType == previousType ? HandlerTickResult.UNCHANGED : HandlerTickResult.STATE_CHANGED;

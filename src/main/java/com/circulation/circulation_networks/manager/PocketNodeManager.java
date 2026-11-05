@@ -306,7 +306,7 @@ public final class PocketNodeManager {
 
         String dimId = getDimensionId(world);
         long posLong = pos.asLong();
-        if (getActiveDimMap(dimId).containsKey(posLong) || pendingHosts.contains(dimId, posLong)) {
+        if (hasActiveHost(dimId, posLong) || pendingHosts.contains(dimId, posLong)) {
             return RegisterPocketNodeResult.OCCUPIED;
         }
         if (API.getNodeAt(world, pos) != null) {
@@ -369,6 +369,7 @@ public final class PocketNodeManager {
         if (!loaded || isClientWorld(world)) {
             return;
         }
+        if (activeHosts.isEmpty() && pendingHosts.isEmpty()) return;
         String dimId = getDimensionId(world);
         long posLong = pos.asLong();
 
@@ -548,6 +549,11 @@ public final class PocketNodeManager {
         return pendingHosts.remove(dimId, posLong);
     }
 
+    private boolean hasActiveHost(String dimId, long posLong) {
+        Long2ObjectMap<PocketNodeHost> dimMap = activeHosts.get(dimId);
+        return dimMap != null && dimMap.containsKey(posLong);
+    }
+
     private Long2ObjectMap<PocketNodeHost> getActiveDimMap(String dimId) {
         return activeHosts.computeIfAbsent(dimId, ignored -> new Long2ObjectOpenHashMap<>());
     }
@@ -591,7 +597,7 @@ public final class PocketNodeManager {
             }
             String dimId = getDimensionId(world);
             long posLong = node.getPos().asLong();
-            if (getActiveDimMap(dimId).containsKey(posLong) || pendingHosts.contains(dimId, posLong)) {
+            if (hasActiveHost(dimId, posLong) || pendingHosts.contains(dimId, posLong)) {
                 continue;
             }
             PocketNodeRecord record = new PocketNodeRecord(

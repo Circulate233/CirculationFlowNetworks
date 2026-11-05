@@ -12,20 +12,26 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.common.NeoForge;
 
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.Set;
+
 public final class BlockEntityLifecycleHooks {
 
     private static final IEventBus EVENT_BUS = NeoForge.EVENT_BUS;
-    private static boolean validateLock;
-    private static boolean invalidateLock;
+    private static final ThreadLocal<Set<Object>> validating = ThreadLocal.withInitial(
+        () -> Collections.newSetFromMap(new IdentityHashMap<>()));
+    private static final ThreadLocal<Set<Object>> invalidating = ThreadLocal.withInitial(
+        () -> Collections.newSetFromMap(new IdentityHashMap<>()));
 
     private BlockEntityLifecycleHooks() {
     }
 
     public static void onValidate(Level world, BlockPos pos, BlockEntity blockEntity) {
-        if (validateLock) {
+        var active = validating.get();
+        if (!active.add(blockEntity)) {
             return;
         }
-        validateLock = true;
         try {
             if (blockEntity instanceof INodeBlockEntity nodeBlockEntity) {
                 nodeBlockEntity.nodeValidate();
@@ -36,15 +42,16 @@ public final class BlockEntityLifecycleHooks {
             HubChannelManager.INSTANCE.onBlockEntityValidate(event);
             EVENT_BUS.post(event);
         } finally {
-            validateLock = false;
+            active.remove(blockEntity);
+            if (active.isEmpty()) validating.remove();
         }
     }
 
     public static void onInvalidate(Level world, BlockPos pos, BlockEntity blockEntity) {
-        if (invalidateLock) {
+        var active = invalidating.get();
+        if (!active.add(blockEntity)) {
             return;
         }
-        invalidateLock = true;
         try {
             if (blockEntity instanceof INodeBlockEntity nodeBlockEntity) {
                 nodeBlockEntity.nodeInvalidate();
@@ -59,7 +66,8 @@ public final class BlockEntityLifecycleHooks {
             }
             EVENT_BUS.post(event);
         } finally {
-            invalidateLock = false;
+            active.remove(blockEntity);
+            if (active.isEmpty()) invalidating.remove();
         }
     }
 }

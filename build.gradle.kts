@@ -125,6 +125,14 @@ if (isVersionProject) {
         resources.setSrcDirs(resourceRoots)
     }
 
+    the<JavaPluginExtension>().sourceSets.named("test") {
+        java.setSrcDirs(listOf(rootProject.file("src/test/java"), file("src/test/java")))
+        resources.setSrcDirs(listOf(rootProject.file("src/test/resources"), file("src/test/resources")))
+        val mainClasspath = project.the<JavaPluginExtension>().sourceSets.getByName("main").compileClasspath
+        compileClasspath += mainClasspath
+        runtimeClasspath += mainClasspath
+    }
+
     repositories {
         mavenCentral()
         exclusiveContent {
@@ -164,6 +172,8 @@ if (isVersionProject) {
         annotationProcessor("org.jetbrains:annotations:24.1.0")
         compileOnly("org.spongepowered:mixin:0.8.5")
         annotationProcessor("org.spongepowered:mixin:0.8.5:processor")
+        testImplementation("org.junit.jupiter:junit-jupiter:5.7.1")
+        testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     }
 
     val rootDependenciesFile = rootProject.file("dependencies.gradle")
@@ -217,6 +227,9 @@ if (isVersionProject) {
     }
     tasks.withType<Test>().configureEach {
         javaLauncher.set(runtimeJavaLauncher)
+        useJUnitPlatform()
+        workingDir = layout.buildDirectory.dir("test-work").get().asFile
+        doFirst { workingDir.mkdirs() }
     }
     tasks.named("compileJava") {
         dependsOn(generateComponentAtlasRegistration)

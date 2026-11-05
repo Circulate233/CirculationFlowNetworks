@@ -330,37 +330,42 @@ final class MachineTransferAccount {
         if (!maximum.isPositive()) {
             return EnergyAmount.obtain(0L);
         }
-        activeReservation.copyFrom(reservedExtract).subtract(deferredExtract);
-        if (activeReservation.isNegative()) {
-            activeReservation.setZero();
+        EnergyAmount reserved = availableReservedExtract().min(maximum);
+        if (reserved.isNegative()) {
+            reserved.recycle();
             throw new IllegalStateException("Deferred extraction exceeds reserved physical escrow");
         }
-        activeReservation.min(maximum);
-        if (activeReservation.isPositive()) {
-            EnergyAmount reserved = EnergyAmount.obtain(activeReservation);
-            reservationOpen = true;
-            return reserved;
-        }
-        activeReservation.setZero();
-        initializeExtract(epoch, metadata);
-        EnergyAmount request = cappedRequest(maximum, extractBudget, epoch);
+        EnergyAmount request = null;
         try {
-            EnergyAmount extracted = EnergyHandlerRuntime.extract(handler, request, metadata, failureContext);
-            EnergyAmount validated;
+            if (reserved.compareTo(maximum) == 0) {
+                openReservation(reserved);
+                return reserved;
+            }
+            initializeExtract(epoch, metadata);
+            EnergyAmount missing = EnergyAmount.obtain(maximum).subtract(reserved);
             try {
-                validated = validateAndConsume(extracted, request, extractBudget, epoch, "extractEnergy");
-            } catch (RuntimeException | Error exception) {
-                extracted.recycle();
-                throw exception;
+                request = cappedRequest(missing, extractBudget, epoch);
+            } finally {
+                missing.recycle();
             }
-            reservedExtract.add(validated);
-            if (validated.isPositive()) {
-                reservedMetadata = metadata;
-                openReservation(validated);
+            if (request.isPositive()) {
+                EnergyAmount extracted = EnergyHandlerRuntime.extract(handler, request, metadata, failureContext);
+                try {
+                    EnergyAmount validated = validateAndConsume(extracted, request, extractBudget, epoch, "extractEnergy");
+                    reservedExtract.add(validated);
+                    reserved.add(validated);
+                    if (validated.isPositive()) reservedMetadata = metadata;
+                } finally {
+                    extracted.recycle();
+                }
             }
-            return validated;
+            if (reserved.isPositive()) openReservation(reserved);
+            return reserved;
+        } catch (RuntimeException | Error exception) {
+            reserved.recycle();
+            throw exception;
         } finally {
-            request.recycle();
+            if (request != null) request.recycle();
         }
     }
     public void commitExtract(EnergyAmount accepted, long epoch) {

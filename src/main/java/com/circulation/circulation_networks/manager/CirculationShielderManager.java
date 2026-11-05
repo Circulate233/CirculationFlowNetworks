@@ -208,6 +208,10 @@ public final class CirculationShielderManager {
         LongSet added = difference(currentPositions, previousPositions);
         LongSet removed = difference(previousPositions, currentPositions);
         MachineBindingIndex.INSTANCE.onShielderCoverageChanged(dimId.hashCode(), added, removed);
+        LongSet affectedChunks = new LongOpenHashSet();
+        if (previousSnapshot != null) affectedChunks.addAll(previousSnapshot.coveredChunks);
+        if (currentSnapshot != null) affectedChunks.addAll(currentSnapshot.coveredChunks);
+        MachineBindingIndex.INSTANCE.onMachineShielderChunksChanged(dimId.hashCode(), affectedChunks);
     }
 
     private static LongSet snapshotCoveredNodePositions(String dimId, ActiveShielderSnapshot snapshot) {
