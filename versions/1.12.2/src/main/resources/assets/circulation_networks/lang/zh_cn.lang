@@ -173,8 +173,12 @@ hud.node.unnamed=未命名节点
 
 # Long-distance relay
 block.circulation_networks.long_distance_relay_node.name=长距离中继节点
-block.circulation_networks.long_distance_relay_node.tooltip.0=§7同维度内不限连接距离，最多连接 3 个同类节点
-block.circulation_networks.long_distance_relay_node.tooltip.1=§7右键连接；空手潜行右键清除全部绑定
+block.circulation_networks.long_distance_relay_node.tooltip.0=§7必须放置在节点基座上
+block.circulation_networks.long_distance_relay_node.tooltip.1=§7放置前请预留至少 1×3×1 的完整空间
+block.circulation_networks.long_distance_relay_node.tooltip.2=§7同维度内的手动链接距离不限
+block.circulation_networks.long_distance_relay_node.tooltip.3=§7最多绑定 3 个长距离中继节点
+block.circulation_networks.long_distance_relay_node.tooltip.4=§e依次右键两个长距离中继节点进行绑定
+block.circulation_networks.long_distance_relay_node.tooltip.5=§e空手潜行右键可清除全部绑定
 message.circulation_networks.long_distance_relay.start=开始连接：请右键另一个长距离中继节点。
 message.circulation_networks.long_distance_relay.connected=长距离中继节点连接成功。
 message.circulation_networks.long_distance_relay.cancelled=已取消本次连接。

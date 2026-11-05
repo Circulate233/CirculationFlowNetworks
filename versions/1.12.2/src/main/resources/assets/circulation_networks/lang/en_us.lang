@@ -173,8 +173,12 @@ hud.node.unnamed=Unnamed Node
 
 # Long-distance relay
 block.circulation_networks.long_distance_relay_node.name=Long-Distance Relay Node
-block.circulation_networks.long_distance_relay_node.tooltip.0=§7Connect up to 3 nodes of the same type at any distance within one dimension
-block.circulation_networks.long_distance_relay_node.tooltip.1=§7Right-click to link; sneak-right-click empty-handed to clear all links
+block.circulation_networks.long_distance_relay_node.tooltip.0=§7Must be placed on a Node Pedestal
+block.circulation_networks.long_distance_relay_node.tooltip.1=§7Reserve at least a 1x3x1 clear space before placement
+block.circulation_networks.long_distance_relay_node.tooltip.2=§7Manual links have no distance limit within one dimension
+block.circulation_networks.long_distance_relay_node.tooltip.3=§7Bind up to 3 Long-Distance Relay Nodes
+block.circulation_networks.long_distance_relay_node.tooltip.4=§eRight-click two Long-Distance Relay Nodes in sequence to bind them
+block.circulation_networks.long_distance_relay_node.tooltip.5=§eSneak-right-click with empty hand to clear all bindings
 message.circulation_networks.long_distance_relay.start=Connection started: right-click another long-distance relay node.
 message.circulation_networks.long_distance_relay.connected=Long-distance relay nodes connected.
 message.circulation_networks.long_distance_relay.cancelled=Connection cancelled.

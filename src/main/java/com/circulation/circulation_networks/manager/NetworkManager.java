@@ -1,6 +1,7 @@
 package com.circulation.circulation_networks.manager;
 
 import com.circulation.circulation_networks.network.nodes.LongDistanceRelayNode;
+import com.circulation.circulation_networks.handlers.LongDistanceRelayInteraction;
 
 import com.circulation.circulation_networks.CirculationFlowNetworks;
 import com.circulation.circulation_networks.api.IGrid;
@@ -685,8 +686,10 @@ public final class NetworkManager {
 
         if (oldGrid.getNodes().isEmpty()) {
             destroyGrid(oldGrid);
-        } else {
-            splitDisconnectedGrid(oldGrid);
+        } else if (splitDisconnectedGrid(oldGrid) && players != null) {
+            for (var player : players) {
+                CirculationFlowNetworks.sendToPlayer(new NodeNetworkRendering(player, oldGrid), player);
+            }
         }
 
         EnergyMachineManager.INSTANCE.removeNode(removedNode);
@@ -695,7 +698,7 @@ public final class NetworkManager {
         NodeEventHooks.postRemoveNodePost(removedNode);
     }
 
-    private void splitDisconnectedGrid(IGrid oldGrid) {
+    private boolean splitDisconnectedGrid(IGrid oldGrid) {
         ReferenceSet<INode> remaining = new ReferenceOpenHashSet<>(oldGrid.getNodes());
         Object2ObjectMap<INode, ReferenceSet<INode>> incomingNeighbors = buildIncomingNeighborMap(oldGrid.getNodes());
         List<ReferenceSet<INode>> components = new ObjectArrayList<>();
@@ -739,7 +742,6 @@ public final class NetworkManager {
             oldGrid.markSnapshotDirty();
             markGridDirty(oldGrid);
 
-            var watchingPlayers = NodeNetworkRendering.getPlayers(oldGrid);
             for (int i = 1; i < components.size(); i++) {
                 IGrid splitGrid = allocGrid();
                 for (INode n : components.get(i)) {
@@ -748,14 +750,10 @@ public final class NetworkManager {
                         splitGrid.setHubNode(h);
                     }
                 }
-                if (watchingPlayers != null) {
-                    for (var player : watchingPlayers) {
-                        CirculationFlowNetworks.sendToPlayer(
-                            new NodeNetworkRendering(player, splitGrid), player);
-                    }
-                }
             }
+            return true;
         }
+        return false;
     }
 
     private static void enqueueComponentNeighbor(
@@ -1006,6 +1004,7 @@ public final class NetworkManager {
         if (relay == null || !activeNodes.contains(relay) || !relay.isActive() || relay.getGrid() == null) {
             return -1;
         }
+        if (relay.getPeerPositions().isEmpty()) return 0;
         MachineBindingIndex.INSTANCE.beginTopologyTransaction();
         try {
             IGrid oldGrid = relay.getGrid();
@@ -1134,6 +1133,8 @@ public final class NetworkManager {
     }
 
     public void onServerStop() {
+        LongDistanceRelayInteraction.reset();
+        dirtyGrids.clear();
         scopeNode.clear();
         nodeScope.clear();
         nodeLocation.clear();

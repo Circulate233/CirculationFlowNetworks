@@ -319,4 +319,53 @@ class LongDistanceRelayNodeTest {
         assertEquals(prefix + "start", LongDistanceRelayInteraction.select(player, b));
         assertEquals(prefix + "cancelled", LongDistanceRelayInteraction.select(player, b));
     }
+
+    @Test
+    void unavailableSecondClickEndsTheSelection() throws Exception {
+        LongDistanceRelayNode a = relay(0);
+        LongDistanceRelayNode b = relay(1000);
+        registerTopology(a, b);
+        Object player = new Object();
+        String prefix = "message.circulation_networks.long_distance_relay.";
+        assertEquals(prefix + "start", LongDistanceRelayInteraction.select(player, a));
+        assertEquals(prefix + "unavailable", LongDistanceRelayInteraction.select(player, null));
+        assertEquals(prefix + "start", LongDistanceRelayInteraction.select(player, b));
+        assertTrue(a.getPeerPositions().isEmpty());
+        assertTrue(b.getPeerPositions().isEmpty());
+
+        assertEquals(prefix + "unavailable", LongDistanceRelayInteraction.select(player, relay(2000)));
+        assertEquals(prefix + "start", LongDistanceRelayInteraction.select(player, a));
+    }
+
+    @Test
+    void clearingAnUnboundRelayDoesNotRescanOrDirtyTheGrid() throws Exception {
+        LongDistanceRelayNode a = relay(0);
+        registerTopology(a);
+        IGrid grid = mock(IGrid.class);
+        Field nodeGrid = Node.class.getDeclaredField("grid");
+        nodeGrid.setAccessible(true);
+        nodeGrid.set(a, grid);
+
+        assertEquals(0, NetworkManager.INSTANCE.clearLongDistanceRelayLinks(a));
+        verifyNoInteractions(grid);
+    }
+
+    @Test
+    void serverStopDropsPendingSavesAndSelectionsFromThePreviousWorld() throws Exception {
+        LongDistanceRelayNode a = relay(0);
+        registerTopology(a);
+        NetworkManager manager = NetworkManager.INSTANCE;
+        manager.markGridDirty(a.getGrid());
+        Object player = new Object();
+        String prefix = "message.circulation_networks.long_distance_relay.";
+        assertEquals(prefix + "start", LongDistanceRelayInteraction.select(player, a));
+
+        manager.onServerStop();
+        Field dirty = NetworkManager.class.getDeclaredField("dirtyGrids");
+        dirty.setAccessible(true);
+        assertTrue(((java.util.Set<?>) dirty.get(manager)).isEmpty());
+        assertTrue(manager.getAllGrids().isEmpty());
+        assertTrue(manager.getActiveNodes().isEmpty());
+        assertEquals(prefix + "start", LongDistanceRelayInteraction.select(player, a));
+    }
 }
