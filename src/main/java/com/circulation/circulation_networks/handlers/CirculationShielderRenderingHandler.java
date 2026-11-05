@@ -46,6 +46,13 @@ public final class CirculationShielderRenderingHandler {
         clientShielders.remove(shielder);
     }
 
+    private boolean hasShowingRanges() {
+        for (ICirculationShielderBlockEntity shielder : clientShielders) {
+            if (shielder.isShowingRange()) return true;
+        }
+        return false;
+    }
+
     @SubscribeEvent
     public void onClientTick(ClientTickEvent.Pre event) {
 
@@ -101,9 +108,17 @@ public final class CirculationShielderRenderingHandler {
         double playerZ = cameraPos.z;
         float partialTicks = mc.getDeltaTracker().getGameTimeDeltaPartialTick(false);
 
-        if (clientShielders.isEmpty()) return;
+        if (!hasShowingRanges()) return;
 
         cachedEventViewMatrix = new Matrix4f(event.getModelViewMatrix());
+        try {
+            renderRanges(playerX, playerY, playerZ, partialTicks);
+        } finally {
+            cachedEventViewMatrix = null;
+        }
+    }
+
+    private void renderRanges(double playerX, double playerY, double playerZ, float partialTicks) {
         for (ICirculationShielderBlockEntity shielder : clientShielders) {
             if (shielder.isShowingRange()) {
                 animProgress.putIfAbsent(shielder, 0.0f);
