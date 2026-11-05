@@ -1,6 +1,9 @@
 package com.circulation.circulation_networks.handlers;
 
 import com.circulation.circulation_networks.api.ICirculationShielderBlockEntity;
+//? if <1.20 {
+import com.circulation.circulation_networks.client.render.LegacyWorldRenderStateGuard;
+//?}
 import com.circulation.circulation_networks.utils.AnimationUtils;
 import com.circulation.circulation_networks.utils.RenderingUtils;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
@@ -82,6 +85,15 @@ public final class CirculationShielderRenderingHandler {
     /** Returns whether a client-side shielder can currently request range rendering. */
     public boolean hasClientShielders() {
         return !clientShielders.isEmpty();
+    }
+
+    private boolean hasShowingRanges() {
+        for (ICirculationShielderBlockEntity shielder : clientShielders) {
+            if (shielder.isShowingRange()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @SubscribeEvent
@@ -186,9 +198,7 @@ public final class CirculationShielderRenderingHandler {
         }
     }
 
-    //? if >=1.20 {
-    /*@SubscribeEvent
-    *///?}
+    @SubscribeEvent
         //? if <1.20 {
     public void onRenderWorldLast(RenderWorldLastEvent event) {
         Minecraft mc = Minecraft.getMinecraft();
@@ -224,14 +234,24 @@ public final class CirculationShielderRenderingHandler {
         float partialTicks = event.getPartialTick().getGameTimeDeltaPartialTick(false);
     *///?}
 
-        if (clientShielders.isEmpty()) return;
+        if (!hasShowingRanges()) return;
 
-        //? if >=1.20 {
+        //? if <1.20 {
+        // Capture once for the whole pass, including failures in per-shielder setup or drawing.
+        try (LegacyWorldRenderStateGuard ignored = LegacyWorldRenderStateGuard.openHudPass("shielder range")) {
+            renderRanges(playerX, playerY, playerZ, partialTicks);
+        }
+        //?} else {
         /*currentWorldPoseStack = event.getPoseStack();
-        *///?}
         //? if >=1.21 {
-        /*cachedEventViewMatrix = new org.joml.Matrix4f(event.getModelViewMatrix());
+        /^cachedEventViewMatrix = new org.joml.Matrix4f(event.getModelViewMatrix());
+        ^///?}
+        renderRanges(playerX, playerY, playerZ, partialTicks);
+        currentWorldPoseStack = null;
         *///?}
+    }
+
+    private void renderRanges(double playerX, double playerY, double playerZ, float partialTicks) {
         for (ICirculationShielderBlockEntity shielder : clientShielders) {
             if (shielder.isShowingRange()) {
                 animProgress.putIfAbsent(shielder, 0.0f);
@@ -239,8 +259,5 @@ public final class CirculationShielderRenderingHandler {
                 renderShielderRange(shielder, playerX, playerY, playerZ, partialTicks);
             }
         }
-        //? if >=1.20 {
-        /*currentWorldPoseStack = null;
-        *///?}
     }
 }
