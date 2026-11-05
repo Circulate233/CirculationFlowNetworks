@@ -17,6 +17,10 @@ import net.minecraftforge.common.MinecraftForge;
  *///?}
 //? if <1.20 {
 import net.minecraftforge.fml.common.eventhandler.EventBus;
+
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.Set;
 //?} else if < 1.21 {
 /*import net.minecraftforge.eventbus.api.IEventBus;
  *///?} else {
@@ -29,8 +33,10 @@ public final class BlockEntityLifecycleHooks {
     private static final EventBus EVENT_BUS;
     //~}
 
-    private static boolean validateLock;
-    private static boolean invalidateLock;
+    private static final ThreadLocal<Set<Object>> validating = ThreadLocal.withInitial(
+        () -> Collections.newSetFromMap(new IdentityHashMap<>()));
+    private static final ThreadLocal<Set<Object>> invalidating = ThreadLocal.withInitial(
+        () -> Collections.newSetFromMap(new IdentityHashMap<>()));
 
     static {
         //? if <1.21 {
@@ -63,10 +69,10 @@ public final class BlockEntityLifecycleHooks {
     //~ if >=1.20 '(TileEntity ' -> '(BlockEntity ' {
     //~ if >=1.20 ' TileEntity ' -> ' BlockEntity ' {
     public static void postValidate(World world, BlockPos pos, TileEntity blockEntity) {
-        if (validateLock) {
+        var active = validating.get();
+        if (!active.add(blockEntity)) {
             return;
         }
-        validateLock = true;
         try {
             if (blockEntity instanceof INodeBlockEntity<?> nodeBlockEntity) {
                 nodeBlockEntity.nodeValidate();
@@ -75,15 +81,16 @@ public final class BlockEntityLifecycleHooks {
             dispatchValidate(event);
             EVENT_BUS.post(event);
         } finally {
-            validateLock = false;
+            active.remove(blockEntity);
+            if (active.isEmpty()) validating.remove();
         }
     }
 
     public static void postInvalidate(World world, BlockPos pos, TileEntity blockEntity) {
-        if (invalidateLock) {
+        var active = invalidating.get();
+        if (!active.add(blockEntity)) {
             return;
         }
-        invalidateLock = true;
         try {
             if (blockEntity instanceof INodeBlockEntity<?> nodeBlockEntity) {
                 nodeBlockEntity.nodeInvalidate();
@@ -92,7 +99,8 @@ public final class BlockEntityLifecycleHooks {
             dispatchInvalidate(event);
             EVENT_BUS.post(event);
         } finally {
-            invalidateLock = false;
+            active.remove(blockEntity);
+            if (active.isEmpty()) invalidating.remove();
         }
     }
     //~}

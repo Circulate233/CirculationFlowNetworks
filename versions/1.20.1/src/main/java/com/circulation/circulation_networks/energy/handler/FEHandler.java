@@ -5,6 +5,7 @@ import com.circulation.circulation_networks.api.EnergyAmounts;
 import com.circulation.circulation_networks.api.HandlerTickResult;
 import com.circulation.circulation_networks.api.IEnergyHandler;
 import com.circulation.circulation_networks.manager.HandlerBindingPolicy;
+import com.circulation.circulation_networks.manager.EnergyFaceSelector;
 import com.circulation.circulation_networks.manager.HandlerInvalidationSink;
 import com.circulation.circulation_networks.network.nodes.HubNode;
 import net.minecraft.core.Direction;
@@ -21,12 +22,16 @@ public final class FEHandler implements IEnergyHandler {
 
     private static final Direction[] DIRECTIONS = Direction.values();
     private static final HandlerBindingPolicy BINDING_POLICY = HandlerBindingPolicy.of(
-        HandlerBindingPolicy.TickLifecycle.STATIC,
-        HandlerBindingPolicy.RoleScope.FIXED,
+        HandlerBindingPolicy.TickLifecycle.BEGIN_TICK,
+        HandlerBindingPolicy.RoleScope.RUNTIME_DYNAMIC,
         HandlerBindingPolicy.MappingScope.NONE,
         HandlerBindingPolicy.PairMatching.NONE
     );
 
+    private final EnergyFaceSelector<IEnergyStorage> faces = new EnergyFaceSelector<>(
+        IEnergyStorage::canExtract, IEnergyStorage::canReceive,
+        storage -> storage.extractEnergy(Integer.MAX_VALUE, true),
+        storage -> storage.receiveEnergy(Integer.MAX_VALUE, true));
     @Nullable
     private IEnergyStorage send;
     @Nullable
@@ -48,13 +53,10 @@ public final class FEHandler implements IEnergyHandler {
         }
         this.blockEntity = Objects.requireNonNull(blockEntity, "blockEntity");
         Objects.requireNonNull(invalidationSink, "invalidationSink");
-        boolean foundCapability = false;
         for (Direction direction : DIRECTIONS) {
-            foundCapability |= bindCapability(blockEntity, direction, invalidationSink);
+            bindCapability(blockEntity, direction, invalidationSink);
         }
-        if (!foundCapability) {
-            bindCapability(blockEntity, null, invalidationSink);
-        }
+        bindCapability(blockEntity, null, invalidationSink);
         energyType = structuralType();
         if (energyType == EnergyType.INVALID) {
             throw new IllegalArgumentException("FE block entity has no usable energy capability");
@@ -68,8 +70,9 @@ public final class FEHandler implements IEnergyHandler {
         if (!capability.isPresent()) {
             return false;
         }
-        capability.addListener(ignored -> invalidationSink.suspendUntilRebind());
+        capability.addListener(ignored -> invalidationSink.invalidate());
         IEnergyStorage storage = capability.orElseThrow(IllegalStateException::new);
+        faces.add(storage);
         if (send == null && storage.canExtract()) {
             send = storage;
         }
@@ -81,16 +84,21 @@ public final class FEHandler implements IEnergyHandler {
 
     @Override
     public HandlerTickResult beginServerTick(long epoch) {
-        throw new IllegalStateException("STATIC FE handler does not receive tick callbacks");
+        requireBlockBinding();
+        if (epoch % 20L != 0L) return HandlerTickResult.UNCHANGED;
+        EnergyType previous = energyType;
+        energyType = faces.role();
+        return previous == energyType ? HandlerTickResult.UNCHANGED : HandlerTickResult.STATE_CHANGED;
     }
 
     @Override
     public void endServerTick(long epoch) {
-        throw new IllegalStateException("STATIC FE handler does not receive tick callbacks");
+        throw new IllegalStateException("FE handler does not use end tick callbacks");
     }
 
     @Override
     public void unbindBlockEntity() {
+        faces.clear();
         send = null;
         receive = null;
         energyType = EnergyType.INVALID;
@@ -126,7 +134,7 @@ public final class FEHandler implements IEnergyHandler {
         if (send == null) {
             return EnergyAmounts.ZERO;
         }
-        return EnergyAmount.obtain(send.extractEnergy((int) maxExtract.asLongClamped(), false));
+        return EnergyAmount.obtain(send.extractEnergy((int) Math.min(Integer.MAX_VALUE, maxExtract.asLongClamped()), false));
     }
 
     @Override
@@ -134,21 +142,29 @@ public final class FEHandler implements IEnergyHandler {
         if (receive == null) {
             return EnergyAmounts.ZERO;
         }
-        return EnergyAmount.obtain(receive.receiveEnergy((int) maxReceive.asLongClamped(), false));
+        return EnergyAmount.obtain(receive.receiveEnergy((int) Math.min(Integer.MAX_VALUE, maxReceive.asLongClamped()), false));
     }
 
     @Override
     public EnergyAmount canExtractValue(@Nullable HubNode.HubMetadata hubMetadata) {
-        return send == null
-            ? EnergyAmounts.ZERO
-            : EnergyAmount.obtain(Math.max(0, send.extractEnergy(Integer.MAX_VALUE, true)));
+        if (blockEntity != null) {
+            long budget = faces.budget(false);
+            send = faces.sender();
+            return EnergyAmount.obtain(budget);
+        }
+        return send == null ? EnergyAmounts.ZERO
+            : EnergyAmount.obtain(Math.max(0L, send.extractEnergy(Integer.MAX_VALUE, true)));
     }
 
     @Override
     public EnergyAmount canReceiveValue(@Nullable HubNode.HubMetadata hubMetadata) {
-        return receive == null
-            ? EnergyAmounts.ZERO
-            : EnergyAmount.obtain(Math.max(0, receive.receiveEnergy(Integer.MAX_VALUE, true)));
+        if (blockEntity != null) {
+            long budget = faces.budget(true);
+            receive = faces.receiver();
+            return EnergyAmount.obtain(budget);
+        }
+        return receive == null ? EnergyAmounts.ZERO
+            : EnergyAmount.obtain(Math.max(0L, receive.receiveEnergy(Integer.MAX_VALUE, true)));
     }
 
     @Override

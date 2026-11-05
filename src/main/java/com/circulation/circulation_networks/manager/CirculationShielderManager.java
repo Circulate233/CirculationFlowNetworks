@@ -221,9 +221,11 @@ public final class CirculationShielderManager {
         LongSet currentPositions = snapshotCoveredNodePositions(dimId, currentSnapshot);
         LongSet added = difference(currentPositions, previousPositions);
         LongSet removed = difference(previousPositions, currentPositions);
-        // Machine routes are indexed separately from nodes, so every active
-        // coverage transition must refresh the dimension's machine routes.
         MachineBindingIndex.INSTANCE.onShielderCoverageChanged(dimId, added, removed);
+        LongSet affectedChunks = new LongOpenHashSet();
+        if (previousSnapshot != null) affectedChunks.addAll(previousSnapshot.coveredChunks);
+        if (currentSnapshot != null) affectedChunks.addAll(currentSnapshot.coveredChunks);
+        MachineBindingIndex.INSTANCE.onMachineShielderChunksChanged(dimId, affectedChunks);
     }
 
     private LongSet snapshotCoveredNodePositions(int dimId, ActiveShielderSnapshot snapshot) {

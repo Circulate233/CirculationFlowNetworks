@@ -27,10 +27,11 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Objects;
 
 public class EUHandler implements IEnergyHandler {
+    private static final long MAX_EXACT_FE_TRANSFER = 1L << 52;
     private static final double MAX_EU_TRANSFER = Long.MAX_VALUE / 4.0D;
     private static final HandlerBindingPolicy BINDING_POLICY = HandlerBindingPolicy.of(
-        HandlerBindingPolicy.TickLifecycle.STATIC,
-        HandlerBindingPolicy.RoleScope.FIXED,
+        HandlerBindingPolicy.TickLifecycle.BEGIN_TICK,
+        HandlerBindingPolicy.RoleScope.RUNTIME_DYNAMIC,
         HandlerBindingPolicy.MappingScope.NONE,
         HandlerBindingPolicy.PairMatching.NONE
     );
@@ -61,48 +62,7 @@ public class EUHandler implements IEnergyHandler {
         if (valueEu >= MAX_EU_TRANSFER) {
             return EnergyAmount.obtain(Long.MAX_VALUE);
         }
-        return EnergyAmountConversionUtils.obtainFromDoubleFloor(valueEu).multiply(4L);
-    }
-
-    static void setAcceptedFeFromEuResult(EnergyAmount targetFe, double resultEu, EnergyAmount requestedEu) {
-        if (!(resultEu > 0.0D)) {
-            targetFe.setZero();
-            return;
-        }
-        if (!Double.isFinite(resultEu)) {
-            targetFe.copyFrom(requestedEu).multiply(4L);
-            return;
-        }
-        EnergyAmountConversionUtils.setFromDoubleFloor(targetFe, resultEu);
-        targetFe.multiply(4L);
-        EnergyAmount requestedFe = EnergyAmount.obtain(requestedEu).multiply(4L);
-        try {
-            targetFe.min(requestedFe);
-        } finally {
-            requestedFe.recycle();
-        }
-    }
-
-    static void setAcceptedFeFromEuRemainder(EnergyAmount targetFe, double remainderEu, EnergyAmount requestedEu) {
-        if (!(remainderEu > 0.0D)) {
-            targetFe.copyFrom(requestedEu).multiply(4L);
-            return;
-        }
-        if (!Double.isFinite(remainderEu)) {
-            targetFe.setZero();
-            return;
-        }
-        EnergyAmount remainderFe = EnergyAmountConversionUtils.obtainFromDoubleFloor(remainderEu).multiply(4L);
-        EnergyAmount requestedFe = EnergyAmount.obtain(requestedEu).multiply(4L);
-        try {
-            targetFe.copyFrom(requestedFe).subtract(remainderFe);
-            if (targetFe.isNegative()) {
-                targetFe.setZero();
-            }
-        } finally {
-            remainderFe.recycle();
-            requestedFe.recycle();
-        }
+        return EnergyAmountConversionUtils.obtainFromDoubleFloor(valueEu * 4.0D);
     }
 
     private void clearTickState() {
@@ -243,12 +203,18 @@ public class EUHandler implements IEnergyHandler {
             throw new IllegalArgumentException("EU handler epoch must increase: previous " + activeEpoch + ", got " + epoch);
         }
         activeEpoch = epoch;
+        if (epoch % 20L == 0L) {
+            EnergyType previous = energyType;
+            prepareBlockState(blockEntity);
+            if (energyType == EnergyType.INVALID) return HandlerTickResult.RETRY_BINDING;
+            if (energyType != previous) return HandlerTickResult.STATE_CHANGED;
+        }
         return HandlerTickResult.UNCHANGED;
     }
 
     @Override
     public void endServerTick(long epoch) {
-        throw new IllegalStateException("EU handler has a static tick lifecycle");
+        throw new IllegalStateException("EU handler does not use end tick callbacks");
     }
 
     @Override
@@ -280,50 +246,24 @@ public class EUHandler implements IEnergyHandler {
 
     @Override
     public EnergyAmount receiveEnergy(EnergyAmount maxReceive, @Nullable HubNode.HubMetadata hubMetadata) {
-        if (isItem) {
-            EnergyAmount receivable = EnergyAmount.obtain(maxReceive);
-            if (receivable.isZero()) {
-                return receivable;
-            }
-            EnergyAmount euAmount = EnergyAmount.obtain(receivable).divide(4L);
-            try {
-                double charged = ElectricItem.manager.charge(itemStack, EnergyAmountConversionUtils.toDoubleClamped(euAmount), Integer.MAX_VALUE, false, false);
-                setAcceptedFeFromEuResult(receivable, charged, euAmount);
-                return receivable;
-            } finally {
-                euAmount.recycle();
-            }
-        } else {
-            if (receive == null) return EnergyAmounts.ZERO;
-            EnergyAmount receivable = EnergyAmount.obtain(maxReceive);
-            if (receivable.isZero()) {
-                return receivable;
-            }
-            EnergyAmount euAmount = EnergyAmount.obtain(receivable).divide(4L);
-            try {
-                double leftover = receive.injectEnergy(receiveFacing, EnergyAmountConversionUtils.toDoubleClamped(euAmount), 0);
-                setAcceptedFeFromEuRemainder(receivable, leftover, euAmount);
-                return receivable;
-            } finally {
-                euAmount.recycle();
-            }
-        }
+        if (!isItem && receive == null) return EnergyAmounts.ZERO;
+        long requestedFe = Math.max(0L, Math.min(MAX_EXACT_FE_TRANSFER, maxReceive.asLongClamped()));
+        if (requestedFe == 0L) return EnergyAmounts.ZERO;
+        double requestedEu = requestedFe / 4.0D;
+        double acceptedEu = isItem
+            ? ElectricItem.manager.charge(itemStack, requestedEu, Integer.MAX_VALUE, false, false)
+            : requestedEu - receive.injectEnergy(receiveFacing, requestedEu, 0);
+        if (!(acceptedEu > 0.0D)) return EnergyAmounts.ZERO;
+        return positiveFeAmountFromEu(Math.min(requestedEu, acceptedEu));
     }
 
     @Override
     public EnergyAmount extractEnergy(EnergyAmount maxExtract, @Nullable HubNode.HubMetadata hubMetadata) {
         if (send == null) return EnergyAmounts.ZERO;
-        EnergyAmount extractable = EnergyAmount.obtain(maxExtract);
-        if (extractable.isZero()) {
-            return extractable;
-        }
-        EnergyAmount euAmount = EnergyAmount.obtain(extractable).divide(4L);
-        try {
-            send.drawEnergy(EnergyAmountConversionUtils.toDoubleClamped(euAmount));
-            return extractable;
-        } finally {
-            euAmount.recycle();
-        }
+        long requestedFe = Math.max(0L, Math.min(MAX_EXACT_FE_TRANSFER, maxExtract.asLongClamped()));
+        if (requestedFe == 0L) return EnergyAmounts.ZERO;
+        send.drawEnergy(requestedFe / 4.0D);
+        return EnergyAmount.obtain(requestedFe);
     }
 
     @Override

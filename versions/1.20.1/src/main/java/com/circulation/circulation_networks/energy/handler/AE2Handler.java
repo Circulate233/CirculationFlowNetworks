@@ -80,7 +80,7 @@ public final class AE2Handler implements IEnergyHandler {
         IEnergyService resolved = resolveComponent(endpoint, componentScratch);
         if (resolved == null) {
             energyService = null;
-            return HandlerTickResult.SUSPEND_UNTIL_REBIND;
+            return HandlerTickResult.RETRY_BINDING;
         }
         if (resolved == energyService && componentServices.equals(componentScratch)) {
             return HandlerTickResult.UNCHANGED;

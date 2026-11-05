@@ -685,6 +685,12 @@ if (isLegacyRfg) {
         sourceCompatibility = JavaVersion.VERSION_1_8.toString()
         targetCompatibility = JavaVersion.VERSION_1_8.toString()
     }
+} else {
+    // The explicit test roots above must not bypass Stonecutter's version branches.
+    tasks.named<JavaCompile>("compileTestJava") {
+        dependsOn("stonecutterGenerateTest")
+        setSource(layout.buildDirectory.dir("generated/stonecutter/test/java"))
+    }
 }
 
 tasks.withType<JavaExec>().configureEach {

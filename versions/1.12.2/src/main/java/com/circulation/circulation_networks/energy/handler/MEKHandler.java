@@ -325,7 +325,7 @@ public class MEKHandler implements IEnergyHandler {
             maxExtract.setZero();
             refreshPending = false;
             refreshFailed = false;
-            return HandlerTickResult.SUSPEND_UNTIL_REBIND;
+            return HandlerTickResult.RETRY_BINDING;
         }
         refreshPending = true;
         return HandlerTickResult.UNCHANGED;

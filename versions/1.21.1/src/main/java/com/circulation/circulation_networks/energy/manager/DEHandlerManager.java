@@ -8,9 +8,11 @@ import net.minecraft.core.Direction;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
+import java.util.Arrays;
+
 public final class DEHandlerManager implements IEnergyHandlerManager {
 
-    private static final Direction[] DIRECTIONS = Direction.values();
+    private static final Direction[] DIRECTIONS = Arrays.copyOf(Direction.values(), Direction.values().length + 1);
 
     @Override
     public boolean isAvailable(BlockEntity blockEntity) {

@@ -5,13 +5,10 @@
     "minVersion": "0.8.5",
     "mixins": [
         "mc.MixinLevelChunk",
-        "mc.MixinBlockEntity"
+        "mc.MixinBlockEntity",
+        "mekanism.MixinBasicEnergyContainer"
     ],
-    "server": [
-        
-    ],
-    "client": [
-        
-    ],
+    "server": [],
+    "client": [],
     "compatibilityLevel": "JAVA_17"
 }

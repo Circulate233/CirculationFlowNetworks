@@ -9,6 +9,8 @@ public enum HandlerTickResult {
     UNCHANGED,
     /** Structural state changed and affected routes must be committed. */
     STATE_CHANGED,
+    /** Revoke this binding and retry with bounded backoff at a later tick. */
+    RETRY_BINDING,
     /** Stop polling this binding until an external lifecycle event rebinds it. */
     SUSPEND_UNTIL_REBIND
 }

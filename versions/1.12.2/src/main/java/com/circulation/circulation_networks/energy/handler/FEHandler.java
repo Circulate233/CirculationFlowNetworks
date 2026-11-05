@@ -20,7 +20,7 @@ public class FEHandler implements IEnergyHandler {
 
     private static final HandlerBindingPolicy BINDING_POLICY = HandlerBindingPolicy.of(
         HandlerBindingPolicy.TickLifecycle.BEGIN_TICK,
-        HandlerBindingPolicy.RoleScope.FIXED,
+        HandlerBindingPolicy.RoleScope.RUNTIME_DYNAMIC,
         HandlerBindingPolicy.MappingScope.NONE,
         HandlerBindingPolicy.PairMatching.NONE
     );
@@ -52,7 +52,9 @@ public class FEHandler implements IEnergyHandler {
                 return true;
             }
         }
-        return tileEntity instanceof IEnergyStorage storage && (storage.canExtract() || storage.canReceive());
+        IEnergyStorage unsided = tileEntity.getCapability(CapabilityEnergy.ENERGY, null);
+        return unsided != null && (unsided.canExtract() || unsided.canReceive())
+            || tileEntity instanceof IEnergyStorage storage && (storage.canExtract() || storage.canReceive());
     }
 
     private static EnergyType structuralType(boolean send, boolean receive) {
@@ -65,7 +67,7 @@ public class FEHandler implements IEnergyHandler {
     private void discoverStructure(TileEntity tileEntity) {
         send = null;
         receive = null;
-        directStorage = tileEntity instanceof IEnergyStorage storage ? storage : null;
+        directStorage = unsidedStorage(tileEntity);
         sendFacing = null;
         receiveFacing = null;
         for (EnumFacing facing : EnumFacing.VALUES) {
@@ -114,7 +116,7 @@ public class FEHandler implements IEnergyHandler {
         TileEntity boundBlockEntity = Objects.requireNonNull(blockEntity, "blockEntity");
         send = null;
         receive = null;
-        directStorage = boundBlockEntity instanceof IEnergyStorage storage ? storage : null;
+        directStorage = unsidedStorage(boundBlockEntity);
         sendFacing = null;
         receiveFacing = null;
         for (EnumFacing facing : EnumFacing.VALUES) {
@@ -145,8 +147,13 @@ public class FEHandler implements IEnergyHandler {
     @Nullable
     private IEnergyStorage storage(@Nullable EnumFacing facing) {
         return facing == null
-            ? directStorage
+            ? unsidedStorage(Objects.requireNonNull(blockEntity, "blockEntity"))
             : Objects.requireNonNull(blockEntity, "blockEntity").getCapability(CapabilityEnergy.ENERGY, facing);
+    }
+
+    private static IEnergyStorage unsidedStorage(TileEntity tile) {
+        IEnergyStorage capability = tile.getCapability(CapabilityEnergy.ENERGY, null);
+        return capability != null ? capability : tile instanceof IEnergyStorage storage ? storage : null;
     }
 
     @Override
@@ -186,7 +193,13 @@ public class FEHandler implements IEnergyHandler {
             energyType = EnergyType.INVALID;
             refreshPending = false;
             refreshFailed = false;
-            return HandlerTickResult.SUSPEND_UNTIL_REBIND;
+            return HandlerTickResult.RETRY_BINDING;
+        }
+        if (epoch % 20L == 0L) {
+            EnergyType previous = energyType;
+            discoverStructure(blockEntity);
+            refreshPending = true;
+            if (energyType != previous) return HandlerTickResult.STATE_CHANGED;
         }
         refreshPending = true;
         return HandlerTickResult.UNCHANGED;
@@ -261,25 +274,53 @@ public class FEHandler implements IEnergyHandler {
     @Override
     public EnergyAmount extractEnergy(EnergyAmount maxExtract, @Nullable HubNode.HubMetadata hubMetadata) {
         return !ensureRefreshed() || send == null ? EnergyAmounts.ZERO
-            : EnergyAmount.obtain(send.extractEnergy((int) maxExtract.asLongClamped(), false));
+            : EnergyAmount.obtain(send.extractEnergy((int) Math.min(Integer.MAX_VALUE, maxExtract.asLongClamped()), false));
     }
 
     @Override
     public EnergyAmount receiveEnergy(EnergyAmount maxReceive, @Nullable HubNode.HubMetadata hubMetadata) {
         return !ensureRefreshed() || receive == null ? EnergyAmounts.ZERO
-            : EnergyAmount.obtain(Math.max(0, receive.receiveEnergy((int) maxReceive.asLongClamped(), false)));
+            : EnergyAmount.obtain(Math.max(0, receive.receiveEnergy((int) Math.min(Integer.MAX_VALUE, maxReceive.asLongClamped()), false)));
     }
 
     @Override
     public EnergyAmount canExtractValue(@Nullable HubNode.HubMetadata hubMetadata) {
-        return !ensureRefreshed() || send == null ? EnergyAmounts.ZERO
-            : EnergyAmount.obtain(send.extractEnergy(Integer.MAX_VALUE, true));
+        return !ensureRefreshed() ? EnergyAmounts.ZERO : EnergyAmount.obtain(selectBudget(false));
     }
 
     @Override
     public EnergyAmount canReceiveValue(@Nullable HubNode.HubMetadata hubMetadata) {
-        return !ensureRefreshed() || receive == null ? EnergyAmounts.ZERO
-            : EnergyAmount.obtain(Math.max(0, receive.receiveEnergy(Integer.MAX_VALUE, true)));
+        return !ensureRefreshed() ? EnergyAmounts.ZERO : EnergyAmount.obtain(selectBudget(true));
+    }
+
+    private int selectBudget(boolean input) {
+        IEnergyStorage selected = input ? receive : send;
+        int available = budget(selected, input);
+        if (available > 0 || blockEntity == null) return available;
+        for (EnumFacing face : EnumFacing.VALUES) {
+            IEnergyStorage candidate = blockEntity.getCapability(CapabilityEnergy.ENERGY, face);
+            if (candidate == selected) continue;
+            available = budget(candidate, input);
+            if (available > 0) {
+                if (input) { receive = candidate; receiveFacing = face; }
+                else { send = candidate; sendFacing = face; }
+                return available;
+            }
+        }
+        IEnergyStorage candidate = unsidedStorage(blockEntity);
+        available = candidate == selected ? 0 : budget(candidate, input);
+        if (available > 0) {
+            directStorage = candidate;
+            if (input) { receive = candidate; receiveFacing = null; }
+            else { send = candidate; sendFacing = null; }
+        }
+        return available;
+    }
+
+    private static int budget(@Nullable IEnergyStorage storage, boolean input) {
+        if (storage == null) return 0;
+        return Math.max(0, input ? storage.canReceive() ? storage.receiveEnergy(Integer.MAX_VALUE, true) : 0
+            : storage.canExtract() ? storage.extractEnergy(Integer.MAX_VALUE, true) : 0);
     }
 
     @Override

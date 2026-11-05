@@ -8,6 +8,10 @@ import com.circulation.circulation_networks.manager.HandlerBindingPolicy;
 import com.circulation.circulation_networks.manager.HandlerInvalidationSink;
 import com.circulation.circulation_networks.network.nodes.HubNode;
 import com.circulation.circulation_networks.utils.EnergyAmountConversionUtils;
+import com.circulation.circulation_networks.api.MekanismEnergyPermissions;
+import mekanism.api.energy.IMekanismStrictEnergyHandler;
+import mekanism.common.tile.interfaces.ISideConfiguration;
+import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import mekanism.api.Action;
 import mekanism.api.energy.IStrictEnergyHandler;
 import mekanism.api.math.FloatingLong;
@@ -15,7 +19,6 @@ import mekanism.common.capabilities.Capabilities;
 import mekanism.common.lib.transmitter.TransmissionType;
 import mekanism.common.tile.component.config.slot.ISlotInfo;
 import mekanism.common.tile.multiblock.TileEntityInductionPort;
-import mekanism.common.tile.prefab.TileEntityConfigurableMachine;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -29,19 +32,14 @@ import java.util.Objects;
 public final class MEKHandler implements IEnergyHandler {
 
     private static final Direction[] DIRECTIONS = Direction.values();
-    private static final HandlerBindingPolicy STATIC_POLICY = HandlerBindingPolicy.of(
-        HandlerBindingPolicy.TickLifecycle.STATIC,
-        HandlerBindingPolicy.RoleScope.FIXED,
-        HandlerBindingPolicy.MappingScope.NONE,
-        HandlerBindingPolicy.PairMatching.NONE
-    );
-    private static final HandlerBindingPolicy INDUCTION_PORT_POLICY = HandlerBindingPolicy.of(
+    private static final HandlerBindingPolicy BINDING_POLICY = HandlerBindingPolicy.of(
         HandlerBindingPolicy.TickLifecycle.BEGIN_TICK,
         HandlerBindingPolicy.RoleScope.RUNTIME_DYNAMIC,
         HandlerBindingPolicy.MappingScope.NONE,
         HandlerBindingPolicy.PairMatching.NONE
     );
     private static final double FE_TO_MEK_RATIO = 2.5D;
+    private static final FloatingLong ONE_FE = FloatingLong.createConst(FE_TO_MEK_RATIO);
     private static final BigInteger MAX_DIRECT_DOUBLE_TRANSFER =
         BigDecimal.valueOf(Double.MAX_VALUE).toBigInteger();
 
@@ -51,16 +49,14 @@ public final class MEKHandler implements IEnergyHandler {
     @Nullable
     private IStrictEnergyHandler receive;
     @Nullable
-    private IStrictEnergyHandler inductionCapability;
-    @Nullable
     private BlockEntity blockEntity;
-    private HandlerBindingPolicy bindingPolicy = STATIC_POLICY;
+    private final ObjectArrayList<Face> faces = new ObjectArrayList<>();
     private boolean itemBound;
     private EnergyType energyType = EnergyType.INVALID;
 
     @Override
     public HandlerBindingPolicy bindingPolicy() {
-        return bindingPolicy;
+        return BINDING_POLICY;
     }
 
     @Override
@@ -70,10 +66,6 @@ public final class MEKHandler implements IEnergyHandler {
         }
         this.blockEntity = Objects.requireNonNull(blockEntity, "blockEntity");
         Objects.requireNonNull(invalidationSink, "invalidationSink");
-        bindingPolicy = blockEntity instanceof TileEntityInductionPort
-            ? INDUCTION_PORT_POLICY
-            : STATIC_POLICY;
-
         boolean foundCapability = false;
         for (Direction direction : DIRECTIONS) {
             foundCapability |= bindCapability(blockEntity, direction, invalidationSink);
@@ -82,16 +74,9 @@ public final class MEKHandler implements IEnergyHandler {
             bindCapability(blockEntity, null, invalidationSink);
         }
 
-        if (blockEntity instanceof TileEntityInductionPort port) {
-            if (inductionCapability == null) {
-                throw new IllegalArgumentException("Mekanism induction port has no usable energy capability");
-            }
-            applyInductionPortRole(port);
-        } else {
-            energyType = structuralType();
-            if (energyType == EnergyType.INVALID) {
-                throw new IllegalArgumentException("Mekanism block entity has no usable energy capability");
-            }
+        refreshStructure();
+        if (energyType == EnergyType.INVALID) {
+            throw new IllegalArgumentException("Mekanism block entity has no usable energy capability");
         }
     }
 
@@ -102,45 +87,20 @@ public final class MEKHandler implements IEnergyHandler {
         if (!capability.isPresent()) {
             return false;
         }
-        capability.addListener(ignored -> invalidationSink.suspendUntilRebind());
+        capability.addListener(ignored -> invalidationSink.invalidate());
         IStrictEnergyHandler handler = capability.orElseThrow(IllegalStateException::new);
+        faces.add(new Face(direction, handler));
 
-        if (blockEntity instanceof TileEntityInductionPort) {
-            if (inductionCapability == null) {
-                inductionCapability = handler;
-            }
-            return true;
-        }
-
-        boolean canInput = true;
-        boolean canOutput = true;
-        if (direction != null && blockEntity instanceof TileEntityConfigurableMachine configurable) {
-            ISlotInfo slotInfo = configurable.getConfig().getSlotInfo(TransmissionType.ENERGY, direction);
-            canInput = slotInfo != null && slotInfo.isEnabled() && slotInfo.canInput();
-            canOutput = slotInfo != null && slotInfo.isEnabled() && slotInfo.canOutput();
-        }
-        if (send == null && canOutput) {
-            send = handler;
-        }
-        if (receive == null && canInput) {
-            receive = handler;
-        }
         return true;
     }
 
     @Override
     public HandlerTickResult beginServerTick(long epoch) {
         BlockEntity binding = requireBlockBinding();
-        if (binding instanceof TileEntityInductionPort port) {
-            if (inductionCapability == null) {
-                energyType = EnergyType.INVALID;
-                return HandlerTickResult.SUSPEND_UNTIL_REBIND;
-            }
-            EnergyType previous = energyType;
-            applyInductionPortRole(port);
-            return energyType == previous ? HandlerTickResult.UNCHANGED : HandlerTickResult.STATE_CHANGED;
-        }
-        throw new IllegalStateException("STATIC Mekanism handler does not receive tick callbacks");
+        if (!(binding instanceof TileEntityInductionPort) && epoch % 20L != 0L) return HandlerTickResult.UNCHANGED;
+        EnergyType previous = energyType;
+        refreshStructure();
+        return previous == energyType ? HandlerTickResult.UNCHANGED : HandlerTickResult.STATE_CHANGED;
     }
 
     @Override
@@ -150,11 +110,10 @@ public final class MEKHandler implements IEnergyHandler {
 
     @Override
     public void unbindBlockEntity() {
+        faces.clear();
         send = null;
         receive = null;
-        inductionCapability = null;
         energyType = EnergyType.INVALID;
-        bindingPolicy = STATIC_POLICY;
         blockEntity = null;
     }
 
@@ -212,6 +171,7 @@ public final class MEKHandler implements IEnergyHandler {
 
     @Override
     public EnergyAmount canExtractValue(@Nullable HubNode.HubMetadata hubMetadata) {
+        if (!itemBound) selectFace(false);
         if (send == null) {
             return EnergyAmounts.ZERO;
         }
@@ -221,6 +181,7 @@ public final class MEKHandler implements IEnergyHandler {
 
     @Override
     public EnergyAmount canReceiveValue(@Nullable HubNode.HubMetadata hubMetadata) {
+        if (!itemBound) selectFace(true);
         if (itemBound) {
             return EnergyAmount.obtain(needEnergy);
         }
@@ -251,22 +212,6 @@ public final class MEKHandler implements IEnergyHandler {
         return energyType;
     }
 
-    private void applyInductionPortRole(TileEntityInductionPort port) {
-        if (inductionCapability == null) {
-            send = null;
-            receive = null;
-            energyType = EnergyType.INVALID;
-        } else if (port.getActive()) {
-            send = inductionCapability;
-            receive = null;
-            energyType = EnergyType.SEND;
-        } else {
-            send = null;
-            receive = inductionCapability;
-            energyType = EnergyType.RECEIVE;
-        }
-    }
-
     private void refreshItemBudget() {
         if (receive == null) {
             needEnergy.setZero();
@@ -284,13 +229,6 @@ public final class MEKHandler implements IEnergyHandler {
         return EnergyAmountConversionUtils.obtainFromDoubleFloor(Math.max(0.0D, inserted) / FE_TO_MEK_RATIO);
     }
 
-    private EnergyType structuralType() {
-        if (send != null) {
-            return receive != null ? EnergyType.STORAGE : EnergyType.SEND;
-        }
-        return receive != null ? EnergyType.RECEIVE : EnergyType.INVALID;
-    }
-
     private BlockEntity requireBlockBinding() {
         if (blockEntity == null) {
             throw new IllegalStateException("Mekanism handler has no block-entity binding");
@@ -306,4 +244,67 @@ public final class MEKHandler implements IEnergyHandler {
             amount.init(MAX_DIRECT_DOUBLE_TRANSFER);
         }
     }
+    private void refreshStructure() {
+        send = null;
+        receive = null;
+        for (Face face : faces) {
+            face.input = true;
+            face.output = true;
+            if (blockEntity instanceof TileEntityInductionPort port) {
+                face.output = port.getActive();
+                face.input = !face.output;
+            } else {
+                if (face.direction != null && blockEntity instanceof ISideConfiguration configurable) {
+                    ISlotInfo slot = configurable.getConfig().getSlotInfo(TransmissionType.ENERGY, face.direction);
+                    face.input = slot != null && slot.isEnabled() && slot.canInput();
+                    face.output = slot != null && slot.isEnabled() && slot.canOutput();
+                }
+                if (blockEntity instanceof IMekanismStrictEnergyHandler nativeHandler) {
+                    boolean known = false, input = false, output = false;
+                    for (var container : nativeHandler.getEnergyContainers(face.direction)) {
+                        if (container instanceof MekanismEnergyPermissions permissions) {
+                            known = true;
+                            input |= permissions.cfn_canInsertEnergy();
+                            output |= permissions.cfn_canExtractEnergy();
+                        } else {
+                            // Unknown third-party containers retain their capability's bidirectional contract.
+                            input = true;
+                            output = true;
+                        }
+                    }
+                    if (known) { face.input &= input; face.output &= output; }
+                }
+            }
+            if (receive == null && face.input) receive = face.handler;
+            if (send == null && face.output) send = face.handler;
+        }
+        energyType = send != null ? receive != null ? EnergyType.STORAGE : EnergyType.SEND
+            : receive != null ? EnergyType.RECEIVE : EnergyType.INVALID;
+    }
+
+    private void selectFace(boolean input) {
+        for (Face face : faces) {
+            if (!(input ? face.input : face.output)) continue;
+            boolean available = input
+                ? FloatingLong.MAX_VALUE.subtract(face.handler.insertEnergy(FloatingLong.MAX_VALUE, Action.SIMULATE)).compareTo(ONE_FE) >= 0
+                : face.handler.extractEnergy(FloatingLong.MAX_VALUE, Action.SIMULATE).compareTo(ONE_FE) >= 0;
+            if (available) {
+                if (input) receive = face.handler;
+                else send = face.handler;
+                return;
+            }
+        }
+    }
+
+    private static final class Face {
+        private final Direction direction;
+        private final IStrictEnergyHandler handler;
+        private boolean input;
+        private boolean output;
+        private Face(Direction direction, IStrictEnergyHandler handler) {
+            this.direction = direction;
+            this.handler = handler;
+        }
+    }
+
 }

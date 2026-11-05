@@ -2,8 +2,10 @@ package com.circulation.circulation_networks.manager;
 
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 
 import java.util.Objects;
+import java.util.function.Consumer;
 
 /** Dense lifecycle state for machine positions. */
 final class MachineLifecyclePositionIndex<T> {
@@ -11,6 +13,8 @@ final class MachineLifecyclePositionIndex<T> {
     private final Int2ObjectOpenHashMap<Long2ObjectOpenHashMap<State<T>>> dimensions =
         new Int2ObjectOpenHashMap<>();
     private long generation;
+    private final Int2ObjectOpenHashMap<Long2ObjectOpenHashMap<LongOpenHashSet>> chunks =
+        new Int2ObjectOpenHashMap<>();
 
     public long submit(int dimensionId, long packedPosition, T identity, Action action) {
         Objects.requireNonNull(identity, "identity");
@@ -39,6 +43,8 @@ final class MachineLifecyclePositionIndex<T> {
         if (state == null) {
             state = new State<>();
             positions.put(packedPosition, state);
+            chunks.computeIfAbsent(dimensionId, ignored -> new Long2ObjectOpenHashMap<>())
+                .computeIfAbsent(chunkOf(packedPosition), ignored -> new LongOpenHashSet()).add(packedPosition);
         }
         state.identity = identity;
         state.generation = ++generation;
@@ -84,13 +90,7 @@ final class MachineLifecyclePositionIndex<T> {
         if (!isCurrent(dimensionId, packedPosition, identity, generation, Action.INVALIDATE)) {
             throw new IllegalStateException("Cannot remove a lifecycle state that is not the current invalidation");
         }
-        Long2ObjectOpenHashMap<State<T>> positions = Objects.requireNonNull(
-            dimensions.get(dimensionId), "Invalidation dimension disappeared before removal"
-        );
-        positions.remove(packedPosition);
-        if (positions.isEmpty()) {
-            dimensions.remove(dimensionId);
-        }
+        removeState(dimensionId, packedPosition);
     }
 
     public void releasePosition(int dimensionId, long packedPosition) {
@@ -118,7 +118,42 @@ final class MachineLifecyclePositionIndex<T> {
 
     public void clear() {
         dimensions.clear();
+        chunks.clear();
         generation = 0L;
+    }
+
+    static long chunkOf(long packedPosition) {
+        // 1.12 stores Z in the low 26 bits; modern BlockPos stores Y in the low 12 bits.
+        //? if <1.20 {
+        return ((packedPosition >> 42) << 32) | ((packedPosition << 38 >> 42) & 0xffffffffL);
+        //?} else {
+        /*return ((packedPosition >> 42) << 32) | ((packedPosition << 26 >> 42) & 0xffffffffL);
+        *///?}
+    }
+
+    public void releaseChunk(int dimensionId, long chunkCoordinate) {
+        releaseChunk(dimensionId, chunkCoordinate, ignored -> {});
+    }
+
+    public void releaseChunk(int dimensionId, long chunkCoordinate, Consumer<T> released) {
+        var dimensionChunks = chunks.get(dimensionId);
+        if (dimensionChunks == null) return;
+        var positions = dimensionChunks.remove(chunkCoordinate);
+        if (positions == null) return;
+        var states = dimensions.get(dimensionId);
+        for (long position : positions) released.accept(states.remove(position).identity);
+        if (states.isEmpty()) dimensions.remove(dimensionId);
+        if (dimensionChunks.isEmpty()) chunks.remove(dimensionId);
+    }
+
+    public void releaseDimension(int dimensionId) {
+        releaseDimension(dimensionId, ignored -> {});
+    }
+
+    public void releaseDimension(int dimensionId, Consumer<T> released) {
+        var states = dimensions.remove(dimensionId);
+        if (states != null) for (State<T> state : states.values()) released.accept(state.identity);
+        chunks.remove(dimensionId);
     }
 
     private State<T> state(int dimensionId, long packedPosition) {
@@ -132,6 +167,15 @@ final class MachineLifecyclePositionIndex<T> {
             return;
         }
         positions.remove(packedPosition);
+        var dimensionChunks = chunks.get(dimensionId);
+        if (dimensionChunks != null) {
+            long chunk = chunkOf(packedPosition);
+            var chunkPositions = dimensionChunks.get(chunk);
+            if (chunkPositions != null && chunkPositions.remove(packedPosition) && chunkPositions.isEmpty()) {
+                dimensionChunks.remove(chunk);
+            }
+            if (dimensionChunks.isEmpty()) chunks.remove(dimensionId);
+        }
         if (positions.isEmpty()) {
             dimensions.remove(dimensionId);
         }
@@ -139,6 +183,7 @@ final class MachineLifecyclePositionIndex<T> {
 
     enum Action {
         DISCOVERED,
+        TOPOLOGY_CHANGED,
         READY,
         DISCOVERY_RETRY,
         MANAGER_UNAVAILABLE,

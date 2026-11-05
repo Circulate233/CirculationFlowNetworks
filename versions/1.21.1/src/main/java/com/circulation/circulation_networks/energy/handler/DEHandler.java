@@ -7,9 +7,9 @@ import com.circulation.circulation_networks.api.EnergyAmounts;
 import com.circulation.circulation_networks.api.HandlerTickResult;
 import com.circulation.circulation_networks.api.IEnergyHandler;
 import com.circulation.circulation_networks.manager.HandlerBindingPolicy;
+import com.circulation.circulation_networks.manager.EnergyFaceSelector;
 import com.circulation.circulation_networks.manager.HandlerInvalidationSink;
 import com.circulation.circulation_networks.network.nodes.HubNode;
-import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
@@ -17,27 +17,31 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.capabilities.BlockCapabilityCache;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Arrays;
 import java.util.Objects;
 
-/** Draconic Evolution OP binding with a fixed structural role. */
+/** Draconic Evolution OP binding with periodically refreshed structural roles. */
 public final class DEHandler implements IEnergyHandler {
 
-    private static final Direction[] DIRECTIONS = Direction.values();
+    private static final Direction[] DIRECTIONS = Arrays.copyOf(Direction.values(), Direction.values().length + 1);
     private static final HandlerBindingPolicy BINDING_POLICY = HandlerBindingPolicy.of(
-        HandlerBindingPolicy.TickLifecycle.STATIC,
-        HandlerBindingPolicy.RoleScope.FIXED,
+        HandlerBindingPolicy.TickLifecycle.BEGIN_TICK,
+        HandlerBindingPolicy.RoleScope.RUNTIME_DYNAMIC,
         HandlerBindingPolicy.MappingScope.NONE,
         HandlerBindingPolicy.PairMatching.NONE
     );
 
-    private final ObjectArrayList<BlockCapabilityCache<IOPStorage, Direction>> capabilityCaches =
-        new ObjectArrayList<>(DIRECTIONS.length);
+    private final EnergyFaceSelector<IOPStorage> faces = new EnergyFaceSelector<>(
+        IOPStorage::canExtract, IOPStorage::canReceive,
+        storage -> storage.extractOP(Long.MAX_VALUE, true),
+        storage -> storage.receiveOP(Long.MAX_VALUE, true));
     @Nullable
     private IOPStorage send;
     @Nullable
     private IOPStorage receive;
     @Nullable
     private BlockEntity blockEntity;
+    private Object cacheGeneration;
     private boolean itemBound;
     private EnergyType energyType = EnergyType.INVALID;
 
@@ -54,20 +58,22 @@ public final class DEHandler implements IEnergyHandler {
             throw new IllegalArgumentException("Draconic Evolution handler requires a server-level block entity");
         }
         this.blockEntity = blockEntity;
+        Object generation = new Object();
+        cacheGeneration = generation;
         for (Direction direction : DIRECTIONS) {
             BlockCapabilityCache<IOPStorage, Direction> cache = BlockCapabilityCache.create(
                 CapabilityOP.BLOCK,
                 level,
                 blockEntity.getBlockPos(),
                 direction,
-                () -> this.blockEntity == blockEntity,
-                invalidationSink::suspendUntilRebind
+                () -> cacheGeneration == generation && this.blockEntity == blockEntity,
+                invalidationSink::invalidate
             );
-            capabilityCaches.add(cache);
             IOPStorage storage = cache.getCapability();
             if (storage == null) {
                 continue;
             }
+            faces.add(storage);
             if (send == null && storage.canExtract()) {
                 send = storage;
             }
@@ -83,19 +89,24 @@ public final class DEHandler implements IEnergyHandler {
 
     @Override
     public HandlerTickResult beginServerTick(long epoch) {
-        throw new IllegalStateException("STATIC Draconic Evolution handler does not receive tick callbacks");
+        requireBlockBinding();
+        if (epoch % 20L != 0L) return HandlerTickResult.UNCHANGED;
+        EnergyType previous = energyType;
+        energyType = faces.role();
+        return previous == energyType ? HandlerTickResult.UNCHANGED : HandlerTickResult.STATE_CHANGED;
     }
 
     @Override
     public void endServerTick(long epoch) {
-        throw new IllegalStateException("STATIC Draconic Evolution handler does not receive tick callbacks");
+        throw new IllegalStateException("Draconic Evolution handler does not use end tick callbacks");
     }
 
     @Override
     public void unbindBlockEntity() {
+        faces.clear();
         send = null;
         receive = null;
-        capabilityCaches.clear();
+        cacheGeneration = null;
         blockEntity = null;
         energyType = EnergyType.INVALID;
     }
@@ -142,15 +153,23 @@ public final class DEHandler implements IEnergyHandler {
 
     @Override
     public EnergyAmount canExtractValue(@Nullable HubNode.HubMetadata hubMetadata) {
-        return send == null
-            ? EnergyAmounts.ZERO
+        if (blockEntity != null) {
+            long budget = faces.budget(false);
+            send = faces.sender();
+            return EnergyAmount.obtain(budget);
+        }
+        return send == null ? EnergyAmounts.ZERO
             : EnergyAmount.obtain(Math.max(0L, send.extractOP(Long.MAX_VALUE, true)));
     }
 
     @Override
     public EnergyAmount canReceiveValue(@Nullable HubNode.HubMetadata hubMetadata) {
-        return receive == null
-            ? EnergyAmounts.ZERO
+        if (blockEntity != null) {
+            long budget = faces.budget(true);
+            receive = faces.receiver();
+            return EnergyAmount.obtain(budget);
+        }
+        return receive == null ? EnergyAmounts.ZERO
             : EnergyAmount.obtain(Math.max(0L, receive.receiveOP(Long.MAX_VALUE, true)));
     }
 

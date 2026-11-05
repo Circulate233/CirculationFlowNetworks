@@ -8,9 +8,11 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.capabilities.Capabilities;
 
+import java.util.Arrays;
+
 public final class FEHandlerManager implements IEnergyHandlerManager {
 
-    private static final Direction[] DIRECTIONS = Direction.values();
+    private static final Direction[] DIRECTIONS = Arrays.copyOf(Direction.values(), Direction.values().length + 1);
 
     @Override
     public boolean isAvailable(BlockEntity blockEntity) {

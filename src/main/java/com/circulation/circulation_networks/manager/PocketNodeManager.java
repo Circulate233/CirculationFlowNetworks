@@ -443,7 +443,7 @@ public final class PocketNodeManager {
 
         int dimId = getDimensionId(world);
         long posLong = pos.toLong();
-        if (getActiveDimMap(dimId).containsKey(posLong) || pendingHosts.contains(dimId, posLong)) {
+        if (hasActiveHost(dimId, posLong) || pendingHosts.contains(dimId, posLong)) {
             return RegisterPocketNodeResult.OCCUPIED;
         }
         if (API.getNodeAt(world, pos) != null) {
@@ -513,6 +513,10 @@ public final class PocketNodeManager {
     //~ if >=1.20 '.toLong()' -> '.asLong()' {
     public void onHostBlockStateChanged(World world, BlockPos pos) {
         if (!loaded || isClientWorld(world)) {
+            return;
+        }
+        // Every server-side block-state change reaches here, even without pocket nodes.
+        if (activeHosts.isEmpty() && pendingHosts.isEmpty()) {
             return;
         }
         int dimId = getDimensionId(world);
@@ -712,6 +716,11 @@ public final class PocketNodeManager {
         return activeHosts.computeIfAbsent(dimId, ignored -> new Long2ObjectOpenHashMap<>());
     }
 
+    private boolean hasActiveHost(int dimId, long posLong) {
+        Long2ObjectMap<PocketNodeHost> dimMap = activeHosts.get(dimId);
+        return dimMap != null && dimMap.containsKey(posLong);
+    }
+
     //~}
 
     //~ if >=1.20 'World ' -> 'Level ' {
@@ -770,7 +779,7 @@ public final class PocketNodeManager {
             }
             int dimId = getDimensionId(world);
             long posLong = node.getPos().toLong();
-            if (getActiveDimMap(dimId).containsKey(posLong) || pendingHosts.contains(dimId, posLong)) {
+            if (hasActiveHost(dimId, posLong) || pendingHosts.contains(dimId, posLong)) {
                 continue;
             }
             PocketNodeRecord record = new PocketNodeRecord(

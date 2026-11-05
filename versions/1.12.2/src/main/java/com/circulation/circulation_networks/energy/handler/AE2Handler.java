@@ -91,14 +91,14 @@ public final class AE2Handler implements IEnergyHandler {
         if (currentGrid == null) {
             gridIdentity = null;
             backendIdentity = null;
-            return HandlerTickResult.SUSPEND_UNTIL_REBIND;
+            return HandlerTickResult.RETRY_BINDING;
         }
         if (currentGrid != gridIdentity) {
             IEnergyGrid current = currentGrid.getCache(IEnergyGrid.class);
             if (current == null) {
                 gridIdentity = null;
                 backendIdentity = null;
-                return HandlerTickResult.SUSPEND_UNTIL_REBIND;
+                return HandlerTickResult.RETRY_BINDING;
             }
             gridIdentity = currentGrid;
             backendIdentity = current;

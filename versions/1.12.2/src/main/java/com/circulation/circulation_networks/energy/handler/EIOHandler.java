@@ -299,7 +299,7 @@ public final class EIOHandler implements IEnergyHandler {
             if (currentType == EnergyType.INVALID) {
                 energyType = EnergyType.INVALID;
                 backendIdentity = null;
-                return HandlerTickResult.SUSPEND_UNTIL_REBIND;
+                return HandlerTickResult.RETRY_BINDING;
             }
             boolean backendChanged = currentBackend != backendIdentity;
             boolean changed = backendChanged || currentType != energyType;
@@ -312,7 +312,7 @@ public final class EIOHandler implements IEnergyHandler {
             energyType = EnergyType.INVALID;
             refreshPending = false;
             refreshFailed = false;
-            return HandlerTickResult.SUSPEND_UNTIL_REBIND;
+            return HandlerTickResult.RETRY_BINDING;
         }
         refreshPending = true;
         return HandlerTickResult.UNCHANGED;

@@ -141,6 +141,7 @@ public final class EnergyMachineManager {
         };
     private final ObjectArrayList<LifecycleCommand> lifecycleInbox = new ObjectArrayList<>();
     private final ObjectArrayList<LifecycleCommand> lifecycleDrain = new ObjectArrayList<>();
+    private final ReferenceSet<CFNBlockEntityEx> unloadedLifecycleEntities = new ReferenceOpenHashSet<>();
     private final ObjectArrayList<ObjectArrayList<CFNBlockEntityEx>> discoveryThrottleWheel =
         new ObjectArrayList<>(DISCOVERY_THROTTLE_WHEEL_SIZE);
     private ObjectArrayList<CFNBlockEntityEx> discoveryThrottleDrain = new ObjectArrayList<>();
@@ -155,6 +156,7 @@ public final class EnergyMachineManager {
     private final PriorityRoleCursor sendCursor = new PriorityRoleCursor();
     private final PriorityRoleCursor receiveCursor = new PriorityRoleCursor();
     private final PriorityRoleCursor itemSendCursor = new PriorityRoleCursor();
+    private final PriorityRoleCursor rejectedSendCursor = new PriorityRoleCursor();
     private final PriorityRoleCursor warningCursor = new PriorityRoleCursor();
     private long warningTickCounter;
     private long warningPlayersVersion = Long.MIN_VALUE;
@@ -321,6 +323,15 @@ public final class EnergyMachineManager {
 
     public void onBlockEntityReady(CFNBlockEntityEx blockEntity) {
         submitLifecycle(blockEntity, MachineLifecyclePositionIndex.Action.READY);
+    }
+
+    void onRepeatedBindingFailure(CFNBlockEntityEx blockEntity) {
+        var world = blockEntity.cfn_getWorld();
+        if (world == null) return;
+        MachineHandlerRuntime runtime = blockEntity.cfn_getMachineHandlerRuntime();
+        if (runtime != null && runtime.ownerManager() != null) {
+            onManagerUnavailableAtPosition(world, blockEntity.cfn_getBlockPos(), runtime.ownerManager());
+        }
     }
 
     //~ if >=1.20 'World ' -> 'Level ' {
@@ -621,7 +632,7 @@ public final class EnergyMachineManager {
                 removeMachine(blockEntity);
             }
             rememberMachinePosition(blockEntity, null, false);
-            scheduleDiscoveryThrottle(blockEntity);
+            scheduleDiscoveryThrottle(blockEntity, explicitOwnerInvalidation ? 20 : MIN_DISCOVERY_THROTTLE_TIMER);
             return RegistrationResult.WAITING_FOR_READY;
         }
         cancelDiscoveryThrottle(blockEntity);
@@ -666,6 +677,10 @@ public final class EnergyMachineManager {
     }
 
     void scheduleDiscoveryThrottle(CFNBlockEntityEx blockEntity) {
+        scheduleDiscoveryThrottle(blockEntity, MIN_DISCOVERY_THROTTLE_TIMER);
+    }
+
+    private void scheduleDiscoveryThrottle(CFNBlockEntityEx blockEntity, int minimumDelay) {
         if (blockEntity.cfn_getEnergyThrottleTimer() != 0
             || blockEntity.cfn_getEnergyLastThrottleTimer() != 0) {
             throw new IllegalStateException("Cannot schedule discovery retry over an existing energy throttle");
@@ -673,7 +688,7 @@ public final class EnergyMachineManager {
         if (discoveryThrottleMembership.containsKey(blockEntity)) {
             throw new IllegalStateException("Discovery throttle already contains the block entity");
         }
-        int timer = MIN_DISCOVERY_THROTTLE_TIMER + discoveryThrottleCursor;
+        int timer = minimumDelay + discoveryThrottleCursor;
         discoveryThrottleCursor++;
         if (discoveryThrottleCursor == DISCOVERY_THROTTLE_TIMER_COUNT) {
             discoveryThrottleCursor = 0;
@@ -708,7 +723,7 @@ public final class EnergyMachineManager {
                 throw new IllegalStateException("Discovery throttle acquired an energy-budget backoff stage");
             }
             int timer = blockEntity.cfn_getEnergyThrottleTimer();
-            if (timer < MIN_DISCOVERY_THROTTLE_TIMER
+            if (timer <= 0
                 || timer > CFNBlockEntityEx.MAX_STORED_ENERGY_THROTTLE_TIMER) {
                 throw new IllegalStateException("Discovery throttle bucket contains an invalid marker: " + timer);
             }
@@ -1410,7 +1425,7 @@ public final class EnergyMachineManager {
             *///?}
         }
         for (CFNBlockEntityEx blockEntity : blockEntities) {
-            submitLifecycle(blockEntity, MachineLifecyclePositionIndex.Action.DISCOVERED);
+            submitLifecycle(blockEntity, MachineLifecyclePositionIndex.Action.TOPOLOGY_CHANGED);
         }
     }
 
@@ -1419,26 +1434,37 @@ public final class EnergyMachineManager {
     }
 
     public void markChunkUnloaded(int dimensionId, int chunkX, int chunkZ) {
-        machineChunkResidency.markUnloaded(dimensionId, ChunkCoordUtils.mergeChunkCoords(chunkX, chunkZ));
+        long chunk = ChunkCoordUtils.mergeChunkCoords(chunkX, chunkZ);
+        synchronized (lifecycleLock) {
+            lifecyclePositions.releaseChunk(dimensionId, chunk, unloadedLifecycleEntities::add);
+            lifecycleInbox.removeIf(command -> command.dimensionId() == dimensionId
+                && MachineLifecyclePositionIndex.chunkOf(command.packedPosition()) == chunk);
+            if (!lifecycleDraining) {
+                lifecycleDrain.removeIf(command -> command.dimensionId() == dimensionId
+                    && MachineLifecyclePositionIndex.chunkOf(command.packedPosition()) == chunk);
+            }
+        }
+        machineChunkResidency.markUnloaded(dimensionId, chunk);
     }
 
     public void clearDimensionChunkResidency(int dimensionId) {
+        synchronized (lifecycleLock) {
+            lifecyclePositions.releaseDimension(dimensionId, unloadedLifecycleEntities::add);
+            lifecycleInbox.removeIf(command -> command.dimensionId() == dimensionId);
+            if (!lifecycleDraining) lifecycleDrain.removeIf(command -> command.dimensionId() == dimensionId);
+        }
         machineChunkResidency.clearDimensionResidency(dimensionId);
     }
 
     private void reconcileMachineChunkResidency() {
+        synchronized (lifecycleLock) {
+            for (CFNBlockEntityEx blockEntity : unloadedLifecycleEntities) cancelDiscoveryThrottle(blockEntity);
+            unloadedLifecycleEntities.clear();
+        }
         machineChunkResidency.tick(machineChunkTransitions);
     }
 
     private void dehydrateMachineChunk(int dimensionId, List<MachinePositionRecord> records) {
-        synchronized (lifecycleLock) {
-            for (int index = 0, count = records.size(); index < count; index++) {
-                MachinePositionRecord record = records.get(index);
-                lifecyclePositions.releasePosition(dimensionId, record.packedPosition());
-                removeLifecycleCommandsAtPosition(lifecycleInbox, dimensionId, record.packedPosition());
-                removeLifecycleCommandsAtPosition(lifecycleDrain, dimensionId, record.packedPosition());
-            }
-        }
         Throwable failure = null;
         Long2ObjectMap<MachineRoute> dimensionRoutes = machineRoutesByPosition.get(dimensionId);
         for (int index = 0, count = records.size(); index < count; index++) {
@@ -1505,17 +1531,6 @@ public final class EnergyMachineManager {
             }
         }
         return false;
-    }
-
-    static void removeLifecycleCommandsAtPosition(ObjectArrayList<LifecycleCommand> commands,
-                                                  int dimensionId,
-                                                  long packedPosition) {
-        for (int index = commands.size() - 1; index >= 0; index--) {
-            LifecycleCommand command = commands.get(index);
-            if (command.dimensionId() == dimensionId && command.packedPosition() == packedPosition) {
-                commands.remove(index);
-            }
-        }
     }
 
     //~ if >=1.20 'World ' -> 'Level ' {
@@ -1685,6 +1700,15 @@ public final class EnergyMachineManager {
             || getDimensionId(world) != command.dimensionId()
             || packBlockPosition(position) != command.packedPosition()
             || !isCurrentBlockEntity(blockEntity)) {
+            try {
+                cancelDiscoveryThrottle(blockEntity);
+                removeMachine(blockEntity, false);
+            } finally {
+                synchronized (lifecycleLock) {
+                    lifecyclePositions.releaseCurrent(command.dimensionId(), command.packedPosition(), blockEntity,
+                        command.generation(), command.action());
+                }
+            }
             return;
         }
         if (command.action() == MachineLifecyclePositionIndex.Action.DISCOVERED) {
@@ -1739,7 +1763,7 @@ public final class EnergyMachineManager {
                     command.action()
                 );
             }
-        } else if (result == RegistrationResult.STALE) {
+        } else if (result == RegistrationResult.STALE || result == RegistrationResult.WAITING_FOR_SCOPE) {
             synchronized (lifecycleLock) {
                 lifecyclePositions.releaseCurrent(
                     command.dimensionId(), command.packedPosition(), command.blockEntity(), command.generation(),
@@ -1757,6 +1781,12 @@ public final class EnergyMachineManager {
                 command.dimensionId(), command.packedPosition(), command.blockEntity(), command.generation(),
                 command.action()
             );
+        }
+        CFNBlockEntityEx blockEntity = command.blockEntity();
+        if (isCurrentBlockEntity(blockEntity) && blockEntity.cfn_getEnergyThrottleTimer() == 0
+            && blockEntity.cfn_getEnergyLastThrottleTimer() == 0) {
+            rememberMachinePosition(blockEntity, null, blockEntity instanceof IMachineNodeBlockEntity);
+            scheduleDiscoveryThrottle(blockEntity, 20);
         }
     }
 
@@ -1872,8 +1902,7 @@ public final class EnergyMachineManager {
                     failure = aggregateFailure(failure, exception);
                 }
             }
-            machineChunkResidency.removeIf(record -> record.dimensionId() == dimId
-                && !record.directMachineNode()
+            machineChunkResidency.removeIf(dimId, coveredChunks, record -> !record.directMachineNode()
                 && !hasScopeRetention(dimId, blockPosFromLong(record.packedPosition()), record));
             throwCleanupFailure(failure);
             return;
@@ -1928,6 +1957,7 @@ public final class EnergyMachineManager {
         warningSessionGeneration++;
         synchronized (lifecycleLock) {
             lifecyclePositions.clear();
+            unloadedLifecycleEntities.clear();
             lifecycleInbox.clear();
             lifecycleDrain.clear();
             positionLifecycleInbox.clear();
@@ -2139,6 +2169,7 @@ public final class EnergyMachineManager {
     }
 
     private void settleAccountWarnings() {
+        if (warningObserverChunksScratch.isEmpty()) return;
         LocalParticipantRoutingIndex localRoutes = LocalParticipantRoutingIndex.INSTANCE;
         for (int index = 0, count = localRoutes.routingGridCount(); index < count; index++) {
             collectWarnings(localRoutes.routingGridAt(index).getParticipantIndex().receive());
@@ -2150,6 +2181,7 @@ public final class EnergyMachineManager {
     }
 
     private void prepareAccountWarnings() {
+        if (warningObserverChunksScratch.isEmpty()) return;
         LocalParticipantRoutingIndex localRoutes = LocalParticipantRoutingIndex.INSTANCE;
         for (int index = 0, count = localRoutes.routingGridCount(); index < count; index++) {
             prepareWarnings(localRoutes.routingGridAt(index).getParticipantIndex().receive());
@@ -3143,9 +3175,7 @@ public final class EnergyMachineManager {
             if (override != null) {
                 return override;
             }
-            if (membership.isBound() && policy.roleScope() == HandlerBindingPolicy.RoleScope.FIXED) {
-                return membership.role();
-            }
+            // Membership stores the effective (possibly overridden) role, not the handler's role.
             return EnergyHandlerRuntime.type(activeHandler, hubMetadata, failureContext);
         }
 
@@ -3593,6 +3623,12 @@ public final class EnergyMachineManager {
                             continue;
                         }
                         transferToItem(sender, receiver, status, epoch);
+                        EnergyAmount remaining = receiver.canReceiveValue();
+                        try {
+                            if (!remaining.isPositive()) break;
+                        } finally {
+                            remaining.recycle();
+                        }
                     }
                 } finally {
                     receivable.recycle();
@@ -3654,6 +3690,8 @@ public final class EnergyMachineManager {
             while (sender != null) {
                 int outcome = transfer(sender, receiver, status, epoch);
                 if ((outcome & TRANSFER_RECEIVER_REJECTED) != 0) {
+                    // A small packet can be rejected even when a later source can satisfy this receiver.
+                    transferFromRemainingSources(sendTraversal, sender, receiver, status, epoch, passId);
                     break;
                 }
                 if ((outcome & TRANSFER_SENDER_UNAVAILABLE) != 0) {
@@ -3670,6 +3708,27 @@ public final class EnergyMachineManager {
             if (sender == null) {
                 return;
             }
+        }
+    }
+
+    private static void transferFromRemainingSources(PriorityRoleCursor traversal,
+                                                    MachineTransferSlot rejected,
+                                                    MachineTransferSlot receiver,
+                                                    Status status, long epoch, long passId) {
+        PriorityRoleCursor fallback = INSTANCE.rejectedSendCursor;
+        fallback.copyRemaining(traversal);
+        try {
+            for (MachineTransferSlot sender = nextActiveSender(fallback, epoch, passId);
+                 sender != null; sender = nextActiveSender(fallback, epoch, passId)) {
+                if (sender.account == rejected.account) continue;
+                int outcome;
+                do {
+                    outcome = transfer(sender, receiver, status, epoch);
+                    if ((outcome & TRANSFER_RECEIVER_UNAVAILABLE) != 0) return;
+                } while ((outcome & (TRANSFER_RECEIVER_REJECTED | TRANSFER_SENDER_UNAVAILABLE)) == 0);
+            }
+        } finally {
+            fallback.close();
         }
     }
 
@@ -3828,6 +3887,14 @@ public final class EnergyMachineManager {
             }
             bucket = firstBucket;
             index = 0;
+        }
+
+        void copyRemaining(PriorityRoleCursor source) {
+            if (inUse || !source.inUse) throw new IllegalStateException("Invalid cursor fork");
+            inUse = true;
+            firstBucket = source.firstBucket;
+            bucket = source.bucket;
+            index = source.index;
         }
 
         void close() {

@@ -6,9 +6,15 @@ import com.circulation.circulation_networks.api.HandlerTickResult;
 import com.circulation.circulation_networks.api.IEnergyHandler;
 import com.circulation.circulation_networks.manager.HandlerBindingPolicy;
 import com.circulation.circulation_networks.manager.HandlerInvalidationSink;
+import com.circulation.circulation_networks.manager.MekanismLongEnergyConversion;
 import com.circulation.circulation_networks.network.nodes.HubNode;
-import com.circulation.circulation_networks.utils.EnergyAmountConversionUtils;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import com.circulation.circulation_networks.api.MekanismEnergyPermissions;
+import mekanism.api.energy.IMekanismStrictEnergyHandler;
+import mekanism.common.tile.interfaces.ISideConfiguration;
+import mekanism.common.lib.transmitter.TransmissionType;
+import mekanism.common.tile.component.config.slot.ISlotInfo;
+import mekanism.common.tile.multiblock.TileEntityInductionPort;
 import mekanism.api.Action;
 import mekanism.api.energy.IStrictEnergyHandler;
 import mekanism.common.capabilities.Capabilities;
@@ -19,25 +25,19 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.capabilities.BlockCapabilityCache;
 import org.jetbrains.annotations.Nullable;
 
-import java.math.BigDecimal;
-import java.math.BigInteger;
 import java.util.Objects;
 
-/** Mekanism energy binding whose block role is frozen from capability presence. */
+/** Mekanism energy binding with structure-derived external energy roles. */
 public final class MEKHandler implements IEnergyHandler {
 
     private static final Direction[] DIRECTIONS = Direction.values();
     private static final HandlerBindingPolicy BINDING_POLICY = HandlerBindingPolicy.of(
-        HandlerBindingPolicy.TickLifecycle.STATIC,
-        HandlerBindingPolicy.RoleScope.FIXED,
+        HandlerBindingPolicy.TickLifecycle.BEGIN_TICK,
+        HandlerBindingPolicy.RoleScope.RUNTIME_DYNAMIC,
         HandlerBindingPolicy.MappingScope.NONE,
         HandlerBindingPolicy.PairMatching.NONE
     );
-    private static final double FE_TO_MEK_RATIO = 2.5D;
-    private static final BigInteger MAX_DIRECT_DOUBLE_TRANSFER = BigDecimal.valueOf(Double.MAX_VALUE).toBigInteger();
 
-    private final ObjectArrayList<BlockCapabilityCache<IStrictEnergyHandler, Direction>> capabilityCaches =
-        new ObjectArrayList<>(DIRECTIONS.length);
     private final EnergyAmount itemReceiveBudget = EnergyAmount.obtain(0L);
     @Nullable
     private IStrictEnergyHandler send;
@@ -45,6 +45,8 @@ public final class MEKHandler implements IEnergyHandler {
     private IStrictEnergyHandler receive;
     @Nullable
     private BlockEntity blockEntity;
+    private Object cacheGeneration;
+    private final ObjectArrayList<Face> faces = new ObjectArrayList<>();
     private boolean itemBound;
     private EnergyType energyType = EnergyType.INVALID;
 
@@ -61,23 +63,23 @@ public final class MEKHandler implements IEnergyHandler {
             throw new IllegalArgumentException("Mekanism handler requires a server-level block entity");
         }
         this.blockEntity = blockEntity;
+        Object generation = new Object();
+        cacheGeneration = generation;
         for (Direction direction : DIRECTIONS) {
             BlockCapabilityCache<IStrictEnergyHandler, Direction> cache = BlockCapabilityCache.create(
                 Capabilities.STRICT_ENERGY.block(),
                 level,
                 blockEntity.getBlockPos(),
                 direction,
-                () -> this.blockEntity == blockEntity,
-                invalidationSink::suspendUntilRebind
+                () -> cacheGeneration == generation && this.blockEntity == blockEntity,
+                invalidationSink::invalidate
             );
-            capabilityCaches.add(cache);
             IStrictEnergyHandler handler = cache.getCapability();
-            if (handler != null && handler.getEnergyContainerCount() > 0 && send == null) {
-                send = handler;
-                receive = handler;
+            if (handler != null && handler.getEnergyContainerCount() > 0) {
+                faces.add(new Face(direction, handler));
             }
         }
-        energyType = send == null ? EnergyType.INVALID : EnergyType.STORAGE;
+        refreshStructure();
         if (energyType == EnergyType.INVALID) {
             throw new IllegalArgumentException("Mekanism block entity has no usable energy capability");
         }
@@ -85,19 +87,24 @@ public final class MEKHandler implements IEnergyHandler {
 
     @Override
     public HandlerTickResult beginServerTick(long epoch) {
-        throw new IllegalStateException("STATIC Mekanism handler does not receive tick callbacks");
+        requireBlockBinding();
+        if (!(blockEntity instanceof TileEntityInductionPort) && epoch % 20L != 0L) return HandlerTickResult.UNCHANGED;
+        EnergyType previous = energyType;
+        refreshStructure();
+        return previous == energyType ? HandlerTickResult.UNCHANGED : HandlerTickResult.STATE_CHANGED;
     }
 
     @Override
     public void endServerTick(long epoch) {
-        throw new IllegalStateException("STATIC Mekanism handler does not receive tick callbacks");
+        throw new IllegalStateException("Mekanism handler does not use end tick callbacks");
     }
 
     @Override
     public void unbindBlockEntity() {
+        faces.clear();
         send = null;
         receive = null;
-        capabilityCaches.clear();
+        cacheGeneration = null;
         blockEntity = null;
         energyType = EnergyType.INVALID;
     }
@@ -139,10 +146,13 @@ public final class MEKHandler implements IEnergyHandler {
         if (requested.isZero()) {
             return requested;
         }
-        long requestedJoules = (long) (EnergyAmountConversionUtils.toDoubleClamped(requested) * FE_TO_MEK_RATIO);
+        long maximumJoules = MekanismLongEnergyConversion.toJoules(requested.asLongClamped());
+        long requestedJoules = MekanismLongEnergyConversion.wholeJoules(
+            maximumJoules - receive.insertEnergy(maximumJoules, Action.SIMULATE));
+        if (requestedJoules == 0L) return requested.setZero();
         long remainder = receive.insertEnergy(requestedJoules, Action.EXECUTE);
         long insertedJoules = Math.max(0L, requestedJoules - remainder);
-        EnergyAmount inserted = EnergyAmountConversionUtils.obtainFromDoubleFloor(insertedJoules / FE_TO_MEK_RATIO);
+        EnergyAmount inserted = EnergyAmount.obtain(MekanismLongEnergyConversion.toFe(insertedJoules));
         inserted.min(requested);
         requested.recycle();
         if (itemBound) {
@@ -162,9 +172,12 @@ public final class MEKHandler implements IEnergyHandler {
         if (requested.isZero()) {
             return requested;
         }
-        long requestedJoules = (long) (EnergyAmountConversionUtils.toDoubleClamped(requested) * FE_TO_MEK_RATIO);
+        long maximumJoules = MekanismLongEnergyConversion.toJoules(requested.asLongClamped());
+        long requestedJoules = MekanismLongEnergyConversion.wholeJoules(
+            send.extractEnergy(maximumJoules, Action.SIMULATE));
+        if (requestedJoules == 0L) return requested.setZero();
         long extractedJoules = Math.max(0L, send.extractEnergy(requestedJoules, Action.EXECUTE));
-        EnergyAmount extracted = EnergyAmountConversionUtils.obtainFromDoubleFloor(extractedJoules / FE_TO_MEK_RATIO);
+        EnergyAmount extracted = EnergyAmount.obtain(MekanismLongEnergyConversion.toFe(extractedJoules));
         extracted.min(requested);
         requested.recycle();
         return extracted;
@@ -172,15 +185,17 @@ public final class MEKHandler implements IEnergyHandler {
 
     @Override
     public EnergyAmount canExtractValue(@Nullable HubNode.HubMetadata hubMetadata) {
+        if (!itemBound) selectFace(false);
         if (send == null || itemBound) {
             return EnergyAmounts.ZERO;
         }
         long extracted = Math.max(0L, send.extractEnergy(Long.MAX_VALUE, Action.SIMULATE));
-        return EnergyAmountConversionUtils.obtainFromDoubleFloor(extracted / FE_TO_MEK_RATIO);
+        return EnergyAmount.obtain(MekanismLongEnergyConversion.toFe(extracted));
     }
 
     @Override
     public EnergyAmount canReceiveValue(@Nullable HubNode.HubMetadata hubMetadata) {
+        if (!itemBound) selectFace(true);
         if (receive == null) {
             return EnergyAmounts.ZERO;
         }
@@ -188,7 +203,7 @@ public final class MEKHandler implements IEnergyHandler {
             return EnergyAmount.obtain(itemReceiveBudget);
         }
         long remainder = receive.insertEnergy(Long.MAX_VALUE, Action.SIMULATE);
-        return EnergyAmountConversionUtils.obtainFromDoubleFloor((Long.MAX_VALUE - remainder) / FE_TO_MEK_RATIO);
+        return EnergyAmount.obtain(MekanismLongEnergyConversion.toFe(Long.MAX_VALUE - remainder));
     }
 
     @Override
@@ -222,16 +237,11 @@ public final class MEKHandler implements IEnergyHandler {
             return;
         }
         long remainder = receive.insertEnergy(Long.MAX_VALUE, Action.SIMULATE);
-        EnergyAmountConversionUtils.setFromDoubleFloor(
-            itemReceiveBudget,
-            (Long.MAX_VALUE - remainder) / FE_TO_MEK_RATIO
-        );
+        itemReceiveBudget.init(MekanismLongEnergyConversion.toFe(Long.MAX_VALUE - remainder));
     }
 
     private static void clampToMaximum(EnergyAmount amount) {
-        if (amount.isPositive() && amount.asBigInteger().compareTo(MAX_DIRECT_DOUBLE_TRANSFER) > 0) {
-            amount.init(MAX_DIRECT_DOUBLE_TRANSFER);
-        }
+        amount.init(Math.clamp(amount.asLongClamped(), 0L, MekanismLongEnergyConversion.MAX_FE));
     }
 
     private void requireUnbound() {
@@ -245,4 +255,67 @@ public final class MEKHandler implements IEnergyHandler {
             throw new IllegalStateException("Mekanism handler has no block-entity binding");
         }
     }
+    private void refreshStructure() {
+        send = null;
+        receive = null;
+        for (Face face : faces) {
+            face.input = true;
+            face.output = true;
+            if (blockEntity instanceof TileEntityInductionPort port) {
+                face.output = port.getActive();
+                face.input = !face.output;
+            } else {
+                if (face.direction != null && blockEntity instanceof ISideConfiguration configurable) {
+                    ISlotInfo slot = configurable.getConfig().getSlotInfo(TransmissionType.ENERGY, face.direction);
+                    face.input = slot != null && slot.isEnabled() && slot.canInput();
+                    face.output = slot != null && slot.isEnabled() && slot.canOutput();
+                }
+                if (blockEntity instanceof IMekanismStrictEnergyHandler nativeHandler) {
+                    boolean known = false, input = false, output = false;
+                    for (var container : nativeHandler.getEnergyContainers(face.direction)) {
+                        if (container instanceof MekanismEnergyPermissions permissions) {
+                            known = true;
+                            input |= permissions.cfn_canInsertEnergy();
+                            output |= permissions.cfn_canExtractEnergy();
+                        } else {
+                            // Unknown third-party containers retain their capability's bidirectional contract.
+                            input = true;
+                            output = true;
+                        }
+                    }
+                    if (known) { face.input &= input; face.output &= output; }
+                }
+            }
+            if (receive == null && face.input) receive = face.handler;
+            if (send == null && face.output) send = face.handler;
+        }
+        energyType = send != null ? receive != null ? EnergyType.STORAGE : EnergyType.SEND
+            : receive != null ? EnergyType.RECEIVE : EnergyType.INVALID;
+    }
+
+    private void selectFace(boolean input) {
+        for (Face face : faces) {
+            if (!(input ? face.input : face.output)) continue;
+            boolean available = input
+                ? face.handler.insertEnergy(Long.MAX_VALUE, Action.SIMULATE) <= Long.MAX_VALUE - 5L
+                : face.handler.extractEnergy(Long.MAX_VALUE, Action.SIMULATE) >= 5L;
+            if (available) {
+                if (input) receive = face.handler;
+                else send = face.handler;
+                return;
+            }
+        }
+    }
+
+    private static final class Face {
+        private final Direction direction;
+        private final IStrictEnergyHandler handler;
+        private boolean input;
+        private boolean output;
+        private Face(Direction direction, IStrictEnergyHandler handler) {
+            this.direction = direction;
+            this.handler = handler;
+        }
+    }
+
 }
