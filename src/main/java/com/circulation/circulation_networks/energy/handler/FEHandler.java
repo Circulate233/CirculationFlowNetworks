@@ -234,11 +234,15 @@ public class FEHandler implements IEnergyHandler {
         return energyType == EnergyType.RECEIVE || energyType == EnergyType.STORAGE;
     }
 
-    private static EnergyType roleOf(int extract, int receive) {
+    private EnergyType roleOf(int extract, int receive) {
         if (extract > 0) {
             return receive > 0 ? EnergyType.STORAGE : EnergyType.SEND;
         }
-        return receive > 0 ? EnergyType.RECEIVE : EnergyType.INVALID;
+        if (receive > 0) return EnergyType.RECEIVE;
+        // A present capability with zero throughput may just be full or empty. Keep the last
+        // observed role; an initially idle capability stays eligible in both directions until
+        // a probe identifies its role. Zero budgets still prevent any transfer or warning.
+        return energyType == EnergyType.INVALID ? EnergyType.STORAGE : energyType;
     }
 
     private static int requireValidAmount(int amount, int requested, String operation) {
