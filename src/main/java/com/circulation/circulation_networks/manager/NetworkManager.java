@@ -33,7 +33,6 @@ import it.unimi.dsi.fastutil.objects.Object2ObjectMaps;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectArrayFIFOQueue;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
-import it.unimi.dsi.fastutil.objects.ObjectList;
 import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ObjectSet;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectMap;
@@ -423,16 +422,14 @@ public final class NetworkManager {
             return;
         }
 
-        var pendingByDim = validationTracker.pendingDimensionsSnapshot();
-        for (var dimEntry : pendingByDim) {
-            String dimId = dimEntry.getKey();
+        for (String dimId : validationTracker.pendingDimensionsSnapshot()) {
             var world = resolveWorld(dimId);
             if (world == null || isClientWorld(world)) {
                 continue;
             }
 
             LongArrayList loadedChunkCoords = new LongArrayList();
-            for (long chunkCoord : dimEntry.getValue().keySet()) {
+            for (long chunkCoord : validationTracker.pendingChunksSnapshot(dimId)) {
                 int chunkX = (int) (chunkCoord >> 32);
                 int chunkZ = (int) chunkCoord;
                 if (Functions.isChunkLoaded(world, chunkX, chunkZ)) {
@@ -1065,7 +1062,7 @@ public final class NetworkManager {
         validatePendingNodesInLoadedWorlds();
     }
 
-    private static final class NodeValidationTracker {
+    static final class NodeValidationTracker {
         private final Object2ObjectMap<String, Long2ObjectMap<LongSet>> pending = new Object2ObjectOpenHashMap<>();
         private final Object2ObjectMap<String, LongSet> early = new Object2ObjectOpenHashMap<>();
 
@@ -1154,8 +1151,13 @@ public final class NetworkManager {
             return pending.isEmpty();
         }
 
-        ObjectList<Object2ObjectMap.Entry<String, Long2ObjectMap<LongSet>>> pendingDimensionsSnapshot() {
-            return new ObjectArrayList<>(pending.object2ObjectEntrySet());
+        String[] pendingDimensionsSnapshot() {
+            // Fastutil entries retain table indices that validation may invalidate by removing dimensions.
+            return pending.keySet().toArray(new String[0]);
+        }
+
+        LongArrayList pendingChunksSnapshot(String dimId) {
+            return new LongArrayList(pending.get(dimId).keySet());
         }
 
         void batchRemovePending(String dimId, LongArrayList positions) {
