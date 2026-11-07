@@ -44,6 +44,8 @@ public class FEHandler implements IEnergyHandler {
     private boolean refreshPending;
     private boolean refreshFailed;
     private EnergyType energyType = EnergyType.INVALID;
+    // Budget backoff can skip the exact periodic tick; refresh on the next eligible callback.
+    private long lastRoleRefreshEpoch = Long.MIN_VALUE;
 
     public static boolean supports(TileEntity tileEntity) {
         for (EnumFacing facing : EnumFacing.VALUES) {
@@ -195,7 +197,8 @@ public class FEHandler implements IEnergyHandler {
             refreshFailed = false;
             return HandlerTickResult.RETRY_BINDING;
         }
-        if (epoch % 20L == 0L) {
+        if (lastRoleRefreshEpoch == Long.MIN_VALUE || epoch - lastRoleRefreshEpoch >= 20L) {
+            lastRoleRefreshEpoch = epoch;
             EnergyType previous = energyType;
             discoverStructure(blockEntity);
             refreshPending = true;
@@ -231,6 +234,7 @@ public class FEHandler implements IEnergyHandler {
 
     @Override
     public void unbindBlockEntity() {
+        lastRoleRefreshEpoch = Long.MIN_VALUE;
         send = null;
         receive = null;
         directStorage = null;

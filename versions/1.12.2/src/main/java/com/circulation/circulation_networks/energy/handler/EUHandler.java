@@ -37,6 +37,8 @@ public class EUHandler implements IEnergyHandler {
     );
 
     private EnergyType energyType;
+    // Budget backoff can skip the exact periodic tick; refresh on the next eligible callback.
+    private long lastRoleRefreshEpoch = Long.MIN_VALUE;
     @Nullable
     private IEnergySource send;
 
@@ -203,7 +205,8 @@ public class EUHandler implements IEnergyHandler {
             throw new IllegalArgumentException("EU handler epoch must increase: previous " + activeEpoch + ", got " + epoch);
         }
         activeEpoch = epoch;
-        if (epoch % 20L == 0L) {
+        if (lastRoleRefreshEpoch == Long.MIN_VALUE || epoch - lastRoleRefreshEpoch >= 20L) {
+            lastRoleRefreshEpoch = epoch;
             EnergyType previous = energyType;
             prepareBlockState(blockEntity);
             if (energyType == EnergyType.INVALID) return HandlerTickResult.RETRY_BINDING;
@@ -219,6 +222,7 @@ public class EUHandler implements IEnergyHandler {
 
     @Override
     public void unbindBlockEntity() {
+        lastRoleRefreshEpoch = Long.MIN_VALUE;
         clearTickState();
         cachedTile = null;
         blockEntity = null;

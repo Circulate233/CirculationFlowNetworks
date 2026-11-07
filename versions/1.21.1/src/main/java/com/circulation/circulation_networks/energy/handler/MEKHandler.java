@@ -49,6 +49,8 @@ public final class MEKHandler implements IEnergyHandler {
     private final ObjectArrayList<Face> faces = new ObjectArrayList<>();
     private boolean itemBound;
     private EnergyType energyType = EnergyType.INVALID;
+    // Budget backoff can skip the exact periodic tick; refresh on the next eligible callback.
+    private long lastRoleRefreshEpoch = Long.MIN_VALUE;
 
     @Override
     public HandlerBindingPolicy bindingPolicy() {
@@ -88,7 +90,9 @@ public final class MEKHandler implements IEnergyHandler {
     @Override
     public HandlerTickResult beginServerTick(long epoch) {
         requireBlockBinding();
-        if (!(blockEntity instanceof TileEntityInductionPort) && epoch % 20L != 0L) return HandlerTickResult.UNCHANGED;
+        if (!(blockEntity instanceof TileEntityInductionPort)
+            && lastRoleRefreshEpoch != Long.MIN_VALUE && epoch - lastRoleRefreshEpoch < 20L) return HandlerTickResult.UNCHANGED;
+        lastRoleRefreshEpoch = epoch;
         EnergyType previous = energyType;
         refreshStructure();
         return previous == energyType ? HandlerTickResult.UNCHANGED : HandlerTickResult.STATE_CHANGED;
@@ -101,6 +105,7 @@ public final class MEKHandler implements IEnergyHandler {
 
     @Override
     public void unbindBlockEntity() {
+        lastRoleRefreshEpoch = Long.MIN_VALUE;
         faces.clear();
         send = null;
         receive = null;

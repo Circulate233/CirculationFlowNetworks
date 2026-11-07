@@ -7,6 +7,7 @@ import com.circulation.circulation_networks.api.HandlerTickResult;
 import com.circulation.circulation_networks.api.IEnergyHandler;
 import com.circulation.circulation_networks.manager.HandlerBindingPolicy;
 import com.circulation.circulation_networks.manager.HandlerInvalidationSink;
+import com.circulation.circulation_networks.manager.EnergyHandlerNotReadyException;
 import com.circulation.circulation_networks.network.nodes.HubNode;
 import com.circulation.circulation_networks.utils.EnergyAmountConversionUtils;
 import com.github.bsideup.jabel.Desugar;
@@ -35,7 +36,7 @@ public class MEKHandler implements IEnergyHandler {
 
     private static final HandlerBindingPolicy BINDING_POLICY = HandlerBindingPolicy.of(
         HandlerBindingPolicy.TickLifecycle.BEGIN_TICK,
-        HandlerBindingPolicy.RoleScope.FIXED,
+        HandlerBindingPolicy.RoleScope.RUNTIME_DYNAMIC,
         HandlerBindingPolicy.MappingScope.NONE,
         HandlerBindingPolicy.PairMatching.NONE
     );
@@ -48,7 +49,7 @@ public class MEKHandler implements IEnergyHandler {
     private static final int MODE_INDUCTION_PORT = 2;
     private static final int MODE_ORDINARY = 3;
     private static final InductionPortAccess INDUCTION_PORT = resolveInductionPortAccess();
-    private static final BigInteger MAX_DIRECT_DOUBLE_TRANSFER = BigDecimal.valueOf(Double.MAX_VALUE).toBigInteger();
+    private static final int ROLE_CHECK_INTERVAL = 20;
     private static final double MAX_FE = Double.MAX_VALUE / FE_TO_MEK_RATIO;
     private static final BigInteger MAX_SCALED_DOUBLE_TRANSFER = BigDecimal.valueOf(MAX_FE).toBigInteger();
 
@@ -78,6 +79,8 @@ public class MEKHandler implements IEnergyHandler {
     private boolean supportsReceive;
     private boolean refreshPending;
     private boolean refreshFailed;
+    private int roleCheckOffset;
+    private long nextRoleCheckEpoch = Long.MIN_VALUE;
 
     private static void clampToMaximum(EnergyAmount amount, BigInteger maximum) {
         if (amount == null || !amount.isInitialized() || amount.isNegative()) {
@@ -299,6 +302,11 @@ public class MEKHandler implements IEnergyHandler {
         supportsSend = send != null;
         supportsReceive = receive != null;
         energyType = structuralType(supportsSend, supportsReceive);
+        if (energyType == EnergyType.INVALID) {
+            // Do not publish a successful binding with no route capable of triggering lazy refresh.
+            throw new EnergyHandlerNotReadyException("Mekanism energy faces are temporarily unavailable");
+        }
+        roleCheckOffset = Math.floorMod(tileEntity.getPos().hashCode(), ROLE_CHECK_INTERVAL);
     }
 
     /**
@@ -316,7 +324,7 @@ public class MEKHandler implements IEnergyHandler {
             throw new IllegalArgumentException("Mekanism handler epoch must increase: previous " + activeEpoch + ", got " + epoch);
         }
         activeEpoch = epoch;
-        if (refreshFailed) {
+        if (energyType == EnergyType.INVALID || refreshFailed) {
             send = null;
             receive = null;
             energyType = EnergyType.INVALID;
@@ -328,7 +336,42 @@ public class MEKHandler implements IEnergyHandler {
             return HandlerTickResult.RETRY_BINDING;
         }
         refreshPending = true;
+        if (nextRoleCheckEpoch == Long.MIN_VALUE) nextRoleCheckEpoch = epoch + roleCheckOffset;
+        if (blockMode == MODE_ORDINARY && epoch >= nextRoleCheckEpoch) {
+            // Backoff may skip the scheduled tick. Run once when resumed, without catching up scans.
+            nextRoleCheckEpoch = epoch + ROLE_CHECK_INTERVAL;
+            if (discoverMissingOrdinaryRoles()) return HandlerTickResult.STATE_CHANGED;
+        }
         return HandlerTickResult.UNCHANGED;
+    }
+
+    /**
+     * Only missing directions need periodic discovery. Existing faces are validated lazily, and a
+     * receiver without an output interface performs no periodic face probes at all. The position
+     * offset spreads discovery over ticks rather than scanning every configurable machine at once.
+     */
+    private boolean discoverMissingOrdinaryRoles() {
+        boolean findSend = !supportsSend && blockEntity instanceof IStrictEnergyOutputter;
+        boolean findReceive = !supportsReceive && blockEntity instanceof IStrictEnergyAcceptor;
+        if (!findSend && !findReceive) return false;
+        EnergyType previous = energyType;
+        for (EnumFacing facing : EnumFacing.VALUES) {
+            if (findSend && ((IStrictEnergyOutputter) blockEntity).canOutputEnergy(facing)) {
+                supportsSend = true;
+                sendFacing = facing;
+                sendState = ROLE_SUPPORTED;
+                findSend = false;
+            }
+            if (findReceive && ((IStrictEnergyAcceptor) blockEntity).canReceiveEnergy(facing)) {
+                supportsReceive = true;
+                receiveFacing = facing;
+                receiveState = ROLE_SUPPORTED;
+                findReceive = false;
+            }
+            if (!findSend && !findReceive) break;
+        }
+        energyType = structuralType(supportsSend, supportsReceive);
+        return energyType != previous;
     }
 
     /**
@@ -380,6 +423,7 @@ public class MEKHandler implements IEnergyHandler {
 
     @Override
     public void unbindBlockEntity() {
+        nextRoleCheckEpoch = Long.MIN_VALUE;
         send = null;
         receive = null;
         energyType = EnergyType.INVALID;
@@ -408,7 +452,7 @@ public class MEKHandler implements IEnergyHandler {
         receiveItem = (IEnergizedItem) itemStack.getItem();
         double i = receiveItem.getMaxTransfer(itemStack);
         double r = receiveItem.getMaxEnergy(itemStack) - receiveItem.getEnergy(itemStack);
-        EnergyAmountConversionUtils.setFromDoubleFloor(needEnergy, Math.max(0.0D, i == 0 ? r : Math.min(r, i)));
+        setFromJoules(needEnergy, Math.max(0.0D, i == 0 ? r : Math.min(r, i)));
         stack = itemStack;
         energyType = EnergyType.RECEIVE;
     }
@@ -431,9 +475,9 @@ public class MEKHandler implements IEnergyHandler {
     public EnergyAmount receiveEnergy(EnergyAmount maxReceive, @Nullable HubNode.HubMetadata hubMetadata) {
         if (isItem) {
             EnergyAmount accepted = EnergyAmount.obtain(needEnergy).min(maxReceive);
-            clampToMaximum(accepted, MAX_DIRECT_DOUBLE_TRANSFER);
+            clampToMaximum(accepted, MAX_SCALED_DOUBLE_TRANSFER);
             if (!accepted.isZero()) {
-                receiveItem.setEnergy(stack, receiveItem.getEnergy(stack) + EnergyAmountConversionUtils.toDoubleClamped(accepted));
+                receiveItem.setEnergy(stack, receiveItem.getEnergy(stack) + toJoules(accepted));
                 needEnergy.subtract(accepted);
             }
             return accepted;

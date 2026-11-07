@@ -113,6 +113,7 @@ public final class EnergyMachineManager {
     private final Int2ObjectMap<Long2ObjectMap<MachineRoute>> machineRoutesByPosition = new Int2ObjectOpenHashMap<>();
     private final Reference2LongMap<IEnergySupplyNode> nodeRescanTicks = new Reference2LongOpenHashMap<>();
     private final Object2ObjectMap<String, LongSet> warningPositionsScratch = new Object2ObjectOpenHashMap<>();
+    private final ReferenceSet<MachineTransferSlot> bindingWarningSlots = new ReferenceOpenHashSet<>();
     private final WarningObserverIndex warningObservers = new WarningObserverIndex(WARNING_OBSERVER_CHUNK_RADIUS);
     private final Object2ObjectMap<String, LongSet> warningObserverChunksScratch = warningObservers.chunks();
     private final WarningSnapshotSynchronizer warningSnapshots =
@@ -1945,6 +1946,7 @@ public final class EnergyMachineManager {
         machineInteractionDemandEpoch = Long.MIN_VALUE;
         nodeRescanTicks.clear();
         warningPositionsScratch.clear();
+        bindingWarningSlots.clear();
         warningObservers.clear();
         warningSnapshots.clear();
         onlineWarningPlayerIdsScratch.clear();
@@ -2170,6 +2172,7 @@ public final class EnergyMachineManager {
 
     private void settleAccountWarnings() {
         if (warningObserverChunksScratch.isEmpty()) return;
+        collectBindingWarnings(warningPositionsScratch, warningObserverChunksScratch);
         LocalParticipantRoutingIndex localRoutes = LocalParticipantRoutingIndex.INSTANCE;
         for (int index = 0, count = localRoutes.routingGridCount(); index < count; index++) {
             collectWarnings(localRoutes.routingGridAt(index).getParticipantIndex().receive());
@@ -2177,6 +2180,17 @@ public final class EnergyMachineManager {
         ChannelParticipantIndex channels = ChannelParticipantIndex.INSTANCE;
         for (int index = 0, count = channels.routingChannelCount(); index < count; index++) {
             collectWarnings(channels.routingChannelAt(index).receive());
+        }
+    }
+
+    private void collectBindingWarnings(Object2ObjectMap<String, LongSet> warnings,
+                                        Object2ObjectMap<String, LongSet> observers) {
+        // Faulted slots have left the transfer indexes. Only visit this small fault set, without
+        // querying capabilities or waking up healthy, full, or unobserved machines.
+        for (MachineTransferSlot slot : bindingWarningSlots) {
+            if (slot.hasWarningTarget && slot.hasWarningObserver(observers)) {
+                slot.addWarningPosition(warnings);
+            }
         }
     }
 
@@ -2895,7 +2909,7 @@ public final class EnergyMachineManager {
         private void configureSlot(IGrid grid, MachineTransferSlot slot) {
             slot.requireGridTracking(grid, grid.getInteraction());
             if (account == null) {
-                slot.suspendTransfer();
+                slot.suspendTransfer(true);
                 return;
             }
             if (MachineBindingIndex.INSTANCE.isEnergyThrottled(tileEntity)) {
@@ -2914,7 +2928,7 @@ public final class EnergyMachineManager {
             );
             if (role == IEnergyHandler.EnergyType.INVALID) {
                 MachineBindingIndex.INSTANCE.markEnergyRoleFailure(tileEntity);
-                slot.suspendTransfer();
+                slot.suspendTransfer(true);
                 return;
             }
             slot.configure(grid, account, policy, hubMetadata, grid.getInteraction(), role, priority, failureContext,
@@ -3220,6 +3234,7 @@ public final class EnergyMachineManager {
                 hasWarningTarget = true;
             }
             transferActive = true;
+            clearBindingWarning();
         }
 
         @Nullable
@@ -3270,8 +3285,14 @@ public final class EnergyMachineManager {
         }
 
         void suspendTransfer() {
+            suspendTransfer(false);
+        }
+
+        void suspendTransfer(boolean bindingFailed) {
             transferActive = false;
-            hasWarningTarget = false;
+            if (bindingFailed && hasWarningTarget) {
+                INSTANCE.bindingWarningSlots.add(this);
+            }
             if (membership.isBound()) {
                 requireMembershipOwner().remove(this);
             }
@@ -3284,6 +3305,8 @@ public final class EnergyMachineManager {
 
         void detachGrid() {
             suspendTransfer();
+            clearBindingWarning();
+            hasWarningTarget = false;
             if (interactionGrid == null) {
                 if (interaction != null) {
                     throw new IllegalStateException("Machine slot retains a grid interaction without grid ownership");
@@ -3293,6 +3316,10 @@ public final class EnergyMachineManager {
             interactionGrid.getParticipantIndex().unregisterMachineInteraction(packedPosition, gridMachineInteraction);
             interactionGrid = null;
             interaction = null;
+        }
+
+        private void clearBindingWarning() {
+            INSTANCE.bindingWarningSlots.remove(this);
         }
 
         void attachGridTracking(IGrid grid, Interaction gridInteraction) {
@@ -3757,6 +3784,9 @@ public final class EnergyMachineManager {
                                 MachineTransferSlot receiver,
                                 Status status,
                                 long epoch) {
+        // Multiple endpoints can alias one physical backend. A self-transfer consumes both budgets
+        // without supplying a consumer; keep this source available for the next receiver instead.
+        if (sender.account == receiver.account) return TRANSFER_RECEIVER_REJECTED;
         EnergyAmount extractable = sender.canExtractValue(epoch);
         try {
             EnergyAmount receivable = receiver.canReceiveValue(epoch);

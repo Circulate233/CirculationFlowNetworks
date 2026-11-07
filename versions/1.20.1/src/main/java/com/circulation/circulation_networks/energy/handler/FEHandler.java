@@ -40,6 +40,8 @@ public final class FEHandler implements IEnergyHandler {
     private BlockEntity blockEntity;
     private boolean itemBound;
     private EnergyType energyType = EnergyType.INVALID;
+    // Budget backoff can skip the exact periodic tick; refresh on the next eligible callback.
+    private long lastRoleRefreshEpoch = Long.MIN_VALUE;
 
     @Override
     public HandlerBindingPolicy bindingPolicy() {
@@ -85,7 +87,8 @@ public final class FEHandler implements IEnergyHandler {
     @Override
     public HandlerTickResult beginServerTick(long epoch) {
         requireBlockBinding();
-        if (epoch % 20L != 0L) return HandlerTickResult.UNCHANGED;
+        if (lastRoleRefreshEpoch != Long.MIN_VALUE && epoch - lastRoleRefreshEpoch < 20L) return HandlerTickResult.UNCHANGED;
+        lastRoleRefreshEpoch = epoch;
         EnergyType previous = energyType;
         energyType = faces.role();
         return previous == energyType ? HandlerTickResult.UNCHANGED : HandlerTickResult.STATE_CHANGED;
@@ -98,6 +101,7 @@ public final class FEHandler implements IEnergyHandler {
 
     @Override
     public void unbindBlockEntity() {
+        lastRoleRefreshEpoch = Long.MIN_VALUE;
         faces.clear();
         send = null;
         receive = null;

@@ -117,6 +117,18 @@ class EnergyRoutingRecoveryTest {
     }
 
     @Test
+    void feRoleDiscoverySurvivesTicksSkippedByBudgetBackoff() {
+        Tile tile = new Tile();
+        FEHandler handler = new FEHandler();
+        handler.bindBlockEntity(tile, org.mockito.Mockito.mock(HandlerInvalidationSink.class));
+        handler.beginServerTick(1);
+        tile.first.output = true;
+        handler.beginServerTick(41);
+        assertEquals(IEnergyHandler.EnergyType.STORAGE, handler.getType(null));
+        handler.unbindBlockEntity();
+    }
+
+    @Test
     void shielderRefreshesMachineOnlyCoverage() {
         final int[] refreshed = {0};
         final boolean[] active = {true};
@@ -297,7 +309,8 @@ class EnergyRoutingRecoveryTest {
 
     private static class Input implements IEnergyStorage {
         int capacity = 100, accepted;
-        public boolean canExtract() { return false; }
+        boolean output;
+        public boolean canExtract() { return output; }
         public boolean canReceive() { return true; }
         public int getEnergyStored() { return 0; }
         public int getMaxEnergyStored() { return capacity; }

@@ -1232,7 +1232,9 @@ public final class MachineBindingIndex {
                     exception.addSuppressed(cleanup);
                 }
                 binding.queueRebind();
-                if (binding.rebindAttempts == 4) {
+                // A known compatible adapter waiting for its faces/network must retain its route
+                // and retry. Replacing it would discard fault warnings and restart discovery.
+                if (binding.rebindAttempts == 4 && !(exception instanceof EnergyHandlerNotReadyException)) {
                     EnergyMachineManager.INSTANCE.onRepeatedBindingFailure(binding.blockEntity);
                 }
                 if (binding.rebindAttempts <= 2 || binding.rebindAttempts == 8) {
