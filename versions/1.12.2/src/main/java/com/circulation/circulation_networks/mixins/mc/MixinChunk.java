@@ -36,7 +36,11 @@ public class MixinChunk {
 
     @Inject(method = "addTileEntity(Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/tileentity/TileEntity;)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/tileentity/TileEntity;invalidate()V", shift = At.Shift.AFTER))
     private void addTileEntityRemove(BlockPos pos, TileEntity tileEntityIn, CallbackInfo ci) {
-        BlockEntityLifecycleHooks.postInvalidate(world, pos, this.tileEntities.get(pos));
+        TileEntity previous = this.tileEntities.get(pos);
+        // World reinserts the same instance when draining block entities loaded during a tick.
+        if (previous != null && previous != tileEntityIn) {
+            BlockEntityLifecycleHooks.postInvalidate(world, pos, previous);
+        }
     }
 
     @Inject(method = "removeTileEntity", at = @At(value = "INVOKE", target = "Lnet/minecraft/tileentity/TileEntity;invalidate()V", shift = At.Shift.AFTER))

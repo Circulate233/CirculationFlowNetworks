@@ -123,6 +123,146 @@ class LongDistanceRelayNodeTest {
         assertEquals(0, restoredA.getLinkScope());
     }
 
+    //? if <1.20 {
+    @org.junit.jupiter.api.BeforeAll
+    static void initializeHeadlessChargingManager() throws Exception {
+        // Forge's mod discovery is absent in this runtime; no accessory mods are loaded.
+        var loader = net.minecraftforge.fml.common.Loader.instance();
+        Field modsField = loader.getClass().getDeclaredField("namedMods");
+        modsField.setAccessible(true);
+        Object previousMods = modsField.get(loader);
+        modsField.set(loader, java.util.Collections.emptyMap());
+        try {
+            assertNotNull(com.circulation.circulation_networks.manager.ChargingManager.INSTANCE);
+        } finally {
+            modsField.set(loader, previousMods);
+        }
+    }
+
+    @Test
+    void addingTheSameBlockEntityAgainKeepsRestoredRelayBindings() throws Exception {
+        LongDistanceRelayNode a = relay(0);
+        LongDistanceRelayNode b = relay(100000);
+        pair(a, b);
+        a = new LongDistanceRelayNode(a.serialize());
+        b = new LongDistanceRelayNode(b.serialize());
+        registerTopology(a, b);
+        a.addNeighbor(b);
+        b.addNeighbor(a);
+        var blockEntity = mock(net.minecraft.tileentity.TileEntity.class, withSettings().extraInterfaces(
+            com.circulation.circulation_networks.api.INodeBlockEntity.class,
+            com.circulation.circulation_networks.api.CFNBlockEntityEx.class));
+        IGrid grid = a.getGrid();
+
+        notifyChunkReplacement(a.getPos(), blockEntity, blockEntity);
+
+        assertTrue(a.canLinkTo(b));
+        assertTrue(a.isActive());
+        assertTrue(b.isActive());
+        assertTrue(a.getNeighbors().contains(b));
+        assertTrue(b.getNeighbors().contains(a));
+        assertSame(grid, a.getGrid());
+        assertSame(grid, b.getGrid());
+        verifyNoInteractions(blockEntity);
+    }
+
+    @Test
+    void replacingTheBlockEntityStillClearsRelayBindings() throws Exception {
+        LongDistanceRelayNode a = relay(0);
+        LongDistanceRelayNode b = relay(100000);
+        registerTopology(a, b);
+        pair(a, b);
+        a.addNeighbor(b);
+        b.addNeighbor(a);
+        var previous = mock(net.minecraft.tileentity.TileEntity.class, withSettings().extraInterfaces(
+            com.circulation.circulation_networks.api.INodeBlockEntity.class,
+            com.circulation.circulation_networks.api.CFNBlockEntityEx.class));
+
+        notifyChunkReplacement(a.getPos(), previous, mock(net.minecraft.tileentity.TileEntity.class));
+
+        assertFalse(a.isActive());
+        assertTrue(b.isActive());
+        assertTrue(a.getPeerPositions().isEmpty());
+        assertTrue(b.getPeerPositions().isEmpty());
+        assertTrue(b.getNeighbors().isEmpty());
+        verify((com.circulation.circulation_networks.api.INodeBlockEntity<?>) previous).nodeInvalidate();
+    }
+
+    private void notifyChunkReplacement(BlockPos pos, net.minecraft.tileentity.TileEntity previous,
+                                         net.minecraft.tileentity.TileEntity incoming) throws Exception {
+        // Invoke the real injection callback; the headless test runtime does not apply Mixins to Chunk.
+        var hook = new com.circulation.circulation_networks.mixins.mc.MixinChunk();
+        Field worldField = hook.getClass().getDeclaredField("world");
+        worldField.setAccessible(true);
+        worldField.set(hook, topologyWorld);
+        Field entitiesField = hook.getClass().getDeclaredField("tileEntities");
+        entitiesField.setAccessible(true);
+        entitiesField.set(hook, java.util.Collections.singletonMap(pos, previous));
+        var method = hook.getClass().getDeclaredMethod("addTileEntityRemove", BlockPos.class,
+            net.minecraft.tileentity.TileEntity.class, org.spongepowered.asm.mixin.injection.callback.CallbackInfo.class);
+        method.setAccessible(true);
+        try {
+            method.invoke(hook, pos, incoming, null);
+        } finally {
+            com.circulation.circulation_networks.manager.EnergyMachineManager.INSTANCE.onServerStop();
+        }
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void savedGridRebindsRelaysWhenOnlyOneEndpointChunkIsLoaded(
+        @org.junit.jupiter.api.io.TempDir java.nio.file.Path saveDirectory) throws Exception {
+        LongDistanceRelayNode a = relay(0);
+        LongDistanceRelayNode b = relay(100000);
+        registerTopology(a, b);
+        pair(a, b);
+        a.addNeighbor(b);
+        b.addNeighbor(a);
+        Field saveFileField = NetworkManager.class.getDeclaredField("saveFile");
+        saveFileField.setAccessible(true);
+        saveFileField.set(null, saveDirectory.toFile());
+        NetworkManager.INSTANCE.markGridDirty(a.getGrid());
+        assertTrue(NetworkManager.INSTANCE.saveGrid());
+        NetworkManager.INSTANCE.onServerStop();
+        saveFileField.set(null, saveDirectory.toFile());
+
+        net.minecraft.world.WorldServer world = mock(net.minecraft.world.WorldServer.class);
+        Field providerField = World.class.getDeclaredField("provider");
+        providerField.setAccessible(true);
+        providerField.set(world, mock(net.minecraft.world.WorldProvider.class));
+        var chunks = mock(net.minecraft.world.gen.ChunkProviderServer.class);
+        when(world.getChunkProvider()).thenReturn(chunks);
+        when(chunks.getLoadedChunk(0, 0)).thenReturn(mock(net.minecraft.world.chunk.Chunk.class));
+        Field worldsField = net.minecraftforge.common.DimensionManager.class.getDeclaredField("worlds");
+        worldsField.setAccessible(true);
+        var worlds = (Int2ObjectMap<net.minecraft.world.WorldServer>) worldsField.get(null);
+        net.minecraft.world.WorldServer previous = worlds.put(0, world);
+        try {
+            var tile = new com.circulation.circulation_networks.tiles.nodes.TileEntityLongDistanceRelayNode();
+            NBTTagCompound blockTag = new NBTTagCompound();
+            blockTag.setInteger("y", 64);
+            blockTag.setTag("longDistanceRelay", new NBTTagCompound());
+            tile.readFromNBT(blockTag);
+            tile.setWorld(world);
+            when(world.getTileEntity(a.getPos())).thenReturn(tile);
+            NetworkManager.INSTANCE.initGrid();
+            LongDistanceRelayNode restoredA = (LongDistanceRelayNode) NetworkManager.INSTANCE.getNodeFromPos(world, a.getPos());
+            LongDistanceRelayNode restoredB = (LongDistanceRelayNode) NetworkManager.INSTANCE.getNodeFromPos(world, b.getPos());
+
+            assertSame(restoredA, tile.getNode());
+            assertEquals(a.getRelayId(), restoredA.getRelayId());
+            assertTrue(restoredA.canLinkTo(restoredB));
+            assertTrue(restoredA.getNeighbors().contains(restoredB));
+            assertTrue(restoredB.getNeighbors().contains(restoredA));
+            assertSame(restoredA.getGrid(), restoredB.getGrid());
+        } finally {
+            NetworkManager.INSTANCE.onServerStop();
+            if (previous == null) worlds.remove(0);
+            else worlds.put(0, previous);
+        }
+    }
+    //?}
+
     @Test
     void aReplacementAtTheSamePositionDoesNotInheritTheOldConnection() {
         LongDistanceRelayNode a = relay(0);
@@ -182,6 +322,9 @@ class LongDistanceRelayNodeTest {
         // Keep world/chunk I/O outside this graph test while exercising real node lifecycle callbacks.
         //? if <1.20 {
         topologyWorld = mock(World.class);
+        Field providerField = World.class.getDeclaredField("provider");
+        providerField.setAccessible(true);
+        providerField.set(topologyWorld, mock(net.minecraft.world.WorldProvider.class));
         when(topologyWorld.getChunkProvider()).thenReturn(mock(IChunkProvider.class));
         //?} else {
         /*topologyWorld = mock(Level.class);
