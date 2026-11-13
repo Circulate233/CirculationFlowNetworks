@@ -147,6 +147,18 @@ public final class AE2BackendHandler implements IEnergyHandler, DeferredReceiveC
     }
 
     @Override
+    public boolean hasUnmetReceiveDemand() {
+        requireOpen();
+        // Recheck live demand after commit; rounded-up refunds are accounting, not a power shortage.
+        double minimumAe = PowerUnits.RF.convertTo(PowerUnits.AE, 1.0D);
+        double demandAe = energyGrid.getEnergyDemand(minimumAe);
+        if (!Double.isFinite(demandAe) || demandAe < 0.0D) {
+            throw new IllegalStateException("AE2 energy grid returned invalid demand " + demandAe);
+        }
+        return demandAe >= minimumAe;
+    }
+
+    @Override
     public EnergyAmount drainRejectedReceive() {
         EnergyAmount result = EnergyAmount.obtain(rejectedReceive);
         rejectedReceive.setZero();

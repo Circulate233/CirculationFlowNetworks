@@ -139,6 +139,18 @@ public final class AE2BackendHandler implements IEnergyHandler, DeferredReceiveC
     }
 
     @Override
+    public boolean hasUnmetReceiveDemand() {
+        requireOpen();
+        // One FE is the smallest transferable amount; ignore fractional demand after commit.
+        double minimumAe = 1.0D / FE_PER_AE;
+        double demand = energyService.getEnergyDemand(minimumAe);
+        if (!Double.isFinite(demand) || demand < 0.0D) {
+            throw new IllegalStateException("AE2 energy service returned invalid demand " + demand);
+        }
+        return demand >= minimumAe;
+    }
+
+    @Override
     public EnergyAmount drainRejectedReceive() {
         EnergyAmount result = EnergyAmount.obtain(rejectedReceive);
         rejectedReceive.setZero();

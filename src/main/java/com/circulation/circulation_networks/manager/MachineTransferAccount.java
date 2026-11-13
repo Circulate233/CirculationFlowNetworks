@@ -42,6 +42,7 @@ final class MachineTransferAccount {
     private boolean budgetSampleValid;
     private boolean warningKnown;
     private boolean warningMissing;
+    private long warningRecordedEpoch = Long.MIN_VALUE;
     private int sendRoleReferences;
     private int receiveRoleReferences;
 
@@ -77,6 +78,7 @@ final class MachineTransferAccount {
         receiveBudget.reset();
         budgetSampleEpoch = Long.MIN_VALUE;
         budgetSampleValid = false;
+        warningRecordedEpoch = Long.MIN_VALUE;
     }
 
     public void activate(long epoch) {
@@ -276,8 +278,9 @@ final class MachineTransferAccount {
     /**
      * Resolves the receive state a warning verdict needs while this account is still active.
      * {@link #recordWarning(long, HubNode.HubMetadata)} runs after the binding window closed and can no longer
-     * probe the handler, so a sampled receive budget must be in place before settlement. A failed sample always
-     * throttles this endpoint, and a throttled endpoint reports from its cached verdict instead.
+     * sample a transfer budget, so one must be in place before settlement. Deferred backends may separately
+     * confirm their post-commit demand. A failed sample always throttles this endpoint, and a throttled endpoint
+     * reports from its cached verdict instead.
      */
     void sampleWarning(IEnergyHandler.EnergyType role,
                        long epoch,
@@ -295,8 +298,16 @@ final class MachineTransferAccount {
         } else if (settledEpoch != epoch || !receiveBudget.isInitialized(epoch)) {
             throw new IllegalStateException("Machine transfer account has no receive state for warning epoch " + epoch);
         }
-        warningMissing = receiveBudget.wasInitiallyPositive(epoch) && receiveBudget.isPositive(epoch);
+        if (warningRecordedEpoch == epoch) {
+            return;
+        }
+        boolean missing = receiveBudget.wasInitiallyPositive(epoch) && receiveBudget.isPositive(epoch);
+        if (missing && settledEpoch == epoch && handler instanceof DeferredReceiveCommit feedback) {
+            missing = feedback.hasUnmetReceiveDemand();
+        }
+        warningMissing = missing;
         warningKnown = true;
+        warningRecordedEpoch = settledEpoch == epoch ? epoch : Long.MIN_VALUE;
     }
 
     boolean hasCachedWarning() {
